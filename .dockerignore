@@ -1,0 +1,6 @@
+*
+!package.json
+!packages/core/package.json
+!packages/core/src
+!packages/server/package.json
+!packages/server/src

@@ -71,6 +71,8 @@ Implemented:
   Gemini, optional), with voice from a room microphone and spoken replies.
 - `/weather` (Open-Meteo, no key), `/art` (fanart.tv artwork), `/domotics` (SmartThings lights).
 - `/health`.
+- Runs at home on the LAN, or hosted on the internet from the `Dockerfile` with a secret key in every URL
+  (`docs/hosting.md`).
 
 Upcoming:
 

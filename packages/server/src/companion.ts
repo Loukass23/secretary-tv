@@ -579,8 +579,10 @@ export function renderCompanionHtml(baseUrl: string): string {
   </div>
 
   <script>
+    // The server's own path: /<key> when hosted, empty at home.
+    const API = ${JSON.stringify(new URL(baseUrl).pathname.replace(/\/$/, ""))};
     async function refresh() {
-      const [rRes, dRes] = await Promise.all([fetch('/reminders'), fetch('/domotics')]);
+      const [rRes, dRes] = await Promise.all([fetch(API + '/reminders'), fetch(API + '/domotics')]);
       const rData = await rRes.json();
       const dData = await dRes.json();
       if (rData.aiSummary) document.getElementById('aiReply').textContent = rData.aiSummary;
@@ -614,7 +616,7 @@ export function renderCompanionHtml(baseUrl: string): string {
     async function askAi(spoken) {
       const inp = document.getElementById('aiInput');
       if (!inp.value.trim()) return;
-      const res = await fetch('/ai/ask', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ prompt: inp.value, dryRun: true, speak: Boolean(spoken) }) });
+      const res = await fetch(API + '/ai/ask', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ prompt: inp.value, dryRun: true, speak: Boolean(spoken) }) });
       const data = await res.json();
       inp.value = '';
       if (data.reply) document.getElementById('aiReply').textContent = data.reply;
@@ -661,7 +663,7 @@ export function renderCompanionHtml(baseUrl: string): string {
       let at = 0;
       for (const f of talk.frames) { all.set(f, at); at += f.length; }
       reply.textContent = 'Listening done, thinking…';
-      const res = await fetch('/ai/transcribe', { method: 'POST', headers: {'content-type':'audio/wav'}, body: toWav(all, rate) });
+      const res = await fetch(API + '/ai/transcribe', { method: 'POST', headers: {'content-type':'audio/wav'}, body: toWav(all, rate) });
       if (!res.ok) {
         reply.textContent = res.status === 503 ? 'Voice needs GEMINI_API_KEY on the server.' : "Didn't catch that.";
         return;
@@ -693,24 +695,24 @@ export function renderCompanionHtml(baseUrl: string): string {
       const t = document.getElementById('remText');
       const d = document.getElementById('remDue');
       if (!t.value.trim()) return;
-      await fetch('/reminders', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ text: t.value, due: d.value }) });
+      await fetch(API + '/reminders', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ text: t.value, due: d.value }) });
       t.value = ''; d.value = '';
       refresh();
     }
     async function toggleRem(id) {
-      await fetch('/reminders/' + encodeURIComponent(id) + '/toggle', { method: 'POST' });
+      await fetch(API + '/reminders/' + encodeURIComponent(id) + '/toggle', { method: 'POST' });
       refresh();
     }
     async function delRem(id) {
-      await fetch('/reminders/' + encodeURIComponent(id), { method: 'DELETE' });
+      await fetch(API + '/reminders/' + encodeURIComponent(id), { method: 'DELETE' });
       refresh();
     }
     async function toggleLight(id, on) {
-      await fetch('/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ id, on, dryRun: true }) });
+      await fetch(API + '/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ id, on, dryRun: true }) });
       refresh();
     }
     async function runScene(scene) {
-      await fetch('/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ scene, dryRun: true }) });
+      await fetch(API + '/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ scene, dryRun: true }) });
       refresh();
     }
     refresh();

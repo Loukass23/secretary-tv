@@ -49,7 +49,7 @@ node ../tv-kit/scripts/cdp.mjs <port> walk|keys|eval|shot|logs|soak|layers
 ```
 
 `scripts/check-budget.mjs` enforces each app's `budget.json` after every build. Server: `pnpm --filter
-@secretary/server start`.
+@secretary/server start`, or the root `Dockerfile` for hosting it with a `SERVER_KEY` (`docs/hosting.md`).
 
 ## UI direction
 

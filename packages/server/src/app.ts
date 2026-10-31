@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createTorbox, rank, type Candidate } from "@secretary/core";
 import {
   forwardSmartThingsCommand,
@@ -37,8 +38,13 @@ export {
 
 export interface AppConfig {
   apiKey: string;
-  /** Public base URL the TV reaches this server at, no trailing slash. */
+  /** Public base URL the TV reaches this server at, no trailing slash (ending in /<key> when `key` is set). */
   baseUrl: string;
+  /**
+   * Hosted on the internet: every URL must start with /<key> (SERVER_KEY, see KEY_PATTERN), or it answers 404.
+   * Unset on a home network, where the paths are as before.
+   */
+  key?: string;
   /** Stremio addon used as the hash source, no trailing slash. Empty: the TV finds streams with its plugins. */
   upstream: string;
   /** Optional path to persist watch progress across server restarts. */
@@ -89,6 +95,18 @@ const WEATHER_TTL_MS = 10 * 60_000;
 /** Image hosts /art passes through, so Nest can read an artwork's colour (they send no CORS headers). */
 const ART_HOSTS = /(?:^|\.)(?:metahub\.space|kitsu\.app|kitsu\.io|tmdb\.org|fanart\.tv)$/;
 const LINK_TTL_MS = 30 * 60_000;
+
+/** A hosted server's key: long enough not to guess, and safe in a URL path. */
+export const KEY_PATTERN = /^[A-Za-z0-9_-]{24,}$/;
+
+/** The path after a leading /<key>, or null when it does not start with the key (compared in constant time). */
+export function keyedPath(pathname: string, key: string): string | null {
+  const slash = pathname.indexOf("/", 1);
+  const head = Buffer.from(slash < 0 ? pathname.slice(1) : pathname.slice(1, slash));
+  const want = Buffer.from(key);
+  if (head.length !== want.length || !timingSafeEqual(head, want)) return null;
+  return slash < 0 ? "/" : pathname.slice(slash);
+}
 
 /** Tiny TTL cache that also shares an in-flight promise between callers. */
 function ttlCache<T>(ttl: number, now: () => number) {
@@ -216,7 +234,17 @@ export function createApp(cfg: AppConfig) {
 
   return async function handle(req: Request): Promise<Response> {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    const { pathname, searchParams } = new URL(req.url);
+    const url = new URL(req.url);
+    const { searchParams } = url;
+    let pathname = url.pathname;
+    if (cfg.key) {
+      // Hosted: the key is the first path segment of every URL, so the TV, its player and Desk need no headers.
+      // A bare /health (no key) answers for the host's health check and says nothing else.
+      if (pathname === "/health") return json({ ok: true });
+      const rest = keyedPath(pathname, cfg.key);
+      if (rest == null) return json({ error: "not found" }, 404);
+      pathname = rest;
+    }
     try {
       if (pathname === "/manifest.json") return json(MANIFEST);
       if (pathname === "/health" && req.method === "GET") {
