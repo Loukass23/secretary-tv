@@ -75,5 +75,4 @@ When a change touches the player, focus or rendering, measure it on a TV with `c
 
 The catalog apps are already restyled to glass. Every catalog-kit screen (`Home`, `Detail`, `HubOverlay`,
 `SagaTimeline`, `NuvioFolder`, `PlayerView`, `ControlCentre`, `PartyOverlay`, `Island`) uses `GlassRoot`/`Glass`, and
-`catalog-kit/src/style.css` holds only base styles. The sentence in `docs/performance.md` ("Glass Hub") saying the
-player is still in the old look predates the "Glass player" section and is stale.
+`catalog-kit/src/style.css` holds only base styles.
