@@ -6,6 +6,9 @@ declare const __NUVIO_URL__: string | undefined;
 declare const __NUVIO_KEY__: string | undefined;
 declare const __SYNC_BACKEND__: string | undefined;
 declare const __PARTY_URL__: string | undefined;
+declare const __ST_CLIENT_ID__: string | undefined;
+declare const __ST_CLIENT_SECRET__: string | undefined;
+declare const __ST_TOKEN__: string | undefined;
 
 export const SERVER_URL = (typeof __SERVER_URL__ !== "undefined" ? __SERVER_URL__ : "").replace(/\/$/, "");
 
@@ -15,6 +18,14 @@ export const NUVIO_KEY = typeof __NUVIO_KEY__ !== "undefined" ? __NUVIO_KEY__ : 
 export const PARTY_URL = (typeof __PARTY_URL__ !== "undefined" ? __PARTY_URL__ : "").replace(/\/$/, "");
 /** "nuvio" (accounts and sync on Nuvio Cloud) or "secretary" (the home server only, for dev and tests). */
 export const SYNC_BACKEND = typeof __SYNC_BACKEND__ !== "undefined" && __SYNC_BACKEND__ === "secretary" ? "secretary" : "nuvio";
+
+/**
+ * SmartThings straight from Nest (docs/smartthings.md). The OAuth app's client id and secret, for refreshing the token
+ * pair the setup script stores on the TV; a personal access token instead (about 24 h) for trying things out.
+ */
+export const ST_CLIENT_ID = typeof __ST_CLIENT_ID__ !== "undefined" ? __ST_CLIENT_ID__ : "";
+export const ST_CLIENT_SECRET = typeof __ST_CLIENT_SECRET__ !== "undefined" ? __ST_CLIENT_SECRET__ : "";
+export const ST_TOKEN = typeof __ST_TOKEN__ !== "undefined" ? __ST_TOKEN__ : "";
 
 export const APP_IDS = {
   movie: typeof __MOVIES_ID__ !== "undefined" && __MOVIES_ID__ ? __MOVIES_ID__ : "ScrtMovies.Movies",

@@ -47,9 +47,12 @@ import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { APP_IDS, HIDE, PINS, SERVER_URL } from "./config.ts";
 import { Home } from "./home.tsx";
 import { clamp, type Focus, type Lengths, SECTIONS, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "./nest-nav.ts";
+import { home, homeConfigured } from "./home-control.ts";
+import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
+import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -60,6 +63,8 @@ const SPEAK_KEY = "nest.speak";
 /** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
 const ASSISTANT_POLL_MS = 2500;
 const WEATHER_POLL_MS = 10 * 60_000;
+/** SmartThings device status while Nest is up: one call per rate-limit window (10 per ~15 s, shared with commands). */
+const HOME_POLL_MS = 15_000;
 /** How long the wave keeps "speaking" after an answer arrives. */
 const SPEAK_MS = 3000;
 /** The glow when an artwork's colour cannot be read: the app's own tint. */
@@ -135,7 +140,7 @@ export function App() {
   const [summary, setSummary] = useState<string | undefined>();
   const [serverOnline, setServerOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party">(() =>
+  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party" | "lights">(() =>
     cloudEnabled && !cloud.session.signedIn() && !signInSkipped() ? "signin" : "home",
   );
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
@@ -164,7 +169,10 @@ export function App() {
   /** The newest turn already handled; undefined until the first poll, whose turns are history. */
   const lastTurn = useRef<number>();
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
-  const theme = useMemo(() => themeFor(themePref, new Date().getHours()), [themePref, time]);
+  const [devices, setDevices] = useState<StDevice[]>([]);
+  const [scenes, setScenes] = useState<StScene[]>([]);
+  const lux = useMemo(() => roomLux(devices), [devices]);
+  const theme = useMemo(() => themeFor(themePref, new Date().getHours(), lux), [themePref, time, lux]);
   const scene = useRef(0);
   const lastBack = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -263,6 +271,16 @@ export function App() {
   const send = async (prompt: string, spoken = false) => {
     const pref = themePrompt(prompt);
     if (pref) return pickTheme(pref);
+    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no server or Gemini.
+    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes) : null;
+    if (act) {
+      flash(act.reply);
+      const done =
+        act.kind === "scene"
+          ? home.runScene(act.scene.id)
+          : Promise.all(act.targets.map((t) => home.command(t.device.id, t.commands)));
+      return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
+    }
     if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
     setAsking(true);
     let speech: string | null | undefined;
@@ -466,6 +484,50 @@ export function App() {
     return () => clearInterval(t);
   }, []);
 
+  // SmartThings straight from the TV (docs/smartthings.md): the devices' status every 15 s while Nest is on screen,
+  // with a toast for what changed (the phone came home, the vacuum finished), and the scenes once.
+  const lastDevices = useRef<StDevice[] | null>(null);
+  const homeTimer = useRef<ReturnType<typeof setTimeout>>();
+  const homeSignInNoted = useRef(false);
+  const scenesLoaded = useRef(false);
+  const pollHome = () => {
+    if (!homeConfigured() || document.visibilityState === "hidden") return;
+    home.devices().then(
+      (next) => {
+        if (lastDevices.current) for (const a of homeAlerts(lastDevices.current, next)) flash(a.text);
+        lastDevices.current = next;
+        setDevices(next);
+        // Scenes once per run, after the first poll that works (the sign-in may come after Nest started).
+        if (!scenesLoaded.current) {
+          scenesLoaded.current = true;
+          home.scenes().then(setScenes, (e) => {
+            scenesLoaded.current = false;
+            console.warn("[nest] SmartThings scenes", e);
+          });
+        }
+      },
+      (e: unknown) => {
+        console.warn("[nest] SmartThings devices", e);
+        // The refresh token lapsed (29 days unused) or was revoked: say so once, not every 15 s.
+        if ((e as { status?: number }).status === 401 || (e as { status?: number }).status === 400) {
+          if (!homeSignInNoted.current) flash("SmartThings needs signing in again (smartthings.mjs authorize)");
+          homeSignInNoted.current = true;
+        }
+      },
+    );
+  };
+  /** After a command: SmartThings takes a moment to report the new state. */
+  const pollHomeSoon = () => {
+    clearTimeout(homeTimer.current);
+    homeTimer.current = setTimeout(pollHome, 1500);
+  };
+  useEffect(() => {
+    if ((view !== "home" && view !== "lights") || !homeConfigured()) return;
+    pollHome();
+    const t = setInterval(pollHome, HOME_POLL_MS);
+    return () => clearInterval(t);
+  }, [view]);
+
   // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
   const shownResults = shownTurn?.results ?? null;
   const focusedArt: { src: string; type: CatalogKind } | null =
@@ -578,7 +640,7 @@ export function App() {
     if (area === "top") {
       if (i === TOP_PARTY) return void setView("party");
       if (i === TOP_SEARCH) return openSearch();
-      if (i === TOP_LIGHTS) return nextScene();
+      if (i === TOP_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
       if (i === TOP_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
@@ -777,6 +839,8 @@ export function App() {
         />
       ) : view === "party" ? (
         <WatchTogether onClose={() => setView("home")} />
+      ) : view === "lights" ? (
+        <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
       ) : view === "search" ? (
         <Search
           focus={searchFocus}

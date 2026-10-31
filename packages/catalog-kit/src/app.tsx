@@ -8,6 +8,7 @@ import {
 import { contentApp, normalizeCode, partyErrorText } from "@secretary/party/src/client.ts";
 import { targetPos, type Timeline } from "@secretary/party/src/protocol.ts";
 import { cloud, cloudEnabled, nuvioCollections, nuvioLibrary, nuvioRemote, partyApi, startListSync, takeLaunch } from "./lib/cloud.ts";
+import { runMovieScene } from "./lib/home.ts";
 import { createPartySession, LEAVE_TEXT, type PartySession, releaseOf, type SocketLike, streamFor } from "./lib/party.ts";
 import { clearLocalLibrary, loadLibrary, setLibraryRemote, syncLibrary } from "./lib/library.ts";
 import { episodeLabel, fileHintFor, nextEpisode } from "./lib/episodes.ts";
@@ -527,13 +528,16 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
   };
 
   const triggerCinemaAutoDim = () => {
-    if (!settings.domotics.cinemaAutoDim || !serverUrl) return;
-    void fetch(`${serverUrl.replace(/\/$/, "")}/domotics/command`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scene: "cinema" }),
-    }).catch(() => {});
+    if (settings.domotics.cinemaAutoDim) void runMovieScene("movie", serverUrl);
   };
+
+  // Leaving the player brings the room back (Nest's restore scene); moving on to the next episode stays in it.
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    const playing = view.name === "player";
+    if (wasPlaying.current && !playing && settings.domotics.cinemaAutoDim) void runMovieScene("restore", serverUrl);
+    wasPlaying.current = playing;
+  }, [view.name]);
 
   const shown =
     view.name === "detail" || view.name === "player"

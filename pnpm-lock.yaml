@@ -253,6 +253,9 @@ importers:
       '@secretary/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@secretary/smartthings':
+        specifier: workspace:*
+        version: link:../smartthings
       '@secretary/tv-kit':
         specifier: workspace:*
         version: link:../tv-kit
@@ -273,6 +276,9 @@ importers:
       '@secretary/party':
         specifier: workspace:*
         version: link:../party
+      '@secretary/smartthings':
+        specifier: workspace:*
+        version: link:../smartthings
       '@secretary/tv-kit':
         specifier: workspace:*
         version: link:../tv-kit
@@ -305,6 +311,8 @@ importers:
       '@secretary/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/smartthings: {}
 
   packages/tv-kit:
     dependencies:

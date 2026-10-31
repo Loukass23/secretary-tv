@@ -133,9 +133,18 @@ export const WAVE_STATUS: Record<WaveState, string> = {
 export type ThemePref = "auto" | "day" | "night";
 export const THEME_PREFS: readonly ThemePref[] = ["auto", "day", "night"];
 
-/** Daylight from 07:00 to 18:59 when the preference is auto. */
-export function themeFor(pref: ThemePref, hour: number): "day" | "night" {
+/** Room light (lux, from the TV's sensor through SmartThings) above which auto picks Daylight, and below which Night. */
+const LUX_DAY = 150;
+const LUX_NIGHT = 60;
+
+/**
+ * Auto follows the room when the TV's light sensor reads clearly bright or dark (about 35 lux with lamps on at night),
+ * and the clock otherwise: Daylight from 07:00 to 18:59.
+ */
+export function themeFor(pref: ThemePref, hour: number, lux: number | null = null): "day" | "night" {
   if (pref !== "auto") return pref;
+  if (lux !== null && lux >= LUX_DAY) return "day";
+  if (lux !== null && lux < LUX_NIGHT) return "night";
   return hour >= 7 && hour < 19 ? "day" : "night";
 }
 

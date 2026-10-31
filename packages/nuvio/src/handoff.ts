@@ -21,12 +21,27 @@ export interface OpenTitle {
 /** The room service's code alphabet (party/src/protocol.ts CODE_ALPHABET), six characters. */
 const ROOM_CODE = /^[2-9A-HJKMNP-Z]{6}$/;
 
+/**
+ * SmartThings for the app's movie lights (docs/smartthings.md): an access token Nest holds the refresh for (good for
+ * up to 24 h, so the app never refreshes and never spends Nest's single-use refresh token), and the scenes to run.
+ */
+export interface HomeGrant {
+  token: string;
+  /** Epoch ms when the token expires. */
+  exp: number;
+  /** Scene run when playback starts. */
+  movie?: string;
+  /** Scene run when the player closes. */
+  restore?: string;
+}
+
 export interface LaunchPayload {
   v: 1;
   /** A session of the app's own (see mintAppSession) and the profile to use. */
   grant?: { session: Session; profile: number };
   /** Open this title's detail page (and play it when autoPlay). */
   open?: OpenTitle;
+  home?: HomeGrant;
   /** Epoch ms when Nest sent it: an app ignores a payload it has already applied. */
   at: number;
 }
@@ -59,6 +74,12 @@ export function decodeLaunch(raw: unknown): LaunchPayload | null {
   if (o && (o.type === "movie" || o.type === "series" || o.type === "anime") && typeof o.title?.id === "string" && o.title.id) {
     out.open = { type: o.type, title: { ...o.title, name: String(o.title.name ?? "") }, autoPlay: o.autoPlay === true };
     if (typeof o.room === "string" && ROOM_CODE.test(o.room)) out.open.room = o.room;
+  }
+  const h = p.home;
+  if (h && typeof h.token === "string" && h.token && typeof h.exp === "number") {
+    out.home = { token: h.token, exp: h.exp };
+    if (typeof h.movie === "string" && h.movie) out.home.movie = h.movie;
+    if (typeof h.restore === "string" && h.restore) out.home.restore = h.restore;
   }
   return out;
 }

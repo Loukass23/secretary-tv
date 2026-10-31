@@ -53,8 +53,10 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
 ### Secretary Nest (launcher)
 
 - Clock, weather, installed TV apps, cross-app Continue Watching, Raptor Hunt.
-- **Ask Nest**: an assistant panel ("play dune", "something for tonight"), reminders, SmartThings lights and the
-  Daylight theme (`docs/launcher.md`).
+- **Ask Nest**: an assistant panel ("play dune", "something for tonight"), reminders and the Daylight theme
+  (`docs/launcher.md`).
+- **SmartThings from the TV, no server**: real scenes and lights, movie lights in the catalog apps, home status toasts,
+  and "turn off the couch light" by name (`docs/smartthings.md`).
 
 ### Home server (`packages/server`)
 

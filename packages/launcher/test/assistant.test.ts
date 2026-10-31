@@ -20,6 +20,14 @@ test("Daylight follows the clock on auto", () => {
   assert.equal(themeFor("day", 23), "day");
 });
 
+test("auto follows the room's light when it is clearly bright or dark", () => {
+  assert.equal(themeFor("auto", 12, 35), "night");
+  assert.equal(themeFor("auto", 22, 400), "day");
+  assert.equal(themeFor("auto", 12, 100), "day");
+  assert.equal(themeFor("auto", 22, 100), "night");
+  assert.equal(themeFor("night", 12, 400), "night");
+});
+
 test("theme prompts are answered on the TV", () => {
   assert.equal(themePrompt("Light theme"), "day");
   assert.equal(themePrompt("switch to dark mode"), "night");

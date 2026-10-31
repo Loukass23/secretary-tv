@@ -449,9 +449,10 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
   {
     id: "domotics.cinemaAutoDim",
     section: "Lights",
-    label: "Auto Cinema Dimming",
-    description: "Dim the living room lights when playback starts",
-    getValue: (s) => (s.domotics.cinemaAutoDim ? "Enabled (15% on Play)" : "Off"),
+    label: "Movie lights",
+    description:
+      "Run the movie scene picked in Nest's Lights panel when playback starts, and its restore scene after. Without SmartThings on Nest, the server dims to 15%",
+    getValue: (s) => (s.domotics.cinemaAutoDim ? "On" : "Off"),
     cycle: (s) => ({
       ...s,
       domotics: { ...s.domotics, cinemaAutoDim: !s.domotics.cinemaAutoDim },

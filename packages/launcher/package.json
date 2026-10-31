@@ -11,6 +11,7 @@
   "dependencies": {
     "@secretary/nuvio": "workspace:*",
     "@secretary/party": "workspace:*",
+    "@secretary/smartthings": "workspace:*",
     "@secretary/tv-kit": "workspace:*",
     "preact": "^10.24.0",
     "uqr": "0.1.2"
