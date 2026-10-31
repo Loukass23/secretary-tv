@@ -185,8 +185,9 @@ and settings rows. Cinema on the reference TV, arrow keys only:
 | Sources sheet with 109 real sources, 30 keys | 17 ms | 33 ms | 2 |
 
 The sources sheet renders only the rows around the focused one (12 of 109 in the page); before that every row was its
-own compositor layer. `catalog-kit/src/style.css` went from 1,890 to 181 lines: only the player and the base styles
-are left in the old look. JS 35.2 KB gzip per catalog app.
+own compositor layer. `catalog-kit/src/style.css` went from 1,890 to 181 lines, leaving only the player and the base
+styles in the old look at that point. The player moved to glass next ("Glass player" below), and `style.css` now holds
+only the base styles. JS 35.2 KB gzip per catalog app.
 
 ## Glass player
 

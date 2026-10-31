@@ -1,0 +1,26 @@
+name: Feature request
+description: An idea for the TV apps, Secretary Nest, the server or the phone companion.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **No sources.** Don't request, name or link stream sources, addons, plugin repositories, indexers, sites or
+        release groups. Secretary TV ships none and recommends none. Requests for new debrid services are welcome.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The problem or use case, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: On the TV, remote keys and screens involved.
+  - type: input
+    id: tv-model
+    attributes:
+      label: TV model and Tizen version (if it matters)
+      placeholder: GU43DU7199UXZG, Tizen 9

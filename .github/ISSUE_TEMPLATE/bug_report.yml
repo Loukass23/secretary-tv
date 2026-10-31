@@ -1,0 +1,65 @@
+name: Bug report
+description: Something doesn't work on the TV, the server or the phone companion.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **No sources.** Don't name or link stream sources, addons, plugin repositories, indexers, sites or release
+        groups anywhere in this issue, including logs and screenshots. Describe them generically ("a Stremio-protocol
+        addon", "a plugin repository I added"). Issues that name them are closed. Debrid services (TorBox,
+        Premiumize, ...) are fine to mention. Remove keys and tokens from logs.
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - Secretary Cinema
+        - Secretary Shows
+        - Secretary Anime
+        - Secretary Nest (launcher)
+        - Secretary Desk / home server
+        - Watch party
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: tv-model
+    attributes:
+      label: TV model
+      description: From Settings › Support › About This TV.
+      placeholder: GU43DU7199UXZG
+    validations:
+      required: true
+  - type: input
+    id: tizen
+    attributes:
+      label: Tizen version
+      placeholder: "9.0"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or build
+      placeholder: 66202d1
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Secretary Cinema
+        2. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`cdp.mjs <port> logs` or server output, with keys removed."
+      render: text
