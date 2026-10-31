@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createTorbox, rank, type Candidate } from "@secretary/core";
 import {
   forwardSmartThingsCommand,
@@ -5,7 +6,11 @@ import {
   handleAiPrompt,
   renderCompanionHtml,
   type SmartThingsPhonePresence,
+  speak,
   syncSmartThingsDevices,
+  transcribe,
+  VOICE_MAX_BYTES,
+  VOICE_TYPES,
 } from "./companion.ts";
 import { type EpisodeHint, episodeHint, pickFile } from "./files.ts";
 import { discoverCatalog, rankSearch, searchCatalogs, type SearchResult } from "./search.ts";
@@ -33,8 +38,13 @@ export {
 
 export interface AppConfig {
   apiKey: string;
-  /** Public base URL the TV reaches this server at, no trailing slash. */
+  /** Public base URL the TV reaches this server at, no trailing slash (ending in /<key> when `key` is set). */
   baseUrl: string;
+  /**
+   * Hosted on the internet: every URL must start with /<key> (SERVER_KEY, see KEY_PATTERN), or it answers 404.
+   * Unset on a home network, where the paths are as before.
+   */
+  key?: string;
   /** Stremio addon used as the hash source, no trailing slash. Empty: the TV finds streams with its plugins. */
   upstream: string;
   /** Optional path to persist watch progress across server restarts. */
@@ -85,6 +95,18 @@ const WEATHER_TTL_MS = 10 * 60_000;
 /** Image hosts /art passes through, so Nest can read an artwork's colour (they send no CORS headers). */
 const ART_HOSTS = /(?:^|\.)(?:metahub\.space|kitsu\.app|kitsu\.io|tmdb\.org|fanart\.tv)$/;
 const LINK_TTL_MS = 30 * 60_000;
+
+/** A hosted server's key: long enough not to guess, and safe in a URL path. */
+export const KEY_PATTERN = /^[A-Za-z0-9_-]{24,}$/;
+
+/** The path after a leading /<key>, or null when it does not start with the key (compared in constant time). */
+export function keyedPath(pathname: string, key: string): string | null {
+  const slash = pathname.indexOf("/", 1);
+  const head = Buffer.from(slash < 0 ? pathname.slice(1) : pathname.slice(1, slash));
+  const want = Buffer.from(key);
+  if (head.length !== want.length || !timingSafeEqual(head, want)) return null;
+  return slash < 0 ? "/" : pathname.slice(slash);
+}
 
 /** Tiny TTL cache that also shares an in-flight promise between callers. */
 function ttlCache<T>(ttl: number, now: () => number) {
@@ -176,9 +198,53 @@ export function createApp(cfg: AppConfig) {
     return torbox.requestDownload(torrentId, file.id);
   }
 
+  /** Runs a prompt for Nest or Desk; /ai/state shows it as pending until the answer lands. */
+  async function ask(prompt: string, source: "tv" | "companion", dryRun: boolean) {
+    state.beginAsk(prompt, source);
+    let result;
+    try {
+      result = await handleAiPrompt(prompt, state, {
+        geminiApiKey: cfg.geminiApiKey ?? process.env.GEMINI_API_KEY,
+        smartThingsToken: cfg.smartThingsToken ?? process.env.SMARTTHINGS_TOKEN,
+        dryRun,
+        fetch: f,
+        find: (intent) =>
+          intent.term
+            ? searchCache(intent.term.toLowerCase(), () => searchCatalogs(intent.term!, f)).then((r) =>
+                intent.kind ? r.filter((x) => x.type === intent.kind) : r,
+              )
+            : searchCache(`discover:${intent.kind ?? ""}:${intent.genre ?? ""}`, () =>
+                discoverCatalog(intent.kind, intent.genre, f),
+              ),
+      });
+    } catch (e) {
+      state.endAsk({ prompt, source, reply: "Something went wrong; try again.", action: "error" });
+      throw e;
+    }
+    const turn = state.endAsk({
+      prompt,
+      source,
+      reply: result.reply,
+      action: result.action,
+      query: result.query,
+      results: result.results,
+    });
+    return { ...result, turn };
+  }
+
   return async function handle(req: Request): Promise<Response> {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    const { pathname, searchParams } = new URL(req.url);
+    const url = new URL(req.url);
+    const { searchParams } = url;
+    let pathname = url.pathname;
+    if (cfg.key) {
+      // Hosted: the key is the first path segment of every URL, so the TV, its player and Desk need no headers.
+      // A bare /health (no key) answers for the host's health check and says nothing else.
+      if (pathname === "/health") return json({ ok: true });
+      const rest = keyedPath(pathname, cfg.key);
+      if (rest == null) return json({ error: "not found" }, 404);
+      pathname = rest;
+    }
     try {
       if (pathname === "/manifest.json") return json(MANIFEST);
       if (pathname === "/health" && req.method === "GET") {
@@ -225,40 +291,28 @@ export function createApp(cfg: AppConfig) {
         return json({ items });
       }
       if (pathname === "/ai/ask" && req.method === "POST") {
-        const body = (await req.json()) as { prompt?: string; dryRun?: boolean; source?: string };
+        const body = (await req.json()) as { prompt?: string; dryRun?: boolean; source?: string; speak?: boolean };
         const prompt = body?.prompt?.trim();
         if (!prompt) return json({ error: "missing prompt" }, 400);
-        const source = body.source === "tv" ? "tv" : "companion";
-        state.beginAsk(prompt, source);
-        let result;
-        try {
-          result = await handleAiPrompt(prompt, state, {
-            geminiApiKey: cfg.geminiApiKey ?? process.env.GEMINI_API_KEY,
-            smartThingsToken: cfg.smartThingsToken ?? process.env.SMARTTHINGS_TOKEN,
-            dryRun: Boolean(body.dryRun),
-            fetch: f,
-            find: (intent) =>
-              intent.term
-                ? searchCache(intent.term.toLowerCase(), () => searchCatalogs(intent.term!, f)).then((r) =>
-                    intent.kind ? r.filter((x) => x.type === intent.kind) : r,
-                  )
-                : searchCache(`discover:${intent.kind ?? ""}:${intent.genre ?? ""}`, () =>
-                    discoverCatalog(intent.kind, intent.genre, f),
-                  ),
-          });
-        } catch (e) {
-          state.endAsk({ prompt, source, reply: "Something went wrong; try again.", action: "error" });
-          throw e;
-        }
-        const turn = state.endAsk({
-          prompt,
-          source,
-          reply: result.reply,
-          action: result.action,
-          query: result.query,
-          results: result.results,
-        });
-        return json({ ...result, turn });
+        const out = await ask(prompt, body.source === "tv" ? "tv" : "companion", Boolean(body.dryRun));
+        // speak: the reply read aloud too, for a room speaker (null without a speech model).
+        if (!body.speak) return json(out);
+        const key = cfg.geminiApiKey ?? process.env.GEMINI_API_KEY;
+        const wav = key ? await speak(out.reply, key, f, process.env.GEMINI_TTS_MODEL) : null;
+        return json({ ...out, speech: wav ? `data:audio/wav;base64,${Buffer.from(wav).toString("base64")}` : null });
+      }
+      // A spoken prompt from Nest or Desk: the words only. The caller then sends them to /ai/ask like typed ones, so
+      // prompts the TV answers itself ("dark mode") never reach the lights.
+      if (pathname === "/ai/transcribe" && req.method === "POST") {
+        const key = cfg.geminiApiKey ?? process.env.GEMINI_API_KEY;
+        if (!key) return json({ error: "voice needs GEMINI_API_KEY" }, 503);
+        const type = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+        if (!VOICE_TYPES.includes(type)) return json({ error: "unsupported audio" }, 415);
+        const audio = new Uint8Array(await req.arrayBuffer());
+        if (!audio.length) return json({ error: "missing audio" }, 400);
+        if (audio.length > VOICE_MAX_BYTES) return json({ error: "clip too long" }, 413);
+        const transcript = await transcribe(audio, type === "audio/x-wav" ? "audio/wav" : type, key, f);
+        return transcript ? json({ transcript }) : json({ error: "no speech" }, 422);
       }
       if (pathname === "/ai/state" && req.method === "GET") {
         return json(state.getAssistant());

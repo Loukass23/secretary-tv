@@ -12,5 +12,7 @@
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/application.info"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- Ask Nest records from a USB microphone (getUserMedia); see docs/launcher.md, "Room microphone". -->
+  <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
   <access origin="*" subdomains="true"/>
 </widget>

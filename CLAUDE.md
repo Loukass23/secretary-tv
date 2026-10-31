@@ -25,6 +25,7 @@ pnpm workspace, one package per folder in `packages/`. Packages import each othe
 | `launcher` | Secretary Nest, the glass home screen |
 | `server` | Home server and Secretary Desk (phone companion) |
 | `nuvio` | Nuvio Cloud client |
+| `smartthings` | SmartThings client used from the TV: devices, scenes, OAuth refresh, home alerts and by-name commands |
 | `party` | Watch-party Cloudflare Worker and Durable Object |
 | `tv-kit` | Focus grid, keys, glass components, perf marks, Vite plugin, deploy and inspector scripts |
 
@@ -49,7 +50,7 @@ node ../tv-kit/scripts/cdp.mjs <port> walk|keys|eval|shot|logs|soak|layers
 ```
 
 `scripts/check-budget.mjs` enforces each app's `budget.json` after every build. Server: `pnpm --filter
-@secretary/server start`.
+@secretary/server start`, or the root `Dockerfile` for hosting it with a `SERVER_KEY` (`docs/hosting.md`).
 
 ## UI direction
 

@@ -385,6 +385,14 @@ test("launch payload: round-trips; bad grants, kinds and versions are dropped", 
   assert.equal(readLaunch(), null, "no tizen here");
 });
 
+test("launch payload: Nest's SmartThings token and scenes travel; a malformed grant is dropped", () => {
+  const home = { token: "t", exp: 5, movie: "scene-movie", restore: "scene-bright" };
+  assert.deepEqual(decodeLaunch(encodeLaunch({ at: 3, home }))?.home, home);
+  assert.deepEqual(decodeLaunch(encodeLaunch({ at: 3, home: { token: "t", exp: 5, movie: "" } }))?.home, { token: "t", exp: 5 });
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 3, home: { token: "", exp: 5 } }))?.home, undefined);
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 3, home: { token: "t" } }))?.home, undefined);
+});
+
 test("launch payload: a watch-party code travels with the title; a malformed one is dropped", () => {
   const title = { id: "tt1:1:2", name: "Show" };
   const open = (room: string) => decodeLaunch(encodeLaunch({ at: 2, open: { type: "series", title, autoPlay: false, room } }))?.open;

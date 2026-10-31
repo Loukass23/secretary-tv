@@ -161,3 +161,12 @@ html, body {
 /* --- watch together --- */
 .nest-party-text { position: absolute; left: 60px; top: 60px; right: 60px; bottom: 170px; display: flex; flex-direction: column; }
 .nest-party-text p { max-width: 900px; }
+
+/* --- lights (lights.tsx): SmartThings scenes and lights --- */
+.nest-lights-head { position: absolute; left: 60px; top: 50px; }
+.nest-lights-head h1 { margin: 6px 0 0; }
+.nest-scene span { padding: 0 24px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nest-lights-status { position: absolute; left: 60px; right: 60px; bottom: 44px; font-size: 24px; font-weight: 600; color: #ffb38f; }
+.sg-glass > .nest-lights-head,
+.sg-glass > .nest-lights-status { position: absolute; }
+.sg-glass > .nest-lights-body { position: absolute; inset: 0; }

@@ -224,13 +224,124 @@ export async function forwardSmartThingsScene(
   );
 }
 
+// Fastest first: measured on 2026-10-31, a one-line reply took 0.4-0.6 s on the lite models, 16 s on 3.6-flash (it
+// thinks first) and over two minutes on 3.8-flash. Someone is waiting at the TV, so the lite models lead.
 const GEMINI_FALLBACK_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
   "gemini-flash-lite-latest",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
   "gemini-3.8-flash",
 ] as const;
+
+/** Audio Gemini takes inline. Nest and Desk record WAV themselves, since Gemini does not list WebM. */
+export const VOICE_TYPES = ["audio/wav", "audio/x-wav", "audio/ogg", "audio/flac", "audio/mpeg", "audio/aac"];
+/** About 30 s of 16 kHz mono WAV; Nest stops recording at 15 s. */
+export const VOICE_MAX_BYTES = 1_000_000;
+
+/** Gemini models with speech output; GEMINI_TTS_MODEL puts another first. */
+const GEMINI_TTS_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
+
+const geminiUrl = (model: string, key: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType?: string; data?: string };
+}
+
+/** How long one model may take before the next is tried: someone is waiting at the TV. */
+const GEMINI_TIMEOUT_MS = 8000;
+
+/** Posts one request to each model in turn until one answers with a part; null when none does. */
+async function firstPart(models: readonly string[], key: string, body: unknown, f: typeof fetch): Promise<GeminiPart | null> {
+  const payload = JSON.stringify(body);
+  for (const model of models) {
+    try {
+      const res = await f(geminiUrl(model, key), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      });
+      if (!res.ok) continue;
+      const out = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] };
+      const part = out.candidates?.[0]?.content?.parts?.[0];
+      if (part) return part;
+    } catch {
+      // Try the next model.
+    }
+  }
+  return null;
+}
+
+/** What was said in a short clip, or "" when there was no speech (or Gemini is down). */
+export async function transcribe(audio: Uint8Array, mimeType: string, key: string, f: typeof fetch = fetch): Promise<string> {
+  const part = await firstPart(
+    GEMINI_FALLBACK_MODELS,
+    key,
+    {
+      contents: [
+        {
+          parts: [
+            { inlineData: { mimeType, data: Buffer.from(audio).toString("base64") } },
+            {
+              text: "Transcribe this spoken request to a TV assistant exactly, in the language spoken. Reply with the transcript only, or with nothing if there is no speech.",
+            },
+          ],
+        },
+      ],
+    },
+    f,
+  );
+  // Gemini punctuates like dictation ("Remind me to water the plants."); a typed prompt has no full stop, and the
+  // reminder would keep it. Quotes go too.
+  return part?.text?.trim().replace(/^["“]|["”]$/g, "").replace(/[.。!！]+$/u, "").trim() ?? "";
+}
+
+/** A reply read aloud as WAV, or null without a speech model. Emoji are dropped first: they would be read out. */
+export async function speak(text: string, key: string, f: typeof fetch = fetch, model?: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const plain = text.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "").trim();
+  if (!plain) return null;
+  const part = await firstPart(
+    model ? [model, ...GEMINI_TTS_MODELS] : GEMINI_TTS_MODELS,
+    key,
+    {
+      contents: [{ parts: [{ text: plain }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } } },
+      },
+    },
+    f,
+  );
+  const data = part?.inlineData?.data;
+  if (!data) return null;
+  // Gemini sends raw 16-bit PCM ("audio/L16;codec=pcm;rate=24000"), which <audio> cannot play without a header.
+  const rate = Number(part.inlineData?.mimeType?.match(/rate=(\d+)/)?.[1] ?? 24000);
+  return pcmToWav(new Uint8Array(Buffer.from(data, "base64")), rate);
+}
+
+/** 16-bit little-endian mono PCM in a WAV file. */
+export function pcmToWav(pcm: Uint8Array, rate: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(44 + pcm.length);
+  const v = new DataView(out.buffer);
+  const ascii = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+  ascii(0, "RIFF");
+  v.setUint32(4, 36 + pcm.length, true);
+  ascii(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ascii(36, "data");
+  v.setUint32(40, pcm.length, true);
+  out.set(pcm, 44);
+  return out;
+}
 
 export async function handleAiPrompt(
   prompt: string,
@@ -362,44 +473,31 @@ export async function handleAiPrompt(
       .filter((r) => !r.completed)
       .map((r) => r.text)
       .join("; ");
-    const payload = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${activeReminders || "none"}. Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
-            },
-          ],
-        },
-      ],
-    });
-    for (const model of GEMINI_FALLBACK_MODELS) {
-      try {
-        const res = await f(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(opts.geminiApiKey)}`,
+    const part = await firstPart(
+      GEMINI_FALLBACK_MODELS,
+      opts.geminiApiKey,
+      {
+        contents: [
           {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload,
+            parts: [
+              {
+                text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${activeReminders || "none"}. Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
+              },
+            ],
           },
-        );
-        if (!res.ok) continue;
-        const body = (await res.json()) as {
-          candidates?: { content?: { parts?: { text?: string }[] } }[];
-        };
-        const text = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) {
-          state.setAiSummary(text);
-          return {
-            reply: text,
-            action: "briefing",
-            reminders: state.getReminders(),
-            domotics: state.getDomotics(),
-          };
-        }
-      } catch {
-        // Try next available Gemini model in cascade.
-      }
+        ],
+      },
+      f,
+    );
+    const text = part?.text?.trim();
+    if (text) {
+      state.setAiSummary(text);
+      return {
+        reply: text,
+        action: "briefing",
+        reminders: state.getReminders(),
+        domotics: state.getDomotics(),
+      };
     }
   }
 
@@ -450,6 +548,7 @@ export function renderCompanionHtml(baseUrl: string): string {
     <div class="row">
       <input id="aiInput" placeholder="e.g. Remind me to call Alex at 19:00, or Cinema mode" />
       <button onclick="askAi()">Dictate</button>
+      <button id="talkBtn" class="sec" title="Hold and speak (a Bluetooth speakerphone paired to this phone works too)">🎤 Hold</button>
     </div>
     <div id="aiReply" class="ai-box">ruffling crest feathers…</div>
   </div>
@@ -475,8 +574,10 @@ export function renderCompanionHtml(baseUrl: string): string {
   </div>
 
   <script>
+    // The server's own path: /<key> when hosted, empty at home.
+    const API = ${JSON.stringify(new URL(baseUrl).pathname.replace(/\/$/, ""))};
     async function refresh() {
-      const [rRes, dRes] = await Promise.all([fetch('/reminders'), fetch('/domotics')]);
+      const [rRes, dRes] = await Promise.all([fetch(API + '/reminders'), fetch(API + '/domotics')]);
       const rData = await rRes.json();
       const dData = await dRes.json();
       if (rData.aiSummary) document.getElementById('aiReply').textContent = rData.aiSummary;
@@ -507,37 +608,106 @@ export function renderCompanionHtml(baseUrl: string): string {
         </div>
       \`).join('');
     }
-    async function askAi() {
+    async function askAi(spoken) {
       const inp = document.getElementById('aiInput');
       if (!inp.value.trim()) return;
-      const res = await fetch('/ai/ask', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ prompt: inp.value, dryRun: true }) });
+      const res = await fetch(API + '/ai/ask', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ prompt: inp.value, dryRun: true, speak: Boolean(spoken) }) });
       const data = await res.json();
       inp.value = '';
       if (data.reply) document.getElementById('aiReply').textContent = data.reply;
+      if (data.speech) new Audio(data.speech).play().catch(() => {});
       refresh();
     }
+    // Hold to talk: records 16 kHz WAV (Gemini does not list WebM), /ai/transcribe turns it into words, askAi sends them.
+    // Browsers only open the microphone on https or localhost.
+    const talk = { held: false, ctx: null, src: null, node: null, stream: null, frames: [] };
+    async function talkStart(e) {
+      e.preventDefault();
+      if (talk.ctx) return;
+      talk.held = true;
+      const reply = document.getElementById('aiReply');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        talk.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        talk.src = talk.ctx.createMediaStreamSource(stream);
+        talk.node = talk.ctx.createScriptProcessor(4096, 1, 1);
+        talk.frames = [];
+        talk.stream = stream;
+        talk.node.onaudioprocess = (ev) => talk.frames.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+        talk.src.connect(talk.node);
+        talk.node.connect(talk.ctx.destination);
+        reply.textContent = 'Listening…';
+        // Let go before the microphone opened: end at once.
+        if (!talk.held) talkStop();
+      } catch {
+        reply.textContent = location.protocol === 'https:' || location.hostname === 'localhost'
+          ? 'No microphone allowed.' : 'The microphone needs https.';
+      }
+    }
+    async function talkStop() {
+      talk.held = false;
+      if (!talk.ctx) return;
+      const rate = talk.ctx.sampleRate;
+      talk.node.disconnect(); talk.src.disconnect(); talk.ctx.close();
+      talk.stream.getTracks().forEach((t) => t.stop());
+      talk.ctx = null;
+      const reply = document.getElementById('aiReply');
+      const n = talk.frames.reduce((s, f) => s + f.length, 0);
+      if (n < rate / 4) { reply.textContent = 'Hold the button while you speak.'; return; }
+      const all = new Float32Array(n);
+      let at = 0;
+      for (const f of talk.frames) { all.set(f, at); at += f.length; }
+      reply.textContent = 'Listening done, thinking…';
+      const res = await fetch(API + '/ai/transcribe', { method: 'POST', headers: {'content-type':'audio/wav'}, body: toWav(all, rate) });
+      if (!res.ok) {
+        reply.textContent = res.status === 503 ? 'Voice needs GEMINI_API_KEY on the server.' : "Didn't catch that.";
+        return;
+      }
+      document.getElementById('aiInput').value = (await res.json()).transcript;
+      askAi(true);
+    }
+    function toWav(samples, from) {
+      const ratio = Math.max(1, from / 16000);
+      const len = Math.floor(samples.length / ratio);
+      const v = new DataView(new ArrayBuffer(44 + len * 2));
+      const str = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
+      const rate = Math.round(from / ratio);
+      str(0, 'RIFF'); v.setUint32(4, 36 + len * 2, true); str(8, 'WAVEfmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      str(36, 'data'); v.setUint32(40, len * 2, true);
+      for (let i = 0; i < len; i++) {
+        const s = Math.max(-1, Math.min(1, samples[Math.floor(i * ratio)]));
+        v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+      return v.buffer;
+    }
+    const talkBtn = document.getElementById('talkBtn');
+    talkBtn.addEventListener('pointerdown', talkStart);
+    talkBtn.addEventListener('pointerup', talkStop);
+    talkBtn.addEventListener('pointerleave', talkStop);
     async function addRem() {
       const t = document.getElementById('remText');
       const d = document.getElementById('remDue');
       if (!t.value.trim()) return;
-      await fetch('/reminders', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ text: t.value, due: d.value }) });
+      await fetch(API + '/reminders', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ text: t.value, due: d.value }) });
       t.value = ''; d.value = '';
       refresh();
     }
     async function toggleRem(id) {
-      await fetch('/reminders/' + encodeURIComponent(id) + '/toggle', { method: 'POST' });
+      await fetch(API + '/reminders/' + encodeURIComponent(id) + '/toggle', { method: 'POST' });
       refresh();
     }
     async function delRem(id) {
-      await fetch('/reminders/' + encodeURIComponent(id), { method: 'DELETE' });
+      await fetch(API + '/reminders/' + encodeURIComponent(id), { method: 'DELETE' });
       refresh();
     }
     async function toggleLight(id, on) {
-      await fetch('/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ id, on, dryRun: true }) });
+      await fetch(API + '/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ id, on, dryRun: true }) });
       refresh();
     }
     async function runScene(scene) {
-      await fetch('/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ scene, dryRun: true }) });
+      await fetch(API + '/domotics/command', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ scene, dryRun: true }) });
       refresh();
     }
     refresh();

@@ -36,6 +36,7 @@ import type { LibraryEntry, LibraryRemote } from "./library.ts";
 import type { CollectionsRemote } from "./nuviocollections.ts";
 import { createListSync, type ListSide } from "./listsync.ts";
 import type { ResumeRemote, UnifiedResumeEntry } from "./resume.ts";
+import { saveHomeGrant } from "./home.ts";
 
 declare const __NUVIO_URL__: string | undefined;
 declare const __NUVIO_KEY__: string | undefined;
@@ -78,6 +79,7 @@ export function takeLaunch(onOwnerChange: () => void, read: () => LaunchPayload 
   const p = read();
   if (!p || p.at <= (readJson<number>(LAUNCH_AT) ?? 0)) return null;
   writeJson(LAUNCH_AT, p.at);
+  if (p.home) saveHomeGrant(p.home);
   if (p.grant && cloudEnabled) {
     const next = `${p.grant.session.userId}:${p.grant.profile}`;
     if (owner() !== next) {

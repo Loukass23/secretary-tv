@@ -37,6 +37,8 @@ import {
   type ThemePref,
   themeFor,
   themePrompt,
+  transcribeClip,
+  VoiceError,
   WAVE_STATUS,
   waveState,
   type Weather,
@@ -45,17 +47,24 @@ import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { APP_IDS, HIDE, PINS, SERVER_URL } from "./config.ts";
 import { Home } from "./home.tsx";
 import { clamp, type Focus, type Lengths, SECTIONS, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "./nest-nav.ts";
+import { home, homeConfigured } from "./home-control.ts";
+import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
+import { play, record, type Recording } from "./voice.ts";
+import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
 const RECENT_SEARCH_KEY = "sectv:recent-searches:v1";
 const MAX_RECENT_SEARCHES = 8;
 const THEME_KEY = "nest.theme";
+const SPEAK_KEY = "nest.speak";
 /** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
 const ASSISTANT_POLL_MS = 2500;
 const WEATHER_POLL_MS = 10 * 60_000;
+/** SmartThings device status while Nest is up: one call per rate-limit window (10 per ~15 s, shared with commands). */
+const HOME_POLL_MS = 15_000;
 /** How long the wave keeps "speaking" after an answer arrives. */
 const SPEAK_MS = 3000;
 /** The glow when an artwork's colour cannot be read: the app's own tint. */
@@ -71,7 +80,16 @@ function loadThemePref(): ThemePref {
   }
 }
 
-const SECTION_APPS = [undefined, APP_IDS.movie, APP_IDS.series, APP_IDS.anime] as const;
+/** Spoken replies, on unless muted with Blue. */
+function loadSpeakReplies(): boolean {
+  try {
+    return localStorage.getItem(SPEAK_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+const SECTION_APPS =[undefined, APP_IDS.movie, APP_IDS.series, APP_IDS.anime] as const;
 const SCENES: readonly [Scene, string][] = [
   ["cinema", "🎬 Cinema lights"],
   ["warm", "🕯 Warm lights"],
@@ -122,7 +140,7 @@ export function App() {
   const [summary, setSummary] = useState<string | undefined>();
   const [serverOnline, setServerOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party">(() =>
+  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party" | "lights">(() =>
     cloudEnabled && !cloud.session.signedIn() && !signInSkipped() ? "signin" : "home",
   );
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
@@ -142,11 +160,19 @@ export function App() {
   const [shownTurn, setShownTurn] = useState<AssistantTurn | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
   const [themePref, setThemePref] = useState<ThemePref>(loadThemePref);
+  const [speakReplies, setSpeakReplies] = useState(loadSpeakReplies);
+  /** The clip being recorded from the room microphone. */
+  const recording = useRef<Recording | null>(null);
+  /** No room microphone (or no transcription): the mic key opens the TV keyboard, as before. */
+  const keyboardOnly = useRef(false);
   const [glow, setGlow] = useState<string | undefined>();
   /** The newest turn already handled; undefined until the first poll, whose turns are history. */
   const lastTurn = useRef<number>();
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
-  const theme = useMemo(() => themeFor(themePref, new Date().getHours()), [themePref, time]);
+  const [devices, setDevices] = useState<StDevice[]>([]);
+  const [scenes, setScenes] = useState<StScene[]>([]);
+  const lux = useMemo(() => roomLux(devices), [devices]);
+  const theme = useMemo(() => themeFor(themePref, new Date().getHours(), lux), [themePref, time, lux]);
   const scene = useRef(0);
   const lastBack = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -241,19 +267,89 @@ export function App() {
     }
   };
 
-  const send = async (prompt: string) => {
+  /** Asks the server; `spoken` prompts get their answer read aloud too, unless replies are muted. */
+  const send = async (prompt: string, spoken = false) => {
     const pref = themePrompt(prompt);
     if (pref) return pickTheme(pref);
+    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no server or Gemini.
+    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes) : null;
+    if (act) {
+      flash(act.reply);
+      const done =
+        act.kind === "scene"
+          ? home.runScene(act.scene.id)
+          : Promise.all(act.targets.map((t) => home.command(t.device.id, t.commands)));
+      return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
+    }
     if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
     setAsking(true);
+    let speech: string | null | undefined;
     try {
-      await askNest(SERVER_URL, prompt);
+      speech = (await askNest(SERVER_URL, prompt, fetch, spoken && speakReplies)).speech;
       applyAssistant(await fetchAssistant(SERVER_URL));
     } catch {
       flash("Couldn't reach the assistant");
     } finally {
       setAsking(false);
     }
+    if (speech) {
+      // The wave keeps speaking for as long as the reply plays, not just SPEAK_MS.
+      clearTimeout(speakTimer.current);
+      setAnswered(true);
+      await play(speech);
+      setAnswered(false);
+    }
+  };
+
+  /**
+   * The mic key: a clip from the room microphone (docs/launcher.md, "Room microphone"), the key again to stop early.
+   * Falls back to the TV keyboard's dictation when the TV gives the app no microphone or the server cannot transcribe.
+   */
+  const listen = async () => {
+    if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
+    if (recording.current) return recording.current.stop();
+    if (keyboardOnly.current) return openAsk();
+    let rec: Recording;
+    try {
+      rec = await record();
+    } catch {
+      keyboardOnly.current = true;
+      return openAsk();
+    }
+    recording.current = rec;
+    setListening(true);
+    flash(`🎤 Listening on ${rec.name}`);
+    const clip = await rec.done;
+    recording.current = null;
+    setListening(false);
+    if (!clip) return flash("Didn't hear anything");
+    setAsking(true);
+    let words = "";
+    try {
+      words = await transcribeClip(SERVER_URL, clip);
+    } catch (e) {
+      const reason = e instanceof VoiceError ? e.reason : "failed";
+      if (reason === "unavailable") {
+        keyboardOnly.current = true;
+        flash("Voice needs a Gemini key on the server");
+      } else {
+        flash(reason === "no-speech" ? "Didn't catch that" : "Couldn't reach the assistant");
+      }
+    } finally {
+      setAsking(false);
+    }
+    if (words) await send(words, true);
+  };
+
+  const toggleSpeech = () => {
+    const next = !speakReplies;
+    setSpeakReplies(next);
+    try {
+      localStorage.setItem(SPEAK_KEY, next ? "1" : "0");
+    } catch {
+      // the choice lasts until the app restarts
+    }
+    flash(next ? "🔊 Spoken replies on" : "🔇 Spoken replies off");
   };
 
   /** The TV keyboard, whose microphone key dictates; OK sends the prompt. */
@@ -388,6 +484,50 @@ export function App() {
     return () => clearInterval(t);
   }, []);
 
+  // SmartThings straight from the TV (docs/smartthings.md): the devices' status every 15 s while Nest is on screen,
+  // with a toast for what changed (the phone came home, the vacuum finished), and the scenes once.
+  const lastDevices = useRef<StDevice[] | null>(null);
+  const homeTimer = useRef<ReturnType<typeof setTimeout>>();
+  const homeSignInNoted = useRef(false);
+  const scenesLoaded = useRef(false);
+  const pollHome = () => {
+    if (!homeConfigured() || document.visibilityState === "hidden") return;
+    home.devices().then(
+      (next) => {
+        if (lastDevices.current) for (const a of homeAlerts(lastDevices.current, next)) flash(a.text);
+        lastDevices.current = next;
+        setDevices(next);
+        // Scenes once per run, after the first poll that works (the sign-in may come after Nest started).
+        if (!scenesLoaded.current) {
+          scenesLoaded.current = true;
+          home.scenes().then(setScenes, (e) => {
+            scenesLoaded.current = false;
+            console.warn("[nest] SmartThings scenes", e);
+          });
+        }
+      },
+      (e: unknown) => {
+        console.warn("[nest] SmartThings devices", e);
+        // The refresh token lapsed (29 days unused) or was revoked: say so once, not every 15 s.
+        if ((e as { status?: number }).status === 401 || (e as { status?: number }).status === 400) {
+          if (!homeSignInNoted.current) flash("SmartThings needs signing in again (smartthings.mjs authorize)");
+          homeSignInNoted.current = true;
+        }
+      },
+    );
+  };
+  /** After a command: SmartThings takes a moment to report the new state. */
+  const pollHomeSoon = () => {
+    clearTimeout(homeTimer.current);
+    homeTimer.current = setTimeout(pollHome, 1500);
+  };
+  useEffect(() => {
+    if ((view !== "home" && view !== "lights") || !homeConfigured()) return;
+    pollHome();
+    const t = setInterval(pollHome, HOME_POLL_MS);
+    return () => clearInterval(t);
+  }, [view]);
+
   // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
   const shownResults = shownTurn?.results ?? null;
   const focusedArt: { src: string; type: CatalogKind } | null =
@@ -500,7 +640,7 @@ export function App() {
     if (area === "top") {
       if (i === TOP_PARTY) return void setView("party");
       if (i === TOP_SEARCH) return openSearch();
-      if (i === TOP_LIGHTS) return nextScene();
+      if (i === TOP_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
       if (i === TOP_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
@@ -522,7 +662,7 @@ export function App() {
       }
       return;
     }
-    if (area === "ask") return i === 0 ? openAsk() : void send(CHIPS[i].prompt);
+    if (area === "ask") return void (i === 0 ? listen() : send(CHIPS[i].prompt));
     if (area === "results") {
       const hit = shownResults?.[i];
       if (hit) openTitleInApp(SERVER_URL, hit.type, hit.title).catch(() => flash(`Couldn't open ${hit.title.name}`));
@@ -546,8 +686,9 @@ export function App() {
       flash("⌕ Spotlight Search · 🎤 for TV voice");
       return;
     }
-    // The microphone key talks to Ask Nest on the home screen; Green cycles the theme.
-    if (key === "SearchVoice") return void openAsk();
+    // The microphone key talks to Ask Nest on the home screen; Green cycles the theme, Blue mutes spoken replies.
+    if (key === "SearchVoice") return void listen();
+    if (key === "Blue") return toggleSpeech();
     if (key === "Green") return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
     if (key === "ChannelUp") {
       getTvInputBridge().close();
@@ -698,6 +839,8 @@ export function App() {
         />
       ) : view === "party" ? (
         <WatchTogether onClose={() => setView("home")} />
+      ) : view === "lights" ? (
+        <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
       ) : view === "search" ? (
         <Search
           focus={searchFocus}

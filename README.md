@@ -53,8 +53,10 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
 ### Secretary Nest (launcher)
 
 - Clock, weather, installed TV apps, cross-app Continue Watching, Raptor Hunt.
-- **Ask Nest**: an assistant panel ("play dune", "something for tonight"), reminders, SmartThings lights and the
-  Daylight theme (`docs/launcher.md`).
+- **Ask Nest**: an assistant panel ("play dune", "something for tonight"), reminders and the Daylight theme
+  (`docs/launcher.md`).
+- **SmartThings from the TV, no server**: real scenes and lights, movie lights in the catalog apps, home status toasts,
+  and "turn off the couch light" by name (`docs/smartthings.md`).
 
 ### Home server (`packages/server`)
 
@@ -67,9 +69,12 @@ Implemented:
 - `/search`: one search across films, shows and anime.
 - `/resume` and `/handoff`: progress across apps, and "open this on the TV" from the phone.
 - **Secretary Desk** (`/companion`, `/remote`): the phone web app with reminders and the assistant.
-- `/reminders`, `/ai/ask`, `/ai/state`: reminders sync and the Secretary Bird assistant (Google Gemini, optional).
+- `/reminders`, `/ai/ask`, `/ai/state`, `/ai/transcribe`: reminders sync and the Secretary Bird assistant (Google
+  Gemini, optional), with voice from a room microphone and spoken replies.
 - `/weather` (Open-Meteo, no key), `/art` (fanart.tv artwork), `/domotics` (SmartThings lights).
 - `/health`.
+- Runs at home on the LAN, or hosted on the internet from the `Dockerfile` with a secret key in every URL
+  (`docs/hosting.md`).
 
 Upcoming:
 

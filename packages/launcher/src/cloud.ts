@@ -4,6 +4,7 @@ import { createClient, encodeLaunch, LAUNCH_KEY, mintAppSession, nuvioConfig, ty
 import { createPartyApi } from "@secretary/party/src/client.ts";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { NUVIO_KEY, NUVIO_URL, PARTY_URL, SYNC_BACKEND } from "./config.ts";
+import { homeGrant } from "./home-control.ts";
 
 export const cloud = createClient({ config: nuvioConfig(NUVIO_URL, NUVIO_KEY), kv: { get: readJson, set: writeJson } });
 
@@ -101,7 +102,8 @@ export async function launchCatalogApp(
       console.warn("[nest] app session failed", e);
     }
   }
-  if (!grant && !open) return fallback(id);
-  await launchWithData(id, encodeLaunch({ at: Date.now(), grant, open }));
+  const home = (await homeGrant()) ?? undefined;
+  if (!grant && !open && !home) return fallback(id);
+  await launchWithData(id, encodeLaunch({ at: Date.now(), grant, open, home }));
   if (grant && current) writeJson(GRANTS, { ...grants, [id]: { owner: current, installed } satisfies Grant });
 }
