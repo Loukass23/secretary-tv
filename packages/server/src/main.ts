@@ -45,6 +45,8 @@ const handle = createApp({
   weather: weatherPlaceFromEnv(process.env),
 });
 
+const HOP_HEADERS = new Set(["host", "connection", "keep-alive", "content-length", "transfer-encoding", "upgrade"]);
+
 createServer(async (req, res) => {
   try {
     const chunks: Buffer[] = [];
@@ -52,7 +54,11 @@ createServer(async (req, res) => {
       for await (const c of req) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
     }
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
-    const out = await handle(new Request(`http://localhost${req.url ?? "/"}`, { method: req.method, body }));
+    // The app reads content-type (/ai/transcribe); hop-by-hop headers stay here, the body is already whole.
+    const headers = Object.entries(req.headers).flatMap(([k, v]) =>
+      v == null || HOP_HEADERS.has(k) ? [] : [[k, Array.isArray(v) ? v.join(", ") : v] as [string, string]],
+    );
+    const out = await handle(new Request(`http://localhost${req.url ?? "/"}`, { method: req.method, body, headers }));
     res.writeHead(out.status, Object.fromEntries(out.headers));
     if (out.body) Readable.fromWeb(out.body as never).pipe(res);
     else res.end();

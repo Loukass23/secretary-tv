@@ -113,7 +113,7 @@ The home screen (`src/home.tsx`) is a glass dashboard; `src/nest-nav.ts` moves f
 | --- | --- | --- |
 | Section pill: Nest, Cinema, Shows, Anime | top centre | opens that app (Nest is this screen) |
 | Search, Lights, Bell | top right | opens search; cycles the Cinema, Warm and Off scenes (`POST /domotics/command`); jumps to the first open reminder (the badge counts them) |
-| Ask Nest chips | left, under the wave | Ask opens the TV keyboard (its microphone dictates); the others send that prompt |
+| Ask Nest chips | left, under the wave | Ask listens on the room microphone (or opens the TV keyboard, whose microphone dictates); the others send that prompt |
 | Ask Nest results | bottom left, in place of Continue Watching | opens the title in its app; Back closes the row |
 | App strip | top right, under the buttons | opens the app |
 | Reminders | right column | marks it done or open again (`POST /reminders/:id/toggle`) |
@@ -121,7 +121,7 @@ The home screen (`src/home.tsx`) is a glass dashboard; `src/nest-nav.ts` moves f
 | + | bottom right | types a new reminder with the TV keyboard (`POST /reminders`) |
 
 Focus starts on the first app. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone key
-opens Ask Nest, Green cycles the theme (automatic, Daylight, Night), and Back twice leaves. Without a server, the apps and the section pill still work and the other panels say what they need.
+asks Nest by voice (see "Room microphone"), Green cycles the theme (automatic, Daylight, Night), Blue mutes spoken replies, and Back twice leaves. Without a server, the apps and the section pill still work and the other panels say what they need.
 
 ## Ask Nest, weather and Daylight
 
@@ -146,3 +146,37 @@ to it, an artwork-coloured glow, weather in the header and a light theme.
   The halo is a blurred canvas drawn once per colour, moved and faded with transform and opacity.
 - **Daylight** (`drawBackdrop(tint, "day")` and the `sg-day` class): pale glass on a lavender and pink wash. Automatic
   by default (07:00–18:59), Green or a theme prompt changes it, and the choice is kept in `localStorage["nest.theme"]`.
+
+## Room microphone
+
+A USB speakerphone on the TV (a Jabra Speak 510 here) can be Ask Nest's microphone and speaker, so nobody has to hold
+the remote up to their mouth. It has to be plugged into the TV: the server may run anywhere, even in the cloud, and only
+ever sees the recorded clip. Bluetooth to the TV does not work for this, since Samsung TVs pair Bluetooth audio as an
+output only.
+
+- **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or the Ask chip) records from the first input
+  whose name looks like a speakerphone ("Jabra", "Speak", "Conference"), else the default input. The clip ends after
+  1.2 s of quiet following speech, after 6 s with no speech, at 15 s, or on the key again. Nest encodes it as 16 kHz WAV
+  with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and posts it to `POST /ai/transcribe`,
+  which returns only the words. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
+  TV and never reaches the lights.
+- **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
+  speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on the TV's current audio output, which is
+  the speakerphone when the TV has switched to it, and the wave speaks until it ends. Blue mutes or unmutes this
+  (`localStorage["nest.speak"]`).
+- **Fallbacks**: if the TV gives the app no microphone, or the server has no `GEMINI_API_KEY`, the key opens the TV
+  keyboard as before for the rest of the session. Secretary Desk has a "Hold" button that records on the phone (a
+  speakerphone paired to the phone over Bluetooth works there); phones only open the microphone on https or localhost.
+- **Privilege**: `http://tizen.org/privilege/mediacapture` in `tizen/config.xml.tpl`.
+
+### Checking a TV
+
+Not yet verified on the reference TV. With the speakerphone plugged in and Nest deployed with the privilege above:
+
+```bash
+node ../tv-kit/scripts/cdp.mjs <port> eval "navigator.mediaDevices.getUserMedia({audio:true}).then(s=>navigator.mediaDevices.enumerateDevices()).then(d=>d.filter(x=>x.kind==='audioinput').map(x=>x.label))"
+```
+
+A list with the speakerphone's name means Nest can use it. A rejection (NotAllowedError, NotFoundError or no
+`mediaDevices`) means this TV keeps the microphone to itself: use the Desk button instead. Note the result here, with
+the model, and measure a `cdp.mjs walk` with the microphone open for `docs/performance.md`.

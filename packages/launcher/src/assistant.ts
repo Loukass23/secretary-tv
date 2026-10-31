@@ -25,6 +25,8 @@ export interface AskReply {
   action: string;
   reminders?: Reminder[];
   turn?: AssistantTurn;
+  /** The reply read aloud (a data: URL), when asked for and the server has a speech model. */
+  speech?: string | null;
 }
 
 /** The chips under the wave: the first opens the keyboard (and its voice input), the rest are prompts. */
@@ -35,14 +37,46 @@ export const CHIPS = [
   { label: "Briefing", prompt: "Briefing" },
 ] as const;
 
-export const askNest = async (serverUrl: string, prompt: string, f: typeof fetch = fetch): Promise<AskReply> => {
+export const askNest = async (
+  serverUrl: string,
+  prompt: string,
+  f: typeof fetch = fetch,
+  speak = false,
+): Promise<AskReply> => {
   const res = await f(`${serverUrl}/ai/ask`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, source: "tv" }),
+    body: JSON.stringify({ prompt, source: "tv", ...(speak ? { speak } : {}) }),
   });
   if (!res.ok) throw new Error(String(res.status));
   return (await res.json()) as AskReply;
+};
+
+/** Why a clip gave no words: the server has no Gemini key, nobody spoke, or it failed. */
+export class VoiceError extends Error {
+  readonly reason: "unavailable" | "no-speech" | "failed";
+  constructor(reason: VoiceError["reason"]) {
+    super(reason);
+    this.reason = reason;
+  }
+}
+
+/** The words in a recorded clip (WAV), from the server's /ai/transcribe. */
+export const transcribeClip = async (serverUrl: string, wav: Uint8Array<ArrayBuffer>, f: typeof fetch = fetch): Promise<string> => {
+  let res: Response;
+  try {
+    res = await f(`${serverUrl}/ai/transcribe`, {
+      method: "POST",
+      headers: { "content-type": "audio/wav" },
+      body: wav,
+    });
+  } catch {
+    throw new VoiceError("failed");
+  }
+  if (res.status === 503) throw new VoiceError("unavailable");
+  if (res.status === 422) throw new VoiceError("no-speech");
+  if (!res.ok) throw new VoiceError("failed");
+  return ((await res.json()) as { transcript: string }).transcript;
 };
 
 export const fetchAssistant = async (serverUrl: string, f: typeof fetch = fetch): Promise<AssistantState> => {
