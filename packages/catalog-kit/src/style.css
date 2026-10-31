@@ -1,0 +1,48 @@
+/* Base styles for the catalog apps. Every screen is glass: tv-kit/src/glass and ui/*.css. --accent and --tinta
+   are set from Settings > Accent Color (lib/settings.ts). Flat fills only: gradients are the slowest raster on
+   the TV (docs/lessons.md). */
+:root {
+  --bg: #07080b;
+  --text: #f4f4f6;
+  --accent: #ff5a26;
+  --tinta: #ffffff;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 24px/1.35 system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+html.avplay, html.avplay body { background: transparent !important; }
+/* The video plane's hole in the page (app.tsx). Never takes focus or clicks. */
+.av-plane { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; }
+
+/* The island (ui/Island.tsx): a fixed-size pill that grows from its centre by transform; its text fades in after.
+   Its page is transparent and takes no clicks, and it sits above every screen and the player. */
+.sg-root.island-root { z-index: 20; background: transparent; pointer-events: none; }
+.island { transform: scaleX(0.2); opacity: 0; transition: transform 260ms var(--sg-ease), opacity 160ms ease-out; will-change: transform, opacity; display: flex; align-items: center; justify-content: center; }
+.island::after { background: rgba(10, 11, 14, 0.86); }
+.island.is-open { transform: scaleX(1); opacity: 1; }
+.island-text { position: relative; z-index: 2; font-size: 21px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 28px; opacity: 0; transition: opacity 160ms ease-out 140ms; }
+.island.is-open .island-text { opacity: 1; }
+.island.is-error .island-text { color: #ffb4a0; }
+
+/* The control centre (ui/ControlCentre.tsx): smoked glass grown down from the top by transform, above everything. */
+.sg-root.cc-root { z-index: 21; background: transparent; pointer-events: none; }
+.cc { transform-origin: top center; transform: scaleY(0.1); opacity: 0; transition: transform 240ms var(--sg-ease), opacity 160ms ease-out; will-change: transform, opacity; }
+.cc.is-open { transform: scaleY(1); opacity: 1; }
+.cc::after { background: rgba(10, 11, 14, 0.9); }
+/* Placed by top/left inside the pill: more specific than the glass rule that keeps a surface's children in flow. */
+.cc > .cc-head, .cc > .cc-row { position: absolute; z-index: 2; }
+.cc-head { position: absolute; left: 30px; right: 30px; top: 24px; display: flex; flex-direction: column; gap: 10px; }
+.cc-clock { font-size: 64px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.cc-now { font-size: 19px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-now b { color: var(--accent, #ff5a26); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; margin-right: 6px; }
+.cc-row { position: absolute; left: 16px; right: 16px; height: 62px; padding: 0 18px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 20px; }
+.cc-row.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); }
+.cc-val { color: inherit; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
+

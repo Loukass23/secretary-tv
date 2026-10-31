@@ -1,0 +1,70 @@
+/* Catalog home in glass (Home.tsx). Surfaces and controls come from tv-kit/src/glass/glass.css, the
+   backdrop layers and the kicker from art.css; the accent (Settings > Accent Color, --accent) is only for
+   highlights: progress, the OK hint, kickers. */
+
+.cat-clock { font-size: 56px; font-weight: 600; letter-spacing: -0.01em; line-height: 1; }
+
+.cat-info { padding: 30px 36px; display: flex; flex-direction: column; gap: 10px; }
+.cat-info h1 {
+  margin: 0;
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cat-info p {
+  flex: 1;
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.4;
+  color: rgba(244, 244, 246, 0.82);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.cat-hint { display: flex; align-items: center; gap: 22px; font-size: 18px; color: var(--sg-ink-dim); margin-top: auto; }
+.cat-ok {
+  padding: 6px 16px;
+  border-radius: 18px;
+  background: var(--accent, #ff5a26);
+  color: var(--tinta, #fff);
+  font-weight: 700;
+}
+
+.cat-row { position: absolute; left: 0; width: 1920px; height: 372px; }
+.cat-row-head { position: absolute; top: 0; display: flex; align-items: baseline; gap: 18px; }
+.cat-row-head h2 { margin: 0; font-size: 30px; font-weight: 600; }
+.cat-row-head span { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.cat-home .sg-tile-progress i { background: var(--accent, #ff5a26); }
+
+/* --- collection card --- */
+.cat-col { display: flex; padding: 26px 30px; }
+.cat-col-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.cat-col-info b { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.cat-col-info small { font-size: 19px; }
+.cat-fan { position: relative; width: 150px; flex-shrink: 0; }
+.cat-fan img { position: absolute; top: 10px; width: 84px; height: 124px; border-radius: 10px; object-fit: cover; }
+.cat-fan-0 { left: 0; transform: rotate(-8deg); }
+.cat-fan-1 { left: 34px; transform: rotate(-1deg); }
+.cat-fan-2 { left: 66px; transform: rotate(7deg); }
+
+/* Nuvio collection folders (FolderTile): cover art, else an emoji, else the name, on a flat fill. */
+.cat-folder { background: rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; }
+.cat-folder img { position: absolute; inset: 0; }
+.cat-folder-emoji { font-size: 96px; line-height: 1; margin-bottom: 40px; }
+.cat-folder-name { position: absolute; left: 18px; right: 18px; bottom: 16px; font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+/* Over cover art: a flat band, no shadow (docs/performance.md). */
+.cat-folder-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 18px; background: rgba(0, 0, 0, 0.55); font-size: 22px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-folder-title { padding: 0 22px; font-size: 30px; font-weight: 700; line-height: 1.15; text-align: center; }
+
+/* The style menu of a collection row (a long OK): a line per card shape, then the size. Flat fills, no blur. */
+.cat-style { padding: 26px 30px; display: flex; flex-direction: column; gap: 4px; }
+.cat-style .cat-kicker { margin-bottom: 8px; }
+.cat-style-line { display: flex; justify-content: space-between; align-items: center; height: 54px; padding: 0 22px; border-radius: 27px; font-size: 26px; }
+.cat-style-line.is-picked { font-weight: 700; }
+.cat-style-line.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); }
+.cat-style small { margin-top: 10px; font-size: 18px; color: var(--sg-ink-dim); }

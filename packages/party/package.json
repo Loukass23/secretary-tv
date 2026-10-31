@@ -1,0 +1,11 @@
+{
+  "name": "@secretary/party",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/worker.ts",
+  "scripts": {
+    "dev": "pnpm dlx wrangler@4 dev",
+    "check": "pnpm dlx wrangler@4 deploy --dry-run"
+  }
+}

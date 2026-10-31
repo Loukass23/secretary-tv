@@ -1,0 +1,53 @@
+/* Backdrop layers (art.tsx). Two permanent layers, rasterized once: a full-page image in the root layer
+   was re-scaled on every repaint and caused most long frames (docs/performance.md, glass catalog). */
+.cat-hero,
+.cat-shade {
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+}
+.cat-hero {
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 420ms var(--sg-ease);
+  will-change: opacity;
+}
+.cat-hero.is-front { opacity: 1; }
+.cat-shade { will-change: transform; }
+
+/* Shared by the catalog screens: the accent kicker and the dim meta line. */
+.cat-kicker {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent, #ff5a26);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cat-meta { font-size: 22px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Action pills inside glass panels: the primary one in the accent, the focused one white. */
+.cat-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 22px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  font-size: 21px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 180ms var(--sg-ease);
+}
+.cat-btn.is-primary { background: var(--accent, #ff5a26); color: var(--tinta, #fff); box-shadow: none; }
+.cat-btn.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); box-shadow: none; transform: scale(1.05); }
+
+/* Watched progress, in the accent. */
+.cat-bar { display: block; width: 180px; height: 5px; margin-top: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); overflow: hidden; }
+.cat-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; }
+.sg-glass.is-focus .cat-bar { background: rgba(16, 17, 20, 0.15); }

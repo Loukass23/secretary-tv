@@ -1,0 +1,24 @@
+{
+  "name": "@secretary/app-anime",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "tizen": "node ../tv-kit/scripts/tizen.mjs",
+    "cdp": "node ../tv-kit/scripts/cdp.mjs"
+  },
+  "dependencies": {
+    "@secretary/catalog-kit": "workspace:*",
+    "@secretary/tv-kit": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "fflate": "^0.8.2",
+    "vite": "^6.0.0"
+  },
+  "tizen": {
+    "packageIdEnv": "SECRETARY_TV_ANIME_ID"
+  }
+}

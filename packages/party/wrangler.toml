@@ -1,0 +1,24 @@
+# Not deployed yet. Before the first deploy: `pnpm dlx wrangler@4 secret put TICKET_SECRET` (32+ random bytes).
+name = "secretary-party"
+main = "src/worker.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+NUVIO_URL = "https://api.nuvio.tv"
+# Nuvio's publishable key from nuvio.tv/docs: public, the same one the TV apps ship.
+NUVIO_KEY = "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
+# PUBLIC_URL = "https://party.example.com"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "PartyRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PartyRoom"]
+
+# Room creation per account: 5 a minute.
+[[ratelimits]]
+name = "CREATE_LIMIT"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }

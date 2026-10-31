@@ -1,0 +1,32 @@
+/* The in-app Hub in glass (HubOverlay.tsx): Spotlight search and Settings, over the app's tinted wallpaper.
+   Same look as Secretary Nest's search (launcher/src/style.css). */
+.hub-glass { position: fixed; inset: 0; z-index: 5; }
+.hub-clock { right: 80px; top: 64px; font-size: 44px; font-weight: 600; line-height: 1; }
+
+.hub-search { display: flex; align-items: center; gap: 16px; padding: 0 20px 0 24px; border-radius: 34px; }
+.hub-search-icon { font-size: 28px; }
+.hub-search-query { flex: 1; font-size: 27px; font-weight: 700; display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
+.hub-search-hint { flex: 1; font-size: 24px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-glass.is-focus .hub-search-hint { color: var(--sg-focus-ink-dim); }
+.hub-caret { width: 3px; height: 30px; margin-left: 4px; background: var(--accent, #ff5a26); animation: hubBlink 1s steps(1) infinite; }
+@keyframes hubBlink { 50% { opacity: 0; } }
+.hub-keycap { padding: 4px 12px; border-radius: 10px; background: var(--sg-raised); font-size: 16px; font-weight: 700; letter-spacing: 0.06em; }
+
+.hub-key { display: flex; align-items: center; justify-content: center; border-radius: 16px; font-size: 28px; font-weight: 600; }
+.hub-recent-label { font-size: 21px; color: var(--sg-ink-dim); }
+.hub-chip { display: flex; align-items: center; justify-content: center; border-radius: 28px; font-size: 20px; white-space: nowrap; }
+
+.hub-rail { position: absolute; left: 0; width: 1920px; height: 440px; }
+.hub-rail-head { position: absolute; top: 0; }
+.hub-rail-head h2 { margin: 0; font-size: 28px; font-weight: 600; white-space: nowrap; }
+.hub-rail-name { position: absolute; font-size: 26px; font-weight: 600; }
+.hub .sg-tile-progress i { background: var(--accent, #ff5a26); }
+
+.hub-title { font-size: 46px; font-weight: 700; letter-spacing: -0.02em; }
+.hub-title small { margin-top: 6px; font-size: 21px; font-weight: 400; letter-spacing: 0; }
+.hub .sg-card-row { font-size: 28px; }
+.hub .sg-card-meta { font-size: 24px; font-weight: 600; }
+.hub .sg-card small { font-size: 19px; margin-left: 0; }
+
+.hub-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 21px; font-weight: 600; }
+.hub-toast::after { background: rgba(10, 11, 14, 0.7); }

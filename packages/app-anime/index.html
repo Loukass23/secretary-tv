@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Secretary Anime</title>
+<style>
+#boot{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#090a0d;color:#f3f2ef;font:700 32px/1.1 system-ui,sans-serif;will-change:transform,opacity;transition:transform 360ms cubic-bezier(.4,0,.2,1),opacity 320ms ease-in}
+#boot .b-crest{width:88px;height:88px;border-radius:26px;background:#14161e;border:2px solid #282c3a;display:flex;align-items:center;justify-content:center;font-size:42px;animation:bRise 480ms cubic-bezier(.2,.8,.2,1) both}
+#boot .b-kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#ff5a26}
+#boot .b-title{font-size:38px;font-weight:800;letter-spacing:-.02em}
+#boot .b-bar{width:220px;height:4px;border-radius:2px;background:#1c1f2a;overflow:hidden;margin-top:4px}
+#boot .b-bar i{display:block;height:100%;width:100%;background:#ff5a26;transform-origin:left;animation:bSweep 520ms cubic-bezier(.22,1,.36,1) both}
+#boot[data-stage="exit"]{opacity:0;transform:translate3d(0,-24px,0);pointer-events:none}
+#boot[data-mode="fade"][data-stage="exit"]{transform:none}
+@keyframes bRise{from{opacity:0;transform:translate3d(0,14px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes bSweep{from{transform:scaleX(.12)}to{transform:scaleX(1)}}
+</style>
+</head>
+<body>
+<div id="boot">
+  <div class="b-crest">🪶</div>
+  <span class="b-kicker">SECRETARY NEST · ANIME</span>
+  <div class="b-title">Secretary Anime</div>
+  <div class="b-bar"><i></i></div>
+</div>
+<div id="root"></div>
+<script type="module" src="./src/main.tsx"></script>
+</body>
+</html>

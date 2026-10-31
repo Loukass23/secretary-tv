@@ -1,0 +1,163 @@
+/* Secretary Nest: what is specific to the home and search screens. Surfaces and controls come
+   from tv-kit/src/glass/glass.css; the rules behind them are in docs/performance.md (glass lab). */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #07080b;
+  color: #f4f4f6;
+  font: 24px/1.35 system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.nest-clock { font-size: 124px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+.nest-date { font-size: 38px; font-weight: 500; line-height: 1.2; }
+.nest-date small { font-size: 30px; }
+.nest-label { font-size: 30px; font-weight: 600; }
+.nest-kicker {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ff5a26;
+}
+
+/* --- Ask Nest (home.tsx): last prompt and answer, the wave, the chips --- */
+.nest-ask { padding: 22px 30px 18px; }
+.nest-ask-head { display: flex; align-items: baseline; justify-content: space-between; height: 24px; }
+.nest-ask-head small { font-size: 19px; }
+.nest-ask-log { height: 98px; margin-top: 6px; animation: nestRise 420ms var(--sg-ease) both; }
+.nest-ask-log small { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-ask-log p {
+  margin: 4px 0 0;
+  font-size: 25px;
+  line-height: 1.32;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* A new answer rises into place: opacity and transform only. */
+@keyframes nestRise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+.nest-chips { position: absolute; left: 24px; right: 24px; bottom: 18px; display: flex; gap: 10px; height: 48px; align-items: center; }
+.sg-glass.nest-ask > .nest-chips { position: absolute; }
+.nest-chips small { font-size: 21px; padding-left: 6px; }
+.nest-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 24px;
+  background: var(--sg-raised);
+  font-size: 21px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.nest-chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--sg-focus);
+  opacity: 0;
+  transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
+}
+.nest-chip.is-focus { color: var(--sg-focus-ink); }
+.nest-chip.is-focus::before { opacity: 1; }
+.nest-chip { isolation: isolate; }
+
+.nest-weather { display: flex; align-items: center; gap: 14px; }
+.nest-weather-icon { font-size: 52px; line-height: 1; }
+.nest-weather b { display: block; font-size: 38px; font-weight: 600; line-height: 1.1; }
+.nest-weather small { font-size: 21px; }
+
+.nest-label-hint { margin-left: 14px; font-size: 19px; font-weight: 500; color: var(--sg-ink-dim); }
+.nest-result-cap {
+  width: 360px;
+  opacity: 0;
+  transition: opacity var(--sg-fade) var(--sg-ease), transform var(--sg-move) var(--sg-ease);
+  will-change: transform, opacity;
+}
+.nest-result-cap.is-on { opacity: 1; }
+.nest-result-cap b { display: block; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-result-cap small { font-size: 18px; }
+
+.nest-empty { display: flex; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
+.nest-empty small { font-size: 24px; }
+.sg-card.is-done b { text-decoration: line-through; }
+
+.nest-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 22px; font-weight: 600; }
+
+/* --- search --- */
+.nest-search-pill { display: flex; align-items: center; gap: 18px; padding: 0 22px 0 26px; border-radius: 34px; }
+.nest-search-icon { font-size: 30px; }
+.nest-search-query { flex: 1; font-size: 28px; font-weight: 700; display: flex; align-items: center; }
+.nest-search-hint { flex: 1; font-size: 26px; color: var(--sg-ink-dim); }
+.nest-caret { width: 3px; height: 32px; margin-left: 4px; background: #ff5a26; animation: nestBlink 1s steps(1) infinite; }
+@keyframes nestBlink { 50% { opacity: 0; } }
+.nest-keycap {
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: var(--sg-raised);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.nest-search-clock { font-size: 52px; font-weight: 600; }
+.nest-key { display: flex; align-items: center; justify-content: center; border-radius: 16px; font-size: 28px; font-weight: 600; }
+.nest-recent-label { font-size: 22px; color: var(--sg-ink-dim); }
+.nest-recent { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 21px; white-space: nowrap; }
+.nest-result-name { font-size: 28px; font-weight: 600; }
+
+/* --- account (account.tsx): sign-in and profiles --- */
+.nest-account { padding: 0; }
+.nest-account h1 { margin: 10px 0 18px; font-size: 56px; font-weight: 700; letter-spacing: -0.01em; }
+.nest-signin { position: absolute; left: 60px; top: 60px; right: 60px; display: flex; gap: 64px; }
+.nest-qr-box { width: 480px; height: 480px; border-radius: var(--sg-r-card); background: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.nest-qr { display: block; }
+.nest-qr-wait { width: 440px; height: 440px; border-radius: 12px; background: #e9e9ee; }
+.nest-signin-text { flex: 1; display: flex; flex-direction: column; }
+.nest-signin-text ol { margin: 0 0 22px; padding-left: 36px; font-size: 30px; line-height: 1.6; }
+.nest-signin-note { margin: 0; font-size: 22px; line-height: 1.4; color: var(--sg-ink-dim); }
+.nest-signin-status { margin-top: auto; font-size: 26px; font-weight: 600; color: #ffb38f; }
+.nest-button { display: flex; align-items: center; justify-content: center; border-radius: 36px; font-size: 26px; font-weight: 600; }
+.nest-profiles-head { position: absolute; left: 0; right: 0; top: 70px; text-align: center; }
+.nest-profile { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.nest-profile b { font-size: 28px; }
+.nest-profile small { font-size: 21px; min-height: 26px; }
+.nest-profile-disc {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--sg-fill);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+  transition: transform var(--sg-move) var(--sg-ease);
+}
+.nest-profile.is-picked .nest-profile-disc { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18), 0 0 0 4px rgba(255, 255, 255, 0.35); }
+.nest-profile.is-focus .nest-profile-disc { transform: scale(1.1); box-shadow: 0 0 0 6px var(--sg-focus); }
+.nest-profile.is-action .nest-profile-disc { font-size: 64px; color: var(--sg-ink-dim); }
+.nest-profiles-note { position: absolute; left: 0; right: 0; bottom: 70px; text-align: center; }
+/* Placed blocks keep their absolute position inside the panel (glass.css makes surface children relative). */
+.sg-glass > .nest-signin,
+.sg-glass > .nest-profiles-head,
+.sg-glass > .nest-profile,
+.sg-glass > .nest-profiles-note { position: absolute; }
+.sg-glass > .nest-account-buttons { position: absolute; inset: 0; }
+
+/* --- watch together --- */
+.nest-party-text { position: absolute; left: 60px; top: 60px; right: 60px; bottom: 170px; display: flex; flex-direction: column; }
+.nest-party-text p { max-width: 900px; }

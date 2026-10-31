@@ -1,0 +1,49 @@
+{
+  "name": "Slow Test Repository",
+  "scrapers": [
+    {
+      "id": "quick",
+      "name": "Quick (0.3 s)",
+      "filename": "providers/quick.js",
+      "description": "Answers after 0.3 s with a 1080p link",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "steady",
+      "name": "Steady (4 s)",
+      "filename": "providers/steady.js",
+      "description": "Answers after 4 s with a 2160p link",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "late",
+      "name": "Late (12 s)",
+      "filename": "providers/late.js",
+      "description": "Answers after 12 s with a 2160p HDR link",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true
+    },
+    {
+      "id": "notice",
+      "name": "Notice (at once)",
+      "filename": "providers/notice.js",
+      "description": "Answers at once with a message row, not a film",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true
+    }
+  ]
+}

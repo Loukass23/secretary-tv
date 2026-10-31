@@ -1,0 +1,82 @@
+/* Detail page in glass (Detail.tsx). The title's art fills the page (art.tsx layers) under the shade;
+   the info panel and the sources sheet are frosted from that art. */
+.detail-glass { position: fixed; inset: 0; z-index: 2; }
+.det-clock { right: 80px; top: 56px; font-size: 52px; font-weight: 600; line-height: 1; }
+
+.det-info { padding: 34px 40px; display: flex; flex-direction: column; gap: 12px; }
+.det-info h1 {
+  margin: 0;
+  font-size: 60px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.det-plot {
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.42;
+  color: rgba(244, 244, 246, 0.84);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+.det-plot.short { -webkit-line-clamp: 3; }
+
+.det-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: auto; }
+
+.det-will { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 19px; }
+.det-will-k { font-size: 14px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.det-will-dim { color: var(--sg-ink-dim); }
+.det-badge { padding: 3px 10px; border-radius: 8px; background: var(--sg-raised); font-size: 16px; font-weight: 700; }
+
+/* --- episodes --- */
+.det-ep { position: absolute; top: 0; width: 320px; height: 250px; }
+.det-ep.is-soon { opacity: 0.5; }
+.det-ep-name {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 194px;
+  font-size: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- sources sheet --- */
+.det-scrim { left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(0, 0, 0, 0.45); }
+.det-sheet { padding: 34px 30px; animation: detSheetIn 220ms var(--sg-ease) both; }
+/* An overlay over the page: darker (smoked) glass so its text reads over any part of the art. */
+.det-sheet::after { background: rgba(10, 11, 14, 0.62); }
+@keyframes detSheetIn { from { opacity: 0; } to { opacity: 1; } }
+.det-sheet .cat-kicker { padding: 0 10px; }
+.det-sheet h2 { margin: 10px 10px 0; font-size: 34px; font-weight: 700; line-height: 1.15; }
+.det-sheet .sg-card-row { font-size: 24px; }
+.det-sheet .sg-card small { font-size: 18px; margin-left: 26px; }
+/* Provider tabs over the source list: placed like the list (the sheet's other children flow), and up to nine, so
+   smaller than the glass default. */
+.det-sheet > .det-tabs { position: absolute; }
+.det-tabs .sg-seg-item { font-size: 17px; white-space: nowrap; }
+/* Section headers in the sources sheet (ui/sheet.ts): small caps text, no surface. */
+.det-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: 17px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sg-ink-dim); }
+/* Filter chips over the source list: placed like the tabs, smaller text so six fit. */
+.det-sheet > .det-chips { position: absolute; }
+.det-chips .sg-seg-item { font-size: 16px; white-space: nowrap; }
+/* The details card over the sheet's list (Detail.tsx SourceDetails): smoked, no frost, text only. */
+.det-sheet > .det-details { position: absolute; z-index: 5; padding: 24px 30px; }
+.det-details::after { background: rgba(10, 11, 14, 0.94); }
+.det-facts { margin: 0; display: grid; grid-template-columns: 170px 1fr; gap: 14px 18px; font-size: 21px; }
+.det-facts dt { color: var(--sg-ink-dim); font-weight: 600; }
+.det-facts dd { margin: 0; overflow-wrap: anywhere; }
+.det-raw { white-space: pre-wrap; color: var(--sg-ink-dim); font-size: 18px; }
+/* "16% watched · 38 min left" over the Resume button: a thin accent bar, moved by transform. */
+.det-progress { display: flex; align-items: center; gap: 14px; margin-top: auto; font-size: 18px; color: var(--sg-ink-dim); }
+.det-progress + .det-actions { margin-top: 12px; }
+.det-progress-bar { display: block; width: 180px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
+.det-progress-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; }
+

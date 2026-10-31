@@ -1,0 +1,65 @@
+/* Player in glass (PlayerView.tsx). While the stream prepares: the title's art with a frosted panel (art.tsx).
+   Over the video: the video is a plane behind a transparent page (docs/lessons.md, AVPlay), so the controls are
+   smoked glass with no frost, and the page behind them stays transparent. */
+.player { position: fixed; inset: 0; }
+/* While a player is attached it owns the screen: every other screen still mounted (the home always is) would
+   cover the video plane, so all of them hide, whatever they are. */
+html.avplay #root > :not(.player):not(.island-root):not(.cc-root):not(.av-plane),
+html.avplay #boot { visibility: hidden; }
+.ply-start { z-index: 1; }
+
+.ply-panel { padding: 30px 36px; display: flex; flex-direction: column; gap: 10px; }
+.ply-panel h1 { margin: 0; font-size: 46px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-panel p { margin: 0; font-size: 22px; color: var(--sg-ink-dim); }
+.ply-badges { display: flex; align-items: center; gap: 10px; }
+.ply-badge { padding: 3px 10px; border-radius: 8px; background: var(--sg-raised); font-size: 16px; font-weight: 700; }
+.ply-dim { font-size: 18px; color: var(--sg-ink-dim); }
+
+/* The bar moves by transform, so playback never repaints it. */
+.ply-bar { display: block; height: 6px; margin-top: auto; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
+.ply-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; will-change: transform; }
+.ply-bar i.is-loading { width: 30%; animation: plySlide 1.4s linear infinite; }
+.ply-bar i.is-failed { width: 100%; background: rgba(255, 255, 255, 0.35); }
+@keyframes plySlide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+/* --- over the video --- */
+.sg-root.ply-osd { z-index: 2; background: transparent; }
+.ply-controls { padding: 24px 32px; display: flex; flex-direction: column; justify-content: space-between; }
+.ply-controls::after { background: rgba(10, 11, 14, 0.72); }
+.ply-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.ply-title { font-size: 26px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-state { font-size: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent, #ff5a26); }
+.ply-controls .ply-bar { margin-top: 0; }
+.ply-time { font-size: 21px; font-weight: 600; color: var(--sg-ink-dim); }
+
+/* The Up next card (PlayerView.tsx): over the video like the controls, with a countdown bar moved by transform. */
+.sg-root.ply-next-root { z-index: 3; background: transparent; }
+.ply-next { padding: 22px; display: flex; gap: 22px; align-items: stretch; }
+.ply-next::after { background: rgba(10, 11, 14, 0.78); }
+.ply-next-art { width: 300px; height: 206px; object-fit: cover; border-radius: 14px; flex: none; position: relative; z-index: 2; }
+.ply-next-text { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-width: 0; position: relative; z-index: 2; }
+.ply-next .ply-title { white-space: normal; }
+.ply-count { width: 100%; animation: plyCount linear forwards; }
+@keyframes plyCount {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* The skip pill (PlayerView.tsx): over the video, focused, OK skips. */
+.sg-root.ply-skip-root { z-index: 3; background: transparent; }
+.ply-skip { display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; }
+.ply-skip > span { position: relative; z-index: 2; }
+
+/* The pause panel (PlayerView.tsx): over the paused video, smoked glass with no frost, in place of the controls. */
+.sg-root.ply-pause-root { z-index: 3; background: transparent; }
+.ply-pause { padding: 30px 36px; display: flex; flex-direction: column; gap: 12px; }
+.ply-pause::after { background: rgba(10, 11, 14, 0.8); }
+.ply-pause > * { position: relative; z-index: 2; }
+.ply-pause h1 { margin: 0; font-size: 46px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-pause-logo { max-width: 520px; max-height: 120px; object-fit: contain; object-position: left center; }
+.ply-pause-plot { margin: 0; font-size: 20px; line-height: 1.4; color: var(--sg-ink-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ply-pause .ply-bar { margin-top: auto; }
+

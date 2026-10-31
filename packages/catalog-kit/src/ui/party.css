@@ -1,0 +1,45 @@
+/* The watch party over the video (PartyOverlay.tsx): smoked glass with no frost, like the controls (player.css). */
+.sg-root.pty-root { z-index: 4; background: transparent; pointer-events: none; }
+.pty-root .sg-glass::after { background: rgba(10, 11, 14, 0.78); }
+.pty-root .sg-glass > * { position: relative; z-index: 2; }
+
+.pty-chip { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; border-radius: var(--sg-r-pill); font-size: 22px; font-weight: 700; }
+.pty-notice { display: flex; align-items: center; justify-content: center; border-radius: var(--sg-r-pill); font-size: 21px; font-weight: 600; }
+
+/* Reactions rise on the right; transform and opacity only, so the video plane is never repainted around them. */
+.pty-react { position: absolute; right: 90px; display: flex; align-items: center; gap: 12px; padding: 8px 18px 8px 10px; border-radius: 40px; background: rgba(10, 11, 14, 0.6); animation: ptyRise 4s var(--sg-ease) forwards; will-change: transform, opacity; }
+.pty-react b { font-size: 48px; line-height: 1; }
+.pty-react span { font-size: 20px; font-weight: 700; }
+@keyframes ptyRise {
+  0% { transform: translateY(40px); opacity: 0; }
+  10% { transform: translateY(0); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+
+.pty-panel { padding: 40px 48px; display: flex; gap: 56px; }
+.pty-join { width: 320px; flex: none; display: flex; flex-direction: column; gap: 10px; }
+.pty-qr-box { width: 300px; height: 300px; border-radius: var(--sg-r-card); background: #fff; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.pty-qr { display: block; }
+.pty-code { font-size: 64px; font-weight: 800; letter-spacing: 0.12em; line-height: 1; }
+.pty-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+
+.pty-members { display: flex; flex-wrap: wrap; gap: 16px; }
+.pty-member { width: 300px; height: 92px; padding: 0 18px; border-radius: var(--sg-r-card); background: var(--sg-fill); box-shadow: inset 0 0 0 1.5px var(--sg-line); display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto; column-gap: 14px; align-content: center; }
+.pty-member i { grid-row: span 2; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 26px; font-weight: 800; color: #101114; }
+.pty-member b { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pty-member small { font-size: 17px; }
+.pty-member.is-away { opacity: 0.5; }
+.pty-member.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); box-shadow: none; }
+.pty-member.is-focus small { color: var(--sg-focus-ink-dim); }
+
+.pty-reactions { display: flex; gap: 14px; margin-top: auto; }
+.pty-emoji { width: 84px; height: 84px; border-radius: 50%; background: var(--sg-fill); display: flex; align-items: center; justify-content: center; font-size: 44px; transition: transform var(--sg-fade) var(--sg-ease); }
+.pty-emoji.is-focus { background: var(--sg-focus); transform: scale(1.12); }
+.pty-actions { display: flex; gap: 18px; }
+
+/* Detail's Watch together card (Detail.tsx): start a party or type a code. */
+.pty-card { padding: 34px 40px; display: flex; flex-direction: column; gap: 14px; }
+.pty-card h2 { margin: 0; font-size: 36px; font-weight: 700; }
+.pty-card p { margin: 0; font-size: 20px; color: var(--sg-ink-dim); }
+.pty-card .pty-actions { margin-top: auto; }

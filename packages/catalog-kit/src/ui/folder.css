@@ -1,0 +1,36 @@
+/* A Nuvio collection folder in glass (NuvioFolder.tsx): the folder's art behind (art.tsx), its catalogs as tabs over
+   a poster grid or as rows. */
+.folder-glass { position: fixed; inset: 0; z-index: 2; }
+.nf-head { position: absolute; width: 1200px; }
+.nf-head h1 { margin: 8px 0 0; font-size: 52px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf-head p { margin: 6px 0 0; font-size: 22px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nf-empty { position: absolute; top: 40px; font-size: 26px; color: var(--sg-ink-dim); }
+/* A name too long for its tab is cut at its end, not at both ends as a centred one would be. */
+.nf .sg-seg-item { min-width: 0; white-space: nowrap; overflow: hidden; justify-content: flex-start; padding: 0 20px; }
+
+/* The View button, the dropdown / page pill and the popup list. */
+.nf-view { display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 600; border-radius: var(--sg-r-pill); }
+.nf-pill { display: flex; align-items: center; justify-content: space-between; padding: 0 30px; font-size: 26px; border-radius: var(--sg-r-pill); }
+.nf-pill small { font-size: 20px; color: var(--sg-ink-dim); }
+.sg-glass.is-focus.nf-pill small { color: var(--sg-focus-ink-dim); }
+.nf-popup { padding: 26px 30px; display: flex; flex-direction: column; gap: 2px; z-index: 30; }
+.nf-popup .cat-kicker { margin-bottom: 8px; }
+.nf-popup small { margin-top: 10px; font-size: 18px; color: var(--sg-ink-dim); }
+
+/* Timeline: posters along a line, the year on its dot where it changes. */
+.nf-tl-line { position: absolute; top: 31px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.25); }
+.nf-tl-step { position: absolute; top: 0; width: 200px; height: 440px; }
+.nf-tl-dot { position: absolute; left: 0; top: 18px; min-width: 28px; height: 28px; border-radius: 14px; background: rgba(255, 255, 255, 0.35); }
+.nf-tl-dot.is-year { top: 10px; height: 44px; padding: 0 16px; border-radius: 22px; background: var(--accent, #ff5a26); color: var(--tinta, #fff); font-size: 22px; font-weight: 700; line-height: 44px; }
+.nf-tl-step b { position: absolute; left: 2px; right: 2px; top: 386px; font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Cover flow: every cover is placed by transform alone; the dimming is a flat layer, not a filter. */
+.nf-flow { position: absolute; border-radius: var(--sg-r-card); overflow: hidden; transition: transform 260ms var(--sg-ease), opacity 260ms var(--sg-ease); will-change: transform; }
+.nf-flow img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nf-flow i { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+.nf-flow.is-focus { outline: 5px solid var(--sg-focus); outline-offset: -5px; }
+
+/* Ranking: a big outlined numeral beside each poster. */
+.nf-rank { position: absolute; top: 0; width: 310px; height: 320px; }
+.nf-rank span { position: absolute; left: 0; bottom: 10px; font-size: 200px; font-weight: 800; line-height: 1; color: transparent; -webkit-text-stroke: 4px rgba(255, 255, 255, 0.7); }
+.nf-rank .sg-tile { z-index: 1; }

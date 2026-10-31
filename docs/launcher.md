@@ -1,0 +1,148 @@
+# Secretary Nest & the In-App Hub
+
+`packages/launcher` (**Secretary Nest**) is a small home-screen app in the glass style (below): a clock, a strip of installed
+apps that it opens through `tizen.application`, reminders and a briefing from `@secretary/server`, cross-app Continue
+Watching, a lights scene button, and **Raptor Hunt** unified search. It is a normal app on the TV. It does not
+replace Smart Hub and does not change any TV setting.
+
+Nest is the one dashboard. Every catalog app (`app-movies`, `app-series`, `app-anime`) has the same glass top bar
+(`Nest | Cinema | Shows | Anime`, Search, Settings): **Nest** and CH+ open Secretary Nest (the catalog app stays alive
+behind it, so coming back is instant), and the in-app Hub (`HubOverlay.tsx`) keeps only Search and Settings. Opening
+Nest needs the launcher's id at build time (`SECRETARY_TV_LAUNCHER_ID`); without it the catalog app says so.
+
+## Why not Samsung Smart Hub Preview or Samsung Universal Search?
+
+Samsung's native Smart Hub offers two integration points—Smart Hub Preview (tiles above the app icon on the TV's home
+bar) and Universal/Bixby Search—that were evaluated and rejected in favor of our own overlay architecture:
+
+1. **Partner & Cloud Lock-In**:
+   - **Samsung Universal Search** cannot be queried or populated by a local developer-signed `.wgt` app. Samsung requires
+     partner-level Seller Office onboarding and cloud-to-cloud catalog feed ingestion before native TV search will index
+     or deep-link into an app.
+   - **Smart Hub Preview** (`http://tizen.org/metadata/app_ui_type/base_screen_resolution` plus a Tizen background
+     service or public preview JSON feed) requires partner-tier privileges and background service execution that retail
+     firmware restricts for non-store apps.
+2. **Vendor Lock-In & Portability**:
+   - Wiring Continue Playing and Search into `tizen.application.ApplicationControl` and Samsung's proprietary preview
+     schema locks the experience to Samsung Tizen.
+   - Keeping Continue Playing (`GET/PUT /resume`) and Unified Search (`GET /search?q=`) inside `@secretary/server` and
+     `@secretary/catalog-kit`'s in-app overlay means the exact same UI works on Samsung Tizen, LG webOS, Android TV, or
+     any standard web browser with zero vendor-specific APIs.
+3. **Zero App-Switching Latency**:
+   - Launching a separate Tizen widget via `tizen.application.launch()` takes 2–3 seconds of cold boot.
+   - By embedding the **Search & Hub Overlay** and in-place catalog switching directly inside `catalog-kit`, opening
+     Search, browsing cross-category Continue Playing, or playing a Series/Anime from inside the Movies app happens
+     instantaneously in the same webview without invoking Tizen's application manager.
+
+## What was verified on the reference TV (GU43DU7199UXZG, Tizen 9)
+
+- `tizen.application.getAppsInfo` returns 472 entries; most are internal services. The filter in `src/apps.ts`
+  (store-style ids, no service/worker/agent/e-manual names, `show !== false`) leaves 9 real apps on this TV, with icons.
+  Icon paths load straight into `<img>`.
+- `tizen.application.launch(id)` opens another app: pressing OK on the Movies tile sent the launcher to `hidden`.
+- Movies can launch the launcher again (`application.launch` privilege), so Back at Movies' root returns to the launcher
+  when the build knows the launcher's id (`SECRETARY_TV_LAUNCHER_ID`, which becomes `<id>.Launcher`).
+- Netflix, Prime and Disney+ do not appear in `getAppsInfo` on this TV. Pin them by id in `src/config.ts` if you find
+  theirs; a pin bypasses the filters. The TV's Settings (`com.samsung.tv.coba.setting.networksettings`) is pinned.
+- Size: 7.4 KB of JS gzipped, 21.5 KB `dist/`.
+
+## Install
+
+```bash
+cd packages/launcher
+SECRETARY_TV_LAUNCHER_ID=ScrtLaunch node ../tv-kit/scripts/tizen.mjs deploy
+```
+
+Put `SECRETARY_TV_LAUNCHER_ID=ScrtLaunch` in `.env.tizen` to make it permanent. Rebuild Movies afterwards so its Back
+returns here. Uninstalling the launcher removes it cleanly; nothing else on the TV was touched.
+
+## Autorun (you do this in the TV's own settings)
+
+Samsung's menu names vary by firmware. Look for a start-up option along the lines of
+Settings > General (or Smart Features) > Start-up options, and choose "Autorun Last App". The TV then opens whichever app
+was running when it was switched off; leave the launcher (or any catalog app) running when you turn the TV off. Turn
+"Autorun Smart Hub" off if it is separate. To undo, set the option back. I did not change this on your TV.
+
+## Home button redirect: not done
+
+Pressing the remote's Home key still opens Smart Hub. The only public project that redirects it is
+[NelsonEU/arn0-tv](https://github.com/NelsonEU/arn0-tv). Its guide (docs/setup-tv.md there) says:
+
+- It rewrites undocumented system preferences (`db/appfw/home_appid` and the main app-control entry, both from
+  `com.samsung.tv.csfs` to the launcher's id) through native helpers run over `sdb`.
+- Its runner is deliberately not published, and it was tested on one TV only (Tizen 6.5, one firmware). The guide
+  says not to run it on other hardware and not to weaken its guards.
+- A firmware update can undo or change the settings. It says to save a baseline of your TV's own values first, verify,
+  then apply, and to restore the baseline before uninstalling the launcher.
+- If Home is misdirected and `sdb` cannot reach the TV, its fallback is a Samsung Home entry in the launcher's own settings,
+  and otherwise Samsung's support path.
+
+I did not apply this. It changes system settings that I should not change on your TV, on a different model and Tizen
+version than the one it was tested on, using code I do not have. If you want to attempt it yourself, rollback means:
+read your TV's current values before touching anything, keep them outside the repo, restore them before uninstalling the
+launcher, and have a way back that does not depend on the launcher (a second `sdb` route to the TV, or Samsung support).
+
+## Where this leaves the idea
+
+- **In-app Hub (Search and Settings)**: Always available inside Movies, Series, and Anime (CH- or the Search button)
+  with cross-category Continue Playing and Unified Search, zero Tizen lock-in, and no app switch. The dashboard
+  itself is Nest (CH+).
+- **Boot into the launcher or last catalog app**: Workable with Autorun Last App, no system changes.
+- **Home key to the launcher**: Unproven on this TV and risky; keep using CH+ and "Autorun Last App" instead.
+
+## Glass components and the lab
+
+`packages/tv-kit/src/glass` holds the floating translucent ("glass") components for the home screen: `GlassRoot`,
+`Glass`, `Segmented`, `IconButton`, `DateChip`, `ListCard`, `MediaTile`, `Avatar`, `Fab` and `Scroller`. Import them by path
+(`@secretary/tv-kit/src/glass/index.ts`) so the catalog apps do not load their CSS. The blur is faked: `blurBackdrop()` blurs
+the page backdrop once and each surface shows its own piece of it, because a live `backdrop-filter` runs at about 15 fps on
+the reference TV. Measurements are in `performance.md`.
+
+To see the lab screen built from them, run this over the inspector, then press Red to cycle `flat`, `live` and `fake`, and Back
+to return to the launcher:
+
+```bash
+node ../tv-kit/scripts/cdp.mjs <port> eval "localStorage.setItem('nest.lab','fake');location.reload()"
+```
+
+## Home screen layout and keys
+
+The home screen (`src/home.tsx`) is a glass dashboard; `src/nest-nav.ts` moves focus between its areas and is unit tested.
+
+| Area | Where | OK does |
+| --- | --- | --- |
+| Section pill: Nest, Cinema, Shows, Anime | top centre | opens that app (Nest is this screen) |
+| Search, Lights, Bell | top right | opens search; cycles the Cinema, Warm and Off scenes (`POST /domotics/command`); jumps to the first open reminder (the badge counts them) |
+| Ask Nest chips | left, under the wave | Ask opens the TV keyboard (its microphone dictates); the others send that prompt |
+| Ask Nest results | bottom left, in place of Continue Watching | opens the title in its app; Back closes the row |
+| App strip | top right, under the buttons | opens the app |
+| Reminders | right column | marks it done or open again (`POST /reminders/:id/toggle`) |
+| Continue Watching | bottom left | opens the title in its app and resumes |
+| + | bottom right | types a new reminder with the TV keyboard (`POST /reminders`) |
+
+Focus starts on the first app. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone key
+opens Ask Nest, Green cycles the theme (automatic, Daylight, Night), and Back twice leaves. Without a server, the apps and the section pill still work and the other panels say what they need.
+
+## Ask Nest, weather and Daylight
+
+Ideas taken from a light, glassy TV concept video: an assistant panel with a voice wave, answers that lay out titles next
+to it, an artwork-coloured glow, weather in the header and a light theme.
+
+- **Ask Nest** (`src/assistant.ts`, the panel in `home.tsx`) replaced the Briefing card. It shows the last prompt and
+  answer, a wave (`VoiceWave` in tv-kit glass) and four chips. The wave is idle, listening (TV keyboard open), thinking
+  (a prompt in flight on this TV or reported by the server) or speaking (for 3 s after an answer).
+- Prompts go to `POST /ai/ask` with `source: "tv"`. Nest polls `GET /ai/state` every 2.5 s while the home screen is up,
+  so prompts typed on the phone companion show on the TV too ("From your phone"). The server keeps the last 8 turns in
+  memory only.
+- **Watch prompts** (`packages/server/src/intent.ts`): "play dune", "show me a comedy", "something for tonight", "find me
+  scary anime". A named title is searched; a kind or genre alone browses Cinemeta's top catalogs (Kitsu's trending or
+  popular for anime). The titles replace Continue Watching until Back; OK opens one in its app. Reminders, lights and the
+  Gemini briefing work as before.
+- "light theme", "dark mode" and "auto theme" are answered on the TV without the server.
+- **Weather**: `GET /weather` uses Open-Meteo (no key). Set `WEATHER_CITY` (looked up once) or `WEATHER_LAT` and
+  `WEATHER_LON` in `.env`; without them Nest shows no weather.
+- **Glow**: the focused tile gets a halo in its artwork's colour. Artwork hosts send no CORS headers, so Nest reads the
+  colour through `GET /art?u=` (metahub, Kitsu, TMDB and fanart.tv only). Without a server the glow uses the app's tint.
+  The halo is a blurred canvas drawn once per colour, moved and faded with transform and opacity.
+- **Daylight** (`drawBackdrop(tint, "day")` and the `sg-day` class): pale glass on a lavender and pink wash. Automatic
+  by default (07:00–18:59), Green or a theme prompt changes it, and the choice is kept in `localStorage["nest.theme"]`.
