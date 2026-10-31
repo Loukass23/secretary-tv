@@ -135,6 +135,20 @@ The first two walks after a launch had 3-4 frames over 50 ms while posters decod
 time; with the wave paused or the glow hidden those first walks had none, so neither costs anything once warm. The wave is
 three SVG ribbons drawn once and moved by transform (translate and a flipping scaleY). JS 30 KB gzip.
 
+### Room microphone (Ask Nest by voice)
+
+The same home screen on the reference TV with a Jabra Speak 510 on USB (`docs/launcher.md`, "Room microphone"), default
+`cdp.mjs walk` after a reload and one warm-up walk. "Mic open" means the mic key was pressed and the clip ended with
+no speech, which leaves the stream open for the next ask (no Web Audio graph is running then):
+
+| State (3 walks each) | Median frame | p95 | Worst | Frames over 50 ms |
+| --- | --- | --- | --- | --- |
+| Mic never opened | 17 ms | 17 ms | 33-50 ms | 0 |
+| Mic open | 17 ms | 17-33 ms | 50-67 ms | 0-1 |
+
+Keeping the microphone open costs nothing measurable. The first walk with eleven new poster results in the row had 7
+frames over 50 ms while they decoded, as in the Ask Nest walks above.
+
 ## Glass catalog home (Cinema, Shows, Anime)
 
 The catalog home in glass, "top shelf" style: the focused title's backdrop fills the page after focus rests 0.6 s, a

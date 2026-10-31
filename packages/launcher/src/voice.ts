@@ -85,6 +85,10 @@ export function encodeWav(samples: Float32Array, rate: number): Uint8Array<Array
   return out;
 }
 
+/** A speakerphone by its device label, for both its microphone and its speaker. */
+// Not a bare "speak": the TV calls its own output "builtin-speaker".
+const ROOM_DEVICE = /jabra|speakerphone|conference/i;
+
 /** The microphone stays open between asks, so the second press starts at once. */
 let mic: Promise<MediaStream> | null = null;
 
@@ -97,7 +101,7 @@ async function openMic(): Promise<MediaStream> {
   const first = await md.getUserMedia({ audio: CONSTRAINTS });
   // Labels are only filled in once a stream is open.
   const inputs = (await md.enumerateDevices()).filter((d) => d.kind === "audioinput");
-  const room = inputs.find((d) => /jabra|speak|conference/i.test(d.label));
+  const room = inputs.find((d) => ROOM_DEVICE.test(d.label));
   const current = first.getAudioTracks()[0]?.getSettings().deviceId;
   if (!room || room.deviceId === current) return first;
   first.getTracks().forEach((t) => t.stop());
@@ -167,9 +171,17 @@ export async function record(): Promise<Recording> {
   return { stop, done, name: micName(stream) };
 }
 
-/** Plays a spoken reply (a data: URL from the server) on the TV's current audio output. */
-export function play(src: string): Promise<void> {
-  const audio = new Audio(src);
+/** Plays a spoken reply (a data: URL from the server) on the speakerphone when there is one, else the TV's output. */
+export async function play(src: string): Promise<void> {
+  const audio = new Audio(src) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+  try {
+    // The TV lists a USB speakerphone as an output too, but keeps playing on its own speakers unless told.
+    const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+    const room = outputs.find((d) => ROOM_DEVICE.test(d.label));
+    if (room && audio.setSinkId) await audio.setSinkId(room.deviceId);
+  } catch {
+    // The default output it is.
+  }
   return new Promise((resolve) => {
     audio.onended = audio.onerror = () => resolve();
     audio.play().catch(() => resolve());

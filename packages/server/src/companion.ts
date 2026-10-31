@@ -224,11 +224,13 @@ export async function forwardSmartThingsScene(
   );
 }
 
+// Fastest first: measured on 2026-10-31, a one-line reply took 0.4-0.6 s on the lite models, 16 s on 3.6-flash (it
+// thinks first) and over two minutes on 3.8-flash. Someone is waiting at the TV, so the lite models lead.
 const GEMINI_FALLBACK_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
   "gemini-flash-lite-latest",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
   "gemini-3.8-flash",
 ] as const;
 
@@ -248,6 +250,9 @@ interface GeminiPart {
   inlineData?: { mimeType?: string; data?: string };
 }
 
+/** How long one model may take before the next is tried: someone is waiting at the TV. */
+const GEMINI_TIMEOUT_MS = 8000;
+
 /** Posts one request to each model in turn until one answers with a part; null when none does. */
 async function firstPart(models: readonly string[], key: string, body: unknown, f: typeof fetch): Promise<GeminiPart | null> {
   const payload = JSON.stringify(body);
@@ -257,6 +262,7 @@ async function firstPart(models: readonly string[], key: string, body: unknown, 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       });
       if (!res.ok) continue;
       const out = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] };
@@ -288,7 +294,9 @@ export async function transcribe(audio: Uint8Array, mimeType: string, key: strin
     },
     f,
   );
-  return part?.text?.trim().replace(/^["“]|["”]$/g, "") ?? "";
+  // Gemini punctuates like dictation ("Remind me to water the plants."); a typed prompt has no full stop, and the
+  // reminder would keep it. Quotes go too.
+  return part?.text?.trim().replace(/^["“]|["”]$/g, "").replace(/[.。!！]+$/u, "").trim() ?? "";
 }
 
 /** A reply read aloud as WAV, or null without a speech model. Emoji are dropped first: they would be read out. */
@@ -465,44 +473,31 @@ export async function handleAiPrompt(
       .filter((r) => !r.completed)
       .map((r) => r.text)
       .join("; ");
-    const payload = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${activeReminders || "none"}. Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
-            },
-          ],
-        },
-      ],
-    });
-    for (const model of GEMINI_FALLBACK_MODELS) {
-      try {
-        const res = await f(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(opts.geminiApiKey)}`,
+    const part = await firstPart(
+      GEMINI_FALLBACK_MODELS,
+      opts.geminiApiKey,
+      {
+        contents: [
           {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload,
+            parts: [
+              {
+                text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${activeReminders || "none"}. Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
+              },
+            ],
           },
-        );
-        if (!res.ok) continue;
-        const body = (await res.json()) as {
-          candidates?: { content?: { parts?: { text?: string }[] } }[];
-        };
-        const text = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) {
-          state.setAiSummary(text);
-          return {
-            reply: text,
-            action: "briefing",
-            reminders: state.getReminders(),
-            domotics: state.getDomotics(),
-          };
-        }
-      } catch {
-        // Try next available Gemini model in cascade.
-      }
+        ],
+      },
+      f,
+    );
+    const text = part?.text?.trim();
+    if (text) {
+      state.setAiSummary(text);
+      return {
+        reply: text,
+        action: "briefing",
+        reminders: state.getReminders(),
+        domotics: state.getDomotics(),
+      };
     }
   }
 

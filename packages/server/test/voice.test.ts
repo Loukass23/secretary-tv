@@ -27,12 +27,14 @@ const voiceApp = (heard: string, calls?: string[], geminiApiKey = "g-key") =>
 const post = (body: BodyInit, type = "audio/wav") =>
   new Request("http://x/ai/transcribe", { method: "POST", headers: { "content-type": type }, body });
 
-test("a clip comes back as words, without asking the assistant", async () => {
+test("a clip comes back as words, without the closing full stop, and without asking the assistant", async () => {
   const calls: string[] = [];
-  const res = await voiceApp("Remind me to water the plants", calls)(post(WAV));
+  const res = await voiceApp("Remind me to water the plants.", calls)(post(WAV));
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { transcript: "Remind me to water the plants" });
   assert.deepEqual(calls, ["transcribe"]);
+  const quoted = await voiceApp("“Play the movie Avatar!”")(post(WAV));
+  assert.deepEqual(await quoted.json(), { transcript: "Play the movie Avatar" });
 });
 
 test("transcription refuses what Gemini cannot take", async () => {

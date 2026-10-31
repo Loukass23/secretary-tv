@@ -155,14 +155,15 @@ ever sees the recorded clip. Bluetooth to the TV does not work for this, since S
 output only.
 
 - **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or the Ask chip) records from the first input
-  whose name looks like a speakerphone ("Jabra", "Speak", "Conference"), else the default input. The clip ends after
+  whose name looks like a speakerphone ("Jabra", "Speakerphone", "Conference"), else the default input. The clip ends after
   1.2 s of quiet following speech, after 6 s with no speech, at 15 s, or on the key again. Nest encodes it as 16 kHz WAV
   with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and posts it to `POST /ai/transcribe`,
   which returns only the words. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
   TV and never reaches the lights.
 - **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
-  speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on the TV's current audio output, which is
-  the speakerphone when the TV has switched to it, and the wave speaks until it ends. Blue mutes or unmutes this
+  speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on
+  the speakerphone's own output when it has one (`setSinkId`; the TV would otherwise keep its own speakers), and the
+  wave speaks until it ends. Blue mutes or unmutes this
   (`localStorage["nest.speak"]`).
 - **Fallbacks**: if the TV gives the app no microphone, or the server has no `GEMINI_API_KEY`, the key opens the TV
   keyboard as before for the rest of the session. Secretary Desk has a "Hold" button that records on the phone (a
@@ -171,12 +172,22 @@ output only.
 
 ### Checking a TV
 
-Not yet verified on the reference TV. With the speakerphone plugged in and Nest deployed with the privilege above:
+Verified on the reference TV (GU43DU7199UXZG, Tizen 9, Chromium 120) on 2026-10-31 with a Jabra Speak 510 on USB:
+
+- The TV lists it as both input and output (`usb-0b0e_Jabra_SPEAK_510_USB_... (usb audio)`). `getUserMedia` succeeds
+  with the mediacapture privilege, and the track is the Jabra. Web Audio runs at 44.1 kHz with `createScriptProcessor`.
+- Spoken prompts went end to end: "Remind me to water the plants" added the reminder, and "Play the movie Avatar"
+  showed the titles. Gemini punctuates transcripts like dictation, so `transcribe()` drops a closing full stop
+  (otherwise it lands in the reminder text).
+- Spoken replies play on the Jabra (`setSinkId`) and were heard. The first try was silent for about 25 s: the server
+  asked `gemini-3.6-flash` first, which took 16 s for one sentence (the lite models answer in under 1 s). With the lite
+  models first and 8 s per model, a briefing with its 9 s spoken reply comes back in about 6.7 s.
+
+To check another TV, plug in the speakerphone, deploy Nest with the privilege above, and run:
 
 ```bash
 node ../tv-kit/scripts/cdp.mjs <port> eval "navigator.mediaDevices.getUserMedia({audio:true}).then(s=>navigator.mediaDevices.enumerateDevices()).then(d=>d.filter(x=>x.kind==='audioinput').map(x=>x.label))"
 ```
 
 A list with the speakerphone's name means Nest can use it. A rejection (NotAllowedError, NotFoundError or no
-`mediaDevices`) means this TV keeps the microphone to itself: use the Desk button instead. Note the result here, with
-the model, and measure a `cdp.mjs walk` with the microphone open for `docs/performance.md`.
+`mediaDevices`) means that TV keeps the microphone to itself: use the Desk button instead.
