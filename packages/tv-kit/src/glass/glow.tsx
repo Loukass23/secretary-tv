@@ -1,6 +1,7 @@
 // The artwork-coloured glow behind a focused tile. A soft outer shadow repaints on every focus change
 // (docs/performance.md, glass lab), so the glow is a small blurred blob drawn once per colour on a
 // canvas, scaled up by the compositor and moved and faded with transform and opacity only.
+import { useRef } from "preact/hooks";
 import { blob, canvas } from "./wallpaper.ts";
 
 const blobs = new Map<string, Promise<string>>();
@@ -74,9 +75,13 @@ function boost(r: number, g: number, b: number): string {
 
 /** The glow layer. Place it before the tiles it sits behind; `at` is the focused tile's page box. */
 export function Glow({ at, src, spread = 56 }: { at: { x: number; y: number; w: number; h: number } | null; src?: string; spread?: number }) {
+  // When focus leaves the artwork the glow fades where it was, instead of sliding to the corner as it fades.
+  const last = useRef(at);
+  if (at) last.current = at;
+  const box = at ?? last.current;
   if (!src) return null;
-  const w = (at?.w ?? 0) + spread * 2;
-  const h = (at?.h ?? 0) + spread * 2;
+  const w = (box?.w ?? 0) + spread * 2;
+  const h = (box?.h ?? 0) + spread * 2;
   return (
     <i
       class={`sg-glow${at ? " is-on" : ""}`}
@@ -86,7 +91,7 @@ export function Glow({ at, src, spread = 56 }: { at: { x: number; y: number; w: 
         width: `${w}px`,
         height: `${h}px`,
         backgroundImage: `url(${src})`,
-        transform: at ? `translate3d(${at.x - spread}px,${at.y - spread}px,0)` : undefined,
+        transform: box ? `translate3d(${box.x - spread}px,${box.y - spread}px,0)` : undefined,
       }}
     />
   );

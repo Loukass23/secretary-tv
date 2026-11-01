@@ -1,94 +1,106 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clamp, type Lengths, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "../src/nest-nav.ts";
+import {
+  clamp,
+  HEADER_BELL,
+  HEADER_LENGTH,
+  HEADER_PARTY,
+  HEADER_PROFILE,
+  HEADER_SEARCH,
+  HEADER_WEATHER,
+  type Layout,
+  step,
+} from "../src/nest-nav.ts";
 
-const full: Lengths = { weather: 0, top: TOP_LENGTH, apps: 8, cards: 4, ask: 0, results: 0, continue: 3, fab: 1, me: 1 };
+// Cinema (one poster), Shows (two stacked), Anime (3x2 grid), Home (scene buttons), Reminders (2 + Add), Apps (2-wide, 3).
+const full: Layout = {
+  weather: true,
+  ask: 4,
+  cols: [
+    { count: 1, across: 1 },
+    { count: 2, across: 1 },
+    { count: 6, across: 3 },
+    { count: 3, across: 1 },
+    { count: 3, across: 1 },
+    { count: 3, across: 2 },
+  ],
+  results: 0,
+  menu: 0,
+};
+const row = (col: number, i: number) => ({ area: "row" as const, col, i });
 
-test("apps lead up to Search and down into the reminders", () => {
-  assert.deepEqual(step({ area: "apps", i: 5 }, "Up", full), { area: "top", i: TOP_SEARCH });
-  assert.deepEqual(step({ area: "apps", i: 5 }, "Down", full), { area: "cards", i: 0 });
+test("the header runs profile, weather, then the four buttons", () => {
+  assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Right", full), { area: "header", i: HEADER_WEATHER });
+  assert.deepEqual(step({ area: "header", i: HEADER_BELL }, "Right", full), { area: "header", i: HEADER_BELL });
+  assert.equal(HEADER_BELL, HEADER_LENGTH - 1);
+  // No weather: it is skipped both ways.
+  const bare = { ...full, weather: false };
+  assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Right", bare), { area: "header", i: HEADER_PARTY });
+  assert.deepEqual(step({ area: "header", i: HEADER_PARTY }, "Left", bare), { area: "header", i: HEADER_PROFILE });
 });
 
-test("the last reminder leads to the add button, and back up to the last reminder", () => {
-  const fab = step({ area: "cards", i: 3 }, "Down", full);
-  assert.deepEqual(fab, { area: "fab", i: 0 });
-  assert.deepEqual(step(fab, "Up", full), { area: "cards", i: 3 });
+test("down from the header: the left side to the assistant, the buttons to the cards", () => {
+  assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Down", full), { area: "ask", i: 0 });
+  assert.deepEqual(step({ area: "header", i: HEADER_SEARCH }, "Down", full), row(0, 0));
+  assert.deepEqual(step(row(2, 1), "Up", full), { area: "header", i: HEADER_PARTY });
+  assert.deepEqual(step({ area: "ask", i: 2 }, "Up", full), { area: "header", i: HEADER_PROFILE });
 });
 
-test("Continue Watching runs right into the reminders and up to the section pill", () => {
-  assert.deepEqual(step({ area: "continue", i: 2 }, "Right", full), { area: "cards", i: 0 });
-  assert.deepEqual(step({ area: "continue", i: 1 }, "Up", full), { area: "top", i: 0 });
-  assert.deepEqual(step({ area: "cards", i: 2 }, "Left", full), { area: "continue", i: 0 });
+test("the chips lead right into the first card, and back", () => {
+  assert.deepEqual(step({ area: "ask", i: 3 }, "Right", full), row(0, 0));
+  assert.deepEqual(step(row(0, 0), "Left", full), { area: "ask", i: 3 });
 });
 
-test("empty areas are skipped", () => {
-  const bare: Lengths = { ...full, cards: 0, continue: 0 };
-  assert.deepEqual(step({ area: "apps", i: 0 }, "Down", bare), { area: "fab", i: 0 });
-  assert.deepEqual(step({ area: "fab", i: 0 }, "Left", bare), { area: "me", i: 0 });
-  assert.deepEqual(step({ area: "fab", i: 0 }, "Left", { ...bare, me: 0 }), { area: "fab", i: 0 });
-  assert.deepEqual(step({ area: "top", i: 0 }, "Down", { ...bare, apps: 0 }), { area: "top", i: 0 });
+test("across the row: stacks keep their line, grids move cell by cell", () => {
+  assert.deepEqual(step(row(0, 0), "Right", full), row(1, 0));
+  assert.deepEqual(step(row(1, 1), "Right", full), row(2, 3));
+  assert.deepEqual(step(row(2, 3), "Right", full), row(2, 4));
+  assert.deepEqual(step(row(2, 5), "Right", full), row(3, 1));
+  assert.deepEqual(step(row(3, 1), "Left", full), row(2, 5));
+  assert.deepEqual(step(row(2, 3), "Left", full), row(1, 1));
+  assert.deepEqual(step(row(5, 2), "Right", full), row(5, 2));
 });
 
-test("rows clamp at both ends", () => {
-  assert.deepEqual(step({ area: "apps", i: 0 }, "Left", full), { area: "apps", i: 0 });
-  assert.deepEqual(step({ area: "top", i: TOP_LENGTH - 1 }, "Right", full), { area: "top", i: TOP_LENGTH - 1 });
+test("up and down inside a column", () => {
+  assert.deepEqual(step(row(2, 1), "Down", full), row(2, 4));
+  assert.deepEqual(step(row(2, 4), "Down", full), row(2, 4));
+  assert.deepEqual(step(row(2, 4), "Up", full), row(2, 1));
+  assert.deepEqual(step(row(4, 0), "Down", full), row(4, 1));
+  assert.deepEqual(step(row(5, 1), "Down", full), row(5, 1));
+  assert.deepEqual(step(row(5, 0), "Down", full), row(5, 2));
 });
 
-test("clamp follows a shrinking area and leaves an empty one", () => {
-  assert.deepEqual(clamp({ area: "cards", i: 3 }, { ...full, cards: 2 }), { area: "cards", i: 1 });
-  assert.deepEqual(clamp({ area: "continue", i: 0 }, { ...full, continue: 0 }), { area: "apps", i: 0 });
+test("empty columns are skipped", () => {
+  const gaps: Layout = { ...full, cols: [{ count: 1, across: 1 }, { count: 0, across: 1 }, { count: 6, across: 3 }] };
+  assert.deepEqual(step(row(0, 0), "Right", gaps), row(2, 0));
+  assert.deepEqual(step(row(2, 0), "Left", gaps), row(0, 0));
+  const empty: Layout = { ...full, cols: [{ count: 0, across: 1 }, { count: 2, across: 1 }] };
+  assert.deepEqual(step({ area: "ask", i: 3 }, "Right", empty), row(1, 0));
 });
 
-test("the account avatar sits under Continue Watching, next to the add button", () => {
-  assert.deepEqual(step({ area: "continue", i: 2 }, "Down", full), { area: "me", i: 0 });
-  assert.deepEqual(step({ area: "me", i: 0 }, "Up", full), { area: "continue", i: 0 });
-  assert.deepEqual(step({ area: "me", i: 0 }, "Up", { ...full, continue: 0 }), { area: "top", i: 0 });
-  assert.deepEqual(step({ area: "me", i: 0 }, "Right", full), { area: "fab", i: 0 });
-  assert.deepEqual(step({ area: "continue", i: 0 }, "Down", { ...full, me: 0 }), { area: "continue", i: 0 });
-});
-
-const ask: Lengths = { ...full, ask: 4 };
-
-test("Ask Nest sits between the section pill and Continue Watching", () => {
-  assert.deepEqual(step({ area: "top", i: 1 }, "Down", ask), { area: "ask", i: 0 });
-  assert.deepEqual(step({ area: "top", i: TOP_SEARCH }, "Down", ask), { area: "apps", i: 0 });
-  assert.deepEqual(step({ area: "ask", i: 2 }, "Up", ask), { area: "top", i: 0 });
-  assert.deepEqual(step({ area: "ask", i: 2 }, "Down", ask), { area: "continue", i: 0 });
-  assert.deepEqual(step({ area: "continue", i: 1 }, "Up", ask), { area: "ask", i: 0 });
-  assert.deepEqual(step({ area: "ask", i: 3 }, "Right", ask), { area: "cards", i: 0 });
-  assert.deepEqual(step({ area: "ask", i: 0 }, "Left", ask), { area: "ask", i: 0 });
-});
-
-test("results take the right column's place while shown", () => {
-  const shown: Lengths = { ...ask, results: 6, apps: 0, cards: 0 };
+test("an answer takes the row's place while shown", () => {
+  const shown = { ...full, results: 6 };
   assert.deepEqual(step({ area: "ask", i: 3 }, "Right", shown), { area: "results", i: 0 });
   assert.deepEqual(step({ area: "results", i: 0 }, "Left", shown), { area: "ask", i: 3 });
   assert.deepEqual(step({ area: "results", i: 5 }, "Right", shown), { area: "results", i: 5 });
-  assert.deepEqual(step({ area: "results", i: 3 }, "Up", shown), { area: "top", i: TOP_SEARCH });
-  assert.deepEqual(step({ area: "results", i: 3 }, "Down", shown), { area: "fab", i: 0 });
-  assert.deepEqual(step({ area: "continue", i: 2 }, "Right", shown), { area: "results", i: 0 });
-  assert.deepEqual(step({ area: "top", i: TOP_BELL }, "Down", shown), { area: "results", i: 0 });
-  assert.deepEqual(step({ area: "fab", i: 0 }, "Up", shown), { area: "results", i: 0 });
-  assert.deepEqual(clamp({ area: "results", i: 4 }, { ...ask, results: 0 }), { area: "apps", i: 0 });
+  assert.deepEqual(step({ area: "results", i: 2 }, "Up", shown), { area: "header", i: HEADER_SEARCH });
+  assert.deepEqual(step({ area: "header", i: HEADER_BELL }, "Down", shown), { area: "results", i: 0 });
+  assert.deepEqual(clamp({ area: "results", i: 4 }, full), row(0, 0));
 });
 
-test("the weather sits left of the section pill and above Ask Nest", () => {
-  const wx: Lengths = { ...ask, weather: 1 };
-  assert.deepEqual(step({ area: "top", i: 0 }, "Left", wx), { area: "weather", i: 0 });
-  assert.deepEqual(step({ area: "top", i: 0 }, "Left", ask), { area: "top", i: 0 });
-  assert.deepEqual(step({ area: "weather", i: 0 }, "Right", wx), { area: "top", i: 0 });
-  assert.deepEqual(step({ area: "weather", i: 0 }, "Down", wx), { area: "ask", i: 0 });
-  assert.deepEqual(step({ area: "ask", i: 2 }, "Up", wx), { area: "weather", i: 0 });
+test("the profile menu runs up and down", () => {
+  const menu = { ...full, menu: 4 };
+  assert.deepEqual(step({ area: "menu", i: 0 }, "Down", menu), { area: "menu", i: 1 });
+  assert.deepEqual(step({ area: "menu", i: 3 }, "Down", menu), { area: "menu", i: 3 });
+  assert.deepEqual(step({ area: "menu", i: 0 }, "Up", menu), { area: "menu", i: 0 });
+  assert.deepEqual(step({ area: "menu", i: 1 }, "Left", menu), { area: "menu", i: 1 });
 });
 
-test("the bell is the last button across the top", () => {
-  assert.equal(TOP_BELL, TOP_LENGTH - 1);
-  assert.deepEqual(step({ area: "top", i: TOP_LIGHTS }, "Right", ask), { area: "top", i: TOP_BELL });
-});
-
-test("the top buttons (Watch together to the bell) lead down into the right column, the pill into the left", () => {
-  const both: Lengths = { ...full, ask: 1 };
-  assert.deepEqual(step({ area: "top", i: TOP_PARTY }, "Down", both), { area: "apps", i: 0 });
-  assert.deepEqual(step({ area: "top", i: TOP_BELL }, "Down", both), { area: "apps", i: 0 });
-  assert.deepEqual(step({ area: "top", i: 0 }, "Down", both), { area: "ask", i: 0 });
+test("clamp follows a shrinking column and leaves an empty one", () => {
+  const fewer: Layout = { ...full, cols: full.cols.map((c, k) => (k === 4 ? { count: 1, across: 1 } : c)) };
+  assert.deepEqual(clamp(row(4, 2), fewer), row(4, 0));
+  const gone: Layout = { ...full, cols: full.cols.map((c, k) => (k === 4 ? { count: 0, across: 1 } : c)) };
+  assert.deepEqual(clamp(row(4, 0), gone), row(5, 0));
+  assert.deepEqual(clamp({ area: "header", i: HEADER_WEATHER }, { ...full, weather: false }), { area: "header", i: HEADER_PROFILE });
+  assert.deepEqual(clamp({ area: "menu", i: 2 }, full), row(0, 0));
 });
