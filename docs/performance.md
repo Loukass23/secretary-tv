@@ -354,3 +354,24 @@ in a walk, where the screen holds still.
 Gemini's free tier allows only a few spoken replies a minute, and the pro speech model none: both fallback models
 answer 429 once that is used, so a reply has no voice (the text still shows). The flash speech model took 2.5 s for a
 sentence when it answered.
+
+## Concept layout: content cards (2026-11-02)
+
+Nest's home relaid out after the concept: the assistant on the wallpaper, a row of content cards (a tall poster, two
+stacked backdrops, a 3×2 grid of covers, the Home card, reminders, apps) and a quiet header. Reference TV, Night theme,
+signed in to Nuvio (real Continue Watching), default `cdp.mjs walk` from the first card and a 27-key walk through the
+grid, the Home buttons and the reminders, after a warm-up walk:
+
+| Walk (2-3 each) | Median frame | p95 | Worst | Frames over 50 ms |
+| --- | --- | --- | --- | --- |
+| Default walk across the row | 17 ms | 17 ms | 17-33 ms | 0 |
+| Grid, Home and Reminders | 17 ms | 17 ms | 33 ms | 0 |
+| Same, glow hidden / artwork hidden / wave hidden | 17 ms | 17 ms | 17-33 ms | 0 |
+
+The cards cost no more than the old dashboard: hiding the glow, the artwork or the wave changed nothing.
+
+Not settled yet: opening the profile menu and the forecast for the first time showed 1-6 frames over 50 ms (worst
+267 ms, likely the forecast's glyph masks rasterising and the new glass mounting), and walks with the wave live gave
+p95 33 ms. Both came from a later stretch where every walk, the idle ones included, ran slower (about 280 frames
+instead of 360 for the same walk) and Nest kept dropping to the background with nothing open. That looks like the TV
+going idle after hours without a real remote press, so those runs need repeating in daytime use.

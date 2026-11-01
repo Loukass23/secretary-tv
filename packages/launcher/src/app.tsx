@@ -46,8 +46,21 @@ import {
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { APP_IDS, GEMINI_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
-import { Home, type RecentCard } from "./home.tsx";
-import { clamp, type Focus, type Lengths, SECTIONS, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "./nest-nav.ts";
+import type { RowColumn } from "./cards.tsx";
+import { rowLayout } from "./cards.tsx";
+import { Home } from "./home.tsx";
+import {
+  clamp,
+  type Focus,
+  HEADER_BELL,
+  HEADER_LIGHTS,
+  HEADER_PARTY,
+  HEADER_PROFILE,
+  HEADER_SEARCH,
+  HEADER_WEATHER,
+  type Layout,
+  step,
+} from "./nest-nav.ts";
 import { home, homeConfigured, runLights } from "./home-control.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
@@ -55,7 +68,7 @@ import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
-import { searchCatalogs, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { discoverCatalog, searchCatalogs, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -95,7 +108,33 @@ function loadSpeakReplies(): boolean {
   }
 }
 
-const SECTION_APPS =[undefined, APP_IDS.movie, APP_IDS.series, APP_IDS.anime] as const;
+/** The catalog apps and the TV's settings have their own places (cards, the profile menu), not the Apps card. */
+const OWN_PLACES: readonly string[] = [APP_IDS.movie, APP_IDS.series, APP_IDS.anime, PINS[PINS.length - 1]];
+const SETTINGS_ID = PINS[PINS.length - 1];
+/** Trending titles for the empty Cinema, Shows and Anime cards, fetched from the TV once a day. */
+const TRENDING_KEY = "nest.trending";
+const TRENDING_TTL_MS = 24 * 60 * 60_000;
+type Trending = Record<CatalogKind, SearchResult[]>;
+const NO_TRENDING: Trending = { movie: [], series: [], anime: [] };
+
+/** A card in the Recent column: an answer from the assistant, or something the home reported. */
+type RecentCard =
+  | { kind: "answer"; key: string; at: number; action: string; prompt: string; reply: string }
+  | { kind: "alert"; key: string; at: number; text: string };
+
+const RECENT_COLOR: Record<string, string> = {
+  watch: "#ff8a3d",
+  reminder_added: "#3ccf6e",
+  domotics_updated: "#ffc94d",
+  weather: "#4fc3ff",
+  briefing: "#b78bff",
+  alert: "#ff7ad9",
+};
+const SOURCE_LABEL: Record<Reminder["source"], [string, string]> = {
+  companion: ["From Secretary Desk", "#5b7cff"],
+  gemini: ["From the assistant", "#7d6bff"],
+  local: ["Added on the TV", "#3ccf6e"],
+};
 const SCENES: readonly [Scene, string][] = [
   ["cinema", "🎬 Cinema lights"],
   ["warm", "🕯 Warm lights"],
@@ -173,7 +212,16 @@ export function App() {
     cloudEnabled && !cloud.session.signedIn() && !signInSkipped() ? "signin" : "home",
   );
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
-  const [focus, setFocus] = useState<Focus>({ area: "apps", i: 0 });
+  const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [trending, setTrending] = useState<Trending>(() => {
+    try {
+      const c = JSON.parse(storage.getItem(TRENDING_KEY) ?? "null") as { at: number; v: Trending } | null;
+      return c?.v ?? NO_TRENDING;
+    } catch {
+      return NO_TRENDING;
+    }
+  });
   const [searchFocus, setSearchFocus] = useState<GridFocus>({ row: 0, col: 0 });
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecent());
@@ -529,7 +577,7 @@ export function App() {
     cloud.session.setProfile(p.index);
     void refreshCloud();
     setView("home");
-    setFocus({ area: "me", i: 0 });
+    setFocus({ area: "header", i: HEADER_PROFILE });
     void refreshMe();
     flash(`Watching as ${p.name}`);
   };
@@ -648,7 +696,6 @@ export function App() {
       action: t.action,
       prompt: t.prompt,
       reply: t.reply,
-      posters: t.results?.slice(0, 3).map((r) => posterUrl(r.title)),
     })),
     ...alerts.map((a) => ({ kind: "alert" as const, key: `a${a.at}:${a.text}`, at: a.at, text: a.text })),
   ]
@@ -662,10 +709,151 @@ export function App() {
   useEffect(() => {
     if (idle) setRecent(latest);
   }, [latestKey, idle]);
-  const continueAt = focus.area === "continue" ? continueItems[focus.i - recent.length] : undefined;
+
+  // Trending titles for the cards with nothing in progress: once a day, from the TV.
+  useEffect(() => {
+    try {
+      const c = JSON.parse(storage.getItem(TRENDING_KEY) ?? "null") as { at: number } | null;
+      if (c && Date.now() - c.at < TRENDING_TTL_MS) return;
+    } catch {
+      // fetch again
+    }
+    void Promise.all((["movie", "series", "anime"] as const).map((k) => discoverCatalog(k, undefined).catch(() => []))).then(
+      ([movie, series, anime]) => {
+        if (!movie.length && !series.length && !anime.length) return;
+        const v = { movie, series, anime };
+        setTrending(v);
+        storage.setItem(TRENDING_KEY, JSON.stringify({ at: Date.now(), v }));
+      },
+    );
+  }, []);
+
+  // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
+  const failed = (name: string) => () => flash(`Couldn't open ${name}`);
+  const resume = (e: UnifiedResumeEntry) => void openTitleInApp(SERVER_URL, e.type, e.title, true).catch(failed(e.title.name));
+  const openHit = (r: SearchResult) => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name));
+  const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
+  const byKind = (k: CatalogKind) => continueItems.filter((e) => e.type === k);
+  const columns: RowColumn[] = [];
+  /** The artwork behind each column's items, for the glow. */
+  const art: ({ src: string; type: CatalogKind } | undefined)[][] = [];
+  const push = (col: RowColumn, pics: ({ src: string; type: CatalogKind } | undefined)[] = []) => {
+    columns.push(col);
+    art.push(pics);
+  };
+  if (recent.length) {
+    const shown = recent.slice(0, 3);
+    push({
+      kind: "list",
+      key: "recent",
+      label: "Recent",
+      items: shown.map((c) =>
+        c.kind === "alert"
+          ? { title: c.text, sub: "Home", color: RECENT_COLOR.alert }
+          : { title: `“${c.prompt}”`, sub: c.reply, color: RECENT_COLOR[c.action] ?? "#b78bff" },
+      ),
+      run: (i) => openRecent(shown[i]),
+    });
+  }
+  const film = byKind("movie")[0];
+  const pick = trending.movie[0];
+  if (film) {
+    push(
+      {
+        kind: "poster",
+        key: "cinema",
+        label: "Continue · Cinema",
+        // The poster carries its own title; a badge says what OK does.
+        tile: { src: posterUrl(film.title), badge: "▶ Resume", progress: progressOf(film) },
+        run: () => resume(film),
+      },
+      [{ src: posterUrl(film.title), type: "movie" }],
+    );
+  } else if (pick) {
+    push(
+      { kind: "poster", key: "cinema", label: "Tonight · Cinema", tile: { src: posterUrl(pick.title), badge: "Top film" }, run: () => openHit(pick) },
+      [{ src: posterUrl(pick.title), type: "movie" }],
+    );
+  }
+  const shows = byKind("series").slice(0, 2);
+  const showPicks = trending.series.filter((r) => !shows.some((e) => e.title.id === r.title.id)).slice(0, 2 - shows.length);
+  if (shows.length || showPicks.length) {
+    const tiles = [
+      ...shows.map((e) => ({
+        src: backdropUrl(e),
+        title: e.title.name,
+        sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "▶ Resume",
+        progress: progressOf(e),
+      })),
+      ...showPicks.map((r) => ({ src: r.title.background ?? posterUrl(r.title), title: r.title.name, sub: "Top series" })),
+    ];
+    push(
+      {
+        kind: "stack",
+        key: "shows",
+        label: shows.length ? "Next up · Shows" : "Top · Shows",
+        tiles,
+        run: (i) => (i < shows.length ? resume(shows[i]) : openHit(showPicks[i - shows.length])),
+      },
+      [...shows.map((e) => ({ src: backdropUrl(e), type: "series" as const })), ...showPicks.map((r) => ({ src: posterUrl(r.title), type: "series" as const }))],
+    );
+  }
+  const anime = byKind("anime").slice(0, 6);
+  const animePicks = trending.anime.filter((r) => !anime.some((e) => e.title.id === r.title.id)).slice(0, 6 - anime.length);
+  if (anime.length || animePicks.length) {
+    const pics = [...anime.map((e) => posterUrl(e.title)), ...animePicks.map((r) => posterUrl(r.title))];
+    push(
+      {
+        kind: "grid",
+        key: "anime",
+        label: "Anime",
+        tiles: [
+          ...anime.map((e) => ({ src: posterUrl(e.title), badge: "▶", progress: progressOf(e) })),
+          ...animePicks.map((r) => ({ src: posterUrl(r.title) })),
+        ],
+        run: (i) => (i < anime.length ? resume(anime[i]) : openHit(animePicks[i - anime.length])),
+      },
+      pics.map((src) => ({ src, type: "anime" as const })),
+    );
+  }
+  const lights = devices.filter((d) => d.kind === "light");
+  const lit = lights.filter((d) => d.on).length;
+  push({
+    kind: "home",
+    key: "home",
+    label: "Home",
+    title: lights.length ? `${lit} light${lit === 1 ? "" : "s"} on` : "Lights",
+    sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.length} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
+    actions: ["🎬 Cinema", "🕯 Warm", "🌙 Off"],
+    run: (i) => runScene(SCENES[i][0], SCENES[i][1]),
+  });
+  const shownReminders = reminders.slice(0, 3);
+  push({
+    kind: "list",
+    key: "reminders",
+    label: "Reminders",
+    items: shownReminders.map((r) => {
+      const [from, color] = SOURCE_LABEL[r.source] ?? SOURCE_LABEL.local;
+      return { title: r.text, sub: from, meta: r.completed ? "✓" : r.due ? `⏰ ${r.due}` : undefined, color: r.completed ? "#6d6c68" : color, done: r.completed };
+    }),
+    add: "+ Add reminder",
+    run: (i) => (i < shownReminders.length ? toggleReminderAt(shownReminders[i]) : newReminder()),
+  });
+  const otherApps = apps.filter((a) => !OWN_PLACES.includes(a.id)).slice(0, 6);
+  if (otherApps.length) {
+    push({
+      kind: "apps",
+      key: "apps",
+      label: "Apps",
+      apps: otherApps.map((a) => ({ icon: a.iconPath, label: a.name.replace(/^Secretary\s+/, "") })),
+      run: (i) => void openApp(otherApps[i].id).catch(failed(otherApps[i].name)),
+    });
+  }
+  const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
+  const rowArt = colAt >= 0 ? art[colAt]?.[focus.i] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
-    continueAt
-      ? { src: backdropUrl(continueAt), type: continueAt.type }
+    rowArt
+      ? rowArt
       : focus.area === "results" && shownResults?.[focus.i]
         ? { src: posterUrl(shownResults[focus.i].title), type: shownResults[focus.i].type }
         : null;
@@ -740,29 +928,32 @@ export function App() {
     };
   }, [view, query]);
 
-  const lengths: Lengths = useMemo(
+  const menuItems = [
+    cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
+    "TV settings",
+    THEME_LABEL[themePref],
+    speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off",
+  ];
+  const navKey = rowLayout(columns).nav.map((c) => `${c.count}/${c.across}`).join();
+  const layout: Layout = useMemo(
     () => ({
-      weather: weather ? 1 : 0,
-      top: TOP_LENGTH,
-      // While an answer is shown it takes the right column's place.
-      apps: shownTurn ? 0 : apps.length,
-      cards: shownTurn ? 0 : reminders.length,
+      weather: Boolean(weather),
       ask: CHIPS.length,
+      // While an answer is shown it takes the row's place.
+      cols: shownTurn ? [] : rowLayout(columns).nav,
       results: shownResults?.length ?? 0,
-      continue: recent.length + continueItems.length,
-      fab: 1,
-      me: cloudEnabled ? 1 : 0,
+      menu: menuOpen ? menuItems.length : 0,
     }),
-    [apps.length, reminders.length, continueItems.length, shownTurn, recent.length, Boolean(weather)],
+    [navKey, shownTurn, Boolean(weather), menuOpen],
   );
 
-  // Keep focus valid when reminders and Continue Watching change. Focus waits on the app strip
-  // while the apps are still loading, so the first chip is focused once they arrive.
+  // Keep focus valid when a card's items change. Focus waits on the row while it is still empty, so the first card is
+  // focused once Continue Watching, the trending titles or the apps arrive.
   useEffect(() => {
-    if (focus.area === "apps" && !apps.length && !error) return;
-    const next = clamp(focus, lengths);
-    if (next !== focus) setFocus(next);
-  }, [lengths]);
+    if (focus.area === "row" && !layout.cols.some((c) => c.count > 0) && !shownTurn && !error) return;
+    const next = clamp(focus, layout);
+    if (next.area !== focus.area || next.i !== focus.i || next.col !== focus.col) setFocus(next);
+  }, [layout]);
 
   const showRecent = view === "search" && !query.trim() && recentSearches.length > 0;
   const searchLengths = useMemo(
@@ -792,58 +983,83 @@ export function App() {
     }
     if (turn.action === "weather") return weather ? setWeatherOpen(true) : undefined;
     if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
-    if (turn.action === "reminder_added") {
-      const at = reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text));
-      return setFocus({ area: "cards", i: Math.max(0, at) });
-    }
+    if (turn.action === "reminder_added") return focusReminders(reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text)));
     void send(turn.prompt);
+  };
+
+  /** The Reminders card, at reminder `at` (or its first). */
+  function focusReminders(at = 0) {
+    const col = columns.findIndex((c) => c.key === "reminders");
+    if (col >= 0) setFocus({ area: "row", col, i: Math.max(0, Math.min(at, 2)) });
+  }
+
+  function toggleReminderAt(r: Reminder) {
+    if (localRem.owns(r.id)) setLocalItems(localRem.toggle(r.id));
+    else if (SERVER_URL) toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
+  }
+
+  /** A scene from the Home card: SmartThings from the TV, else through the server. */
+  function runScene(id: Scene, label: string) {
+    if (!SERVER_URL || homeConfigured()) {
+      return void runLights({ scene: id }, devices, scenes).then(
+        () => {
+          flash(label);
+          pollHomeSoon();
+        },
+        (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the lights"),
+      );
+    }
+    setScene(SERVER_URL, id).then(
+      () => flash(label),
+      () => flash("Couldn't reach the lights"),
+    );
+  }
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    setFocus({ area: "header", i: HEADER_PROFILE });
+  };
+
+  const runMenu = (i: number) => {
+    if (i === 0) {
+      closeMenu();
+      return void setView(cloudEnabled ? (cloud.session.signedIn() ? "profiles" : "signin") : "profiles");
+    }
+    if (i === 1) {
+      closeMenu();
+      return void openApp(SETTINGS_ID).catch(failed("the TV's settings"));
+    }
+    if (i === 2) return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
+    toggleSpeech();
   };
 
   const activate = () => {
     const { area, i } = focus;
-    if (area === "weather") return setWeatherOpen((o) => !o);
-    if (area === "top") {
-      if (i === TOP_PARTY) return void setView("party");
-      if (i === TOP_SEARCH) return openSearch();
-      if (i === TOP_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
-      if (i === TOP_BELL) {
+    if (area === "menu") return runMenu(i);
+    if (area === "header") {
+      if (i === HEADER_PROFILE) {
+        setWeatherOpen(false);
+        setMenuOpen(true);
+        return setFocus({ area: "menu", i: 0 });
+      }
+      if (i === HEADER_WEATHER) return setWeatherOpen((o) => !o);
+      if (i === HEADER_PARTY) return void setView("party");
+      if (i === HEADER_SEARCH) return openSearch();
+      if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
+      if (i === HEADER_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
-        return setFocus({ area: "cards", i: due });
-      }
-      const id = SECTION_APPS[i];
-      if (id) openApp(id).catch(() => flash(`Couldn't open ${SECTIONS[i]}`));
-      return;
-    }
-    if (area === "apps") {
-      const app = apps[i];
-      if (app) openApp(app.id).catch(() => flash(`Couldn't open ${app.name}`));
-      return;
-    }
-    if (area === "cards") {
-      const r = reminders[i];
-      if (r && localRem.owns(r.id)) setLocalItems(localRem.toggle(r.id));
-      else if (r && SERVER_URL) {
-        toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
+        return focusReminders(due);
       }
       return;
     }
     if (area === "ask") return void (i === 0 ? listen() : send(CHIPS[i].prompt));
     if (area === "results") {
       const hit = shownResults?.[i];
-      if (hit) openTitleInApp(SERVER_URL, hit.type, hit.title).catch(() => flash(`Couldn't open ${hit.title.name}`));
+      if (hit) openHit(hit);
       return;
     }
-    if (area === "me") return void setView(cloud.session.signedIn() ? "profiles" : "signin");
-    if (area === "continue") {
-      if (i < recent.length) return openRecent(recent[i]);
-      const entry = continueItems[i - recent.length];
-      if (entry) {
-        openTitleInApp(SERVER_URL, entry.type, entry.title, true).catch(() => flash(`Couldn't open ${entry.title.name}`));
-      }
-      return;
-    }
-    newReminder();
+    if (area === "row") columns[focus.col ?? 0]?.run(i);
   };
 
   useKeys(view === "home", (key) => {
@@ -860,10 +1076,12 @@ export function App() {
     if (key === "ChannelUp") {
       getTvInputBridge().close();
       setImeActive(false);
-      setFocus({ area: "top", i: TOP_SEARCH });
+      setFocus({ area: "header", i: HEADER_SEARCH });
       return;
     }
     if (key === "Enter") return void activate();
+    if (menuOpen && key === "Back") return closeMenu();
+    if (menuOpen && (key === "Left" || key === "Right")) return;
     if (weatherOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Left" || key === "Right")) {
       setWeatherOpen(false);
       if (key === "Back") return;
@@ -881,7 +1099,7 @@ export function App() {
       return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
-      const next = step(focus, key, lengths);
+      const next = step(focus, key, layout);
       if (next !== focus) setFocus(next);
       return;
     }
@@ -1027,24 +1245,16 @@ export function App() {
         <Home
           focus={focus}
           time={time}
-          apps={apps}
-          reminders={reminders}
           ask={askView}
           results={shownTurn ? { query: shownTurn.query ?? "", items: shownResults ?? [] } : null}
           weather={weather}
           weatherOpen={weatherOpen}
-          recent={recent}
+          menu={menuOpen ? menuItems : null}
           glow={glow}
-          continueItems={continueItems}
+          columns={columns}
+          open={reminders.filter((r) => !r.completed).length}
           status={status}
           me={me}
-          emptyContinue={
-            (cloudEnabled ? Boolean(me) : serverOnline)
-              ? "Nothing in progress. Start something in Cinema, Shows or Anime."
-              : cloudEnabled
-                ? "Sign in to Nuvio to see what you were watching."
-                : "Continue Watching needs Secretary Server."
-          }
         />
       )}
       {toast && (
