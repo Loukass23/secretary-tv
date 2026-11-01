@@ -226,11 +226,11 @@ Jabra:
   speaker stopped. The spoken reply then took another 4-4.5 s to arrive from the speech model; the wave stays on
   "thinking" meanwhile.
 - "Give me a briefing" was taken as a title to search, since "give me" leads a watch prompt. The intent parser now
-  leaves the briefing, news, summary, weather and forecast alone. That answer had no spoken reply (the speech model
-  returned nothing).
+  leaves the briefing, news, summary, weather and forecast alone.
 - One press heard nothing for 6 s and said "Didn't hear anything", as designed.
-- Over the 3 minutes, 21 of about 11,000 frames were over 50 ms (worst 333 ms), not yet attributed. Starting a recording
-  (a new AudioContext) and working out a reply's envelope (decoding the WAV on the main thread) are the likely ones.
+- Over the 3 minutes, 21 of about 11,000 frames were over 50 ms (worst 333 ms): a new AudioContext per recording, the
+  reply's base64 round trip and a new Recent card arriving with each answer. docs/performance.md, "Voice", has the fixes.
+- The briefing had no voice because Gemini's free speech quota was used up (429 from both speech models).
 
 To check another TV, plug in the speakerphone, deploy Nest with the privilege above, and run:
 

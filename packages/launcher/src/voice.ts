@@ -2,7 +2,6 @@
 // microphone". Records a short clip as 16 kHz WAV for Gemini (from the TV or through the server). No MediaRecorder:
 // Gemini does not list WebM, and the TV's MediaRecorder support varies, so the samples are taken with Web Audio and
 // encoded here. The wave follows the clip's level while recording, and the reply's while it plays.
-import { fromBase64 } from "@secretary/assistant";
 
 /** Sample rate of the clip sent to the server: plenty for speech, a third of the bytes of 48 kHz. */
 export const CLIP_RATE = 16000;
@@ -170,6 +169,8 @@ export interface Recording {
   name: string;
 }
 
+let audio: AudioContext | null = null;
+
 /** Starts a clip; rejects when the TV gives the app no microphone. `onLevel` gets each frame's wave level, then null. */
 export async function record(onLevel?: (level: number | null) => void): Promise<Recording> {
   if (!mic) mic = openMic();
@@ -180,8 +181,14 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
     mic = null;
     throw e;
   }
-  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
+  // One context for every clip, suspended in between: creating one cost 67-133 ms on the TV's main thread, and closing
+  // it 67 ms (docs/performance.md, "Voice").
+  if (!audio) {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    audio = new Ctx();
+  }
+  const ctx = audio;
+  if (ctx.state === "suspended") await ctx.resume();
   const source = ctx.createMediaStreamSource(stream);
   // ScriptProcessor is deprecated but present on every TV; AudioWorklet would need a separate module file.
   const node = ctx.createScriptProcessor(4096, 1, 1);
@@ -198,7 +205,7 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
     onLevel?.(null);
     node.disconnect();
     source.disconnect();
-    void ctx.close();
+    void ctx.suspend();
     if (!ends.heard) return finish(null);
     const all = new Float32Array(frames.reduce((n, f) => n + f.length, 0));
     let at = 0;
@@ -224,12 +231,21 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
 }
 
 /**
- * Plays a spoken reply (a WAV data: URL) on the speakerphone when there is one, else the TV's output. `onLevel` gets
- * the reply's loudness as it plays, then null.
+ * Plays a spoken reply on the speakerphone when there is one, else the TV's output: WAV bytes (Gemini from the TV) or a
+ * WAV data: URL (from the server). `onLevel` gets the reply's loudness as it plays, then null.
  */
-export async function play(src: string, onLevel?: (level: number | null) => void): Promise<void> {
-  const audio = new Audio(src) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
-  const levels = onLevel && src.startsWith("data:audio/wav;base64,") ? envelope(fromBase64(src.slice(22))) : [];
+export async function play(src: string | Uint8Array, onLevel?: (level: number | null) => void): Promise<void> {
+  // The bytes behind a Blob URL: an <audio> on a 300 KB data: URL took 64 ms of the main thread on the TV, and decoding
+  // base64 by hand 35 ms more; fetch() decodes it off the main thread (docs/performance.md, "Voice").
+  let wav: Uint8Array;
+  try {
+    wav = typeof src === "string" ? new Uint8Array(await (await fetch(src)).arrayBuffer()) : src;
+  } catch {
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: "audio/wav" }));
+  const audio = new Audio(url) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+  const levels = onLevel ? envelope(wav) : [];
   try {
     // The TV lists a USB speakerphone as an output too, but keeps playing on its own speakers unless told.
     const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
@@ -247,6 +263,7 @@ export async function play(src: string, onLevel?: (level: number | null) => void
     audio.play().catch(() => resolve());
   }).finally(() => {
     clearInterval(meter);
+    URL.revokeObjectURL(url);
     if (levels.length) onLevel!(null);
   });
 }

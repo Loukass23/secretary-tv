@@ -334,3 +334,23 @@ The live wave costs nothing measurable: six ribbon layers, three of them at opac
 a row with the wave live kept the heap at 3-4 MB and the page at 146 elements. The first walk after a launch had 3
 frames over 50 ms (worst 117 ms) while the app icons decoded, as before. Asks on the TV took 0.3 s (weather, a
 reminder), 0.6 s (a comedy, catalogs from the TV) and 1 s (a Gemini briefing, called from the TV). JS 47 KB gzip.
+
+## Voice
+
+The long frames from the spoken test in docs/launcher.md ("Checking a TV": 21 of about 11,000 over 50 ms, worst
+333 ms), found by logging every frame over 50 ms next to what Nest was doing, on the reference TV. Spoken replies were
+played from a 6 s test WAV through the real playback (`__sectv.play`), since the speech model's free quota had run out.
+
+| Step | Before | After |
+| --- | --- | --- |
+| Start a recording | 67-133 ms each time (a new AudioContext) | 117 ms the first time only; the context is kept and suspended between clips |
+| End a recording | 67 ms (closing the context) | none |
+| Start a spoken reply | about 120 ms measured, plus the base64 round trip: Gemini's audio was encoded to a data: URL and decoded again (35 ms), the envelope (21 ms), an `<audio>` on a 300 KB data: URL (64 ms) | one 67 ms frame: the bytes go to a Blob URL, and a server's data: URL is decoded by `fetch()` |
+| An answer appears | 83 + 83 ms on the first, 50-67 ms later | one 50-67 ms frame; the Recent row takes the new card once Nest is idle again (at most one 50 ms frame then) |
+
+What is left is repainting the Ask panel's text when an answer lands and the one-off audio context. Neither shows
+in a walk, where the screen holds still.
+
+Gemini's free tier allows only a few spoken replies a minute, and the pro speech model none: both fallback models
+answer 429 once that is used, so a reply has no voice (the text still shows). The flash speech model took 2.5 s for a
+sentence when it answered.

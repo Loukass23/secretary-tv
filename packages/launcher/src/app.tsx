@@ -55,7 +55,7 @@ import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
-import { searchCatalogs, speak as speakGemini, transcribe as transcribeGemini, wavDataUrl } from "@secretary/assistant";
+import { searchCatalogs, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -342,7 +342,7 @@ export function App() {
     }
     setAsking(true);
     const wantSpeech = spoken && speakReplies;
-    let speech: string | null | undefined;
+    let speech: string | Uint8Array | null | undefined;
     try {
       // The server first when it is up (the phone shares its turns and reminders), else the TV answers itself.
       let reply: string | undefined;
@@ -361,7 +361,7 @@ export function App() {
       }
       if (wantSpeech && !speech && GEMINI_KEY) {
         const wav = await speakGemini(reply, GEMINI_KEY);
-        speech = wav ? wavDataUrl(wav) : null;
+        speech = wav;
       }
     } finally {
       setAsking(false);
@@ -640,7 +640,7 @@ export function App() {
     .reverse()
     .filter((t, k, all) => all.findIndex((u) => u.prompt.toLowerCase() === t.prompt.toLowerCase()) === k)
     .slice(0, MAX_RECENT);
-  const recent: RecentCard[] = [
+  const latest: RecentCard[] = [
     ...recentTurns.map((t) => ({
       kind: "answer" as const,
       key: `t${t.id}`,
@@ -654,6 +654,14 @@ export function App() {
   ]
     .sort((a, b) => b.at - a.at)
     .slice(0, MAX_RECENT);
+  // A new card moves the whole row (67-83 ms frames on the TV), so the row catches up once Nest is idle again and the
+  // answer rises in the Ask panel on its own (docs/performance.md, "Voice").
+  const [recent, setRecent] = useState<RecentCard[]>(latest);
+  const latestKey = latest.map((c) => c.key).join();
+  const idle = !listening && !asking && !answered && !talk.pending;
+  useEffect(() => {
+    if (idle) setRecent(latest);
+  }, [latestKey, idle]);
   const continueAt = focus.area === "continue" ? continueItems[focus.i - recent.length] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
     continueAt
@@ -683,9 +691,12 @@ export function App() {
       continueItems,
       reminders,
       assistant,
-      ask: (q: string) => send(q),
+      // spoken: the reply is read aloud as after a voice prompt (Gemini speech, envelope, playback).
+      ask: (q: string, spoken = false) => send(q, spoken),
       // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
       wave: setWaveLevel,
+      // A reply's WAV through the real playback (envelope, speakerphone, wave), when the speech model is out of quota.
+      play: (wav: Uint8Array) => play(wav, setWaveLevel),
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => {
         setQuery(q);
