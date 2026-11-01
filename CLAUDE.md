@@ -19,6 +19,7 @@ pnpm workspace, one package per folder in `packages/`. Packages import each othe
 | Package | What it is |
 | --- | --- |
 | `core` | Debrid cache checks and links, file choice, release ranking |
+| `assistant` | Ask Nest's answers (`route()`), Gemini, watch intents, catalog search and weather; shared by the server and Nest |
 | `plugins` | Runs Nuvio-format plugin repositories on the TV, one Worker per provider |
 | `catalog-kit` | Shared catalog engine: home, detail, Hub (search, settings), sources, AVPlay player |
 | `app-movies`, `app-series`, `app-anime` | Thin Tizen shells over `catalog-kit` (Cinema, Shows, Anime) |

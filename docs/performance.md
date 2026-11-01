@@ -314,3 +314,12 @@ node ../tv-kit/scripts/cdp.mjs <port> walk 900 Left,Left,Left,Left,Left,Left
   previous keyframe), about 5 s after the last press.
 - The resume point uses the same IDLE seek, so prepare-ahead prepares at the resume point: OK to first frame 0.38 s at
   57:28, with no seek after play.
+
+## Live wave and the Nest relayout (2026-11-01): not yet measured
+
+The wave now follows the room microphone and spoken replies (`setWaveLevel`, docs/launcher.md "Ask Nest"): each
+ribbon's `scaleY` is written straight to the DOM every frame while a voice is live, with no Preact render and no
+transition. The home screen also gained a forecast sheet, a Recent row of glass cards and answer posters on the right.
+Expected cost is that of the old wave (transform only, six ribbon layers instead of three, two of them at opacity 0),
+but it has not been measured on the reference TV yet. To do: `cdp.mjs walk` and `soak` on the home screen while
+recording and while a reply plays, and the walk with the Recent row and the results on the right.

@@ -9,6 +9,10 @@ declare const __PARTY_URL__: string | undefined;
 declare const __ST_CLIENT_ID__: string | undefined;
 declare const __ST_CLIENT_SECRET__: string | undefined;
 declare const __ST_TOKEN__: string | undefined;
+declare const __GEMINI_KEY__: string | undefined;
+declare const __WEATHER_LAT__: string | undefined;
+declare const __WEATHER_LON__: string | undefined;
+declare const __WEATHER_CITY__: string | undefined;
 
 export const SERVER_URL = (typeof __SERVER_URL__ !== "undefined" ? __SERVER_URL__ : "").replace(/\/$/, "");
 
@@ -26,6 +30,19 @@ export const SYNC_BACKEND = typeof __SYNC_BACKEND__ !== "undefined" && __SYNC_BA
 export const ST_CLIENT_ID = typeof __ST_CLIENT_ID__ !== "undefined" ? __ST_CLIENT_ID__ : "";
 export const ST_CLIENT_SECRET = typeof __ST_CLIENT_SECRET__ !== "undefined" ? __ST_CLIENT_SECRET__ : "";
 export const ST_TOKEN = typeof __ST_TOKEN__ !== "undefined" ? __ST_TOKEN__ : "";
+
+/**
+ * Gemini straight from the TV (docs/launcher.md, "Ask Nest on the TV"): voice, spoken replies and free questions with no
+ * server. The key ships inside the .wgt, so use one restricted to the Generative Language API.
+ */
+export const GEMINI_KEY = typeof __GEMINI_KEY__ !== "undefined" ? __GEMINI_KEY__ : "";
+
+/** Where the weather is for when SmartThings has no location: coordinates, or a city looked up once. */
+export const WEATHER_ENV = {
+  WEATHER_LAT: typeof __WEATHER_LAT__ !== "undefined" ? __WEATHER_LAT__ : "",
+  WEATHER_LON: typeof __WEATHER_LON__ !== "undefined" ? __WEATHER_LON__ : "",
+  WEATHER_CITY: typeof __WEATHER_CITY__ !== "undefined" ? __WEATHER_CITY__ : "",
+};
 
 export const APP_IDS = {
   movie: typeof __MOVIES_ID__ !== "undefined" && __MOVIES_ID__ ? __MOVIES_ID__ : "ScrtMovies.Movies",

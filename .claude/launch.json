@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nest",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@secretary/launcher", "exec", "vite", "--port", "5179", "--strictPort"],
+      "port": 5179
+    }
+  ]
+}

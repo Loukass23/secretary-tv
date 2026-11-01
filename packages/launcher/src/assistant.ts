@@ -1,5 +1,6 @@
 // Ask Nest: the assistant panel's data (docs/launcher.md). Talks to @secretary/server's /ai/ask and
 // /ai/state, which the phone companion uses too, so prompts from either show on the TV.
+import type { Weather } from "@secretary/assistant";
 import type { WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Reminder, SearchResult } from "./apps.ts";
 
@@ -85,14 +86,9 @@ export const fetchAssistant = async (serverUrl: string, f: typeof fetch = fetch)
   return (await res.json()) as AssistantState;
 };
 
-export interface Weather {
-  tempC: number;
-  label: string;
-  icon: string;
-  place?: string;
-}
+export type { Weather } from "@secretary/assistant";
 
-/** Null when the server has no place configured or the forecast is down: Nest then shows no weather. */
+/** The server's forecast, when the TV knows no place of its own (weather.ts); null without one. */
 export const fetchWeather = async (serverUrl: string, f: typeof fetch = fetch): Promise<Weather | null> => {
   try {
     const res = await f(`${serverUrl}/weather`);
