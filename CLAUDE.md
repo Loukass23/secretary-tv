@@ -23,6 +23,7 @@ pnpm workspace, one package per folder in `packages/`. Packages import each othe
 | `plugins` | Runs Nuvio-format plugin repositories on the TV, one Worker per provider |
 | `catalog-kit` | Shared catalog engine: home, detail, Hub (search, settings), sources, AVPlay player |
 | `app-movies`, `app-series`, `app-anime` | Thin Tizen shells over `catalog-kit` (Cinema, Shows, Anime) |
+| `app-music` | Secretary Music: YouTube music in glass, tells Nest what is playing (`docs/music.md`) |
 | `launcher` | Secretary Nest, the glass home screen |
 | `server` | Home server and Secretary Desk (phone companion) |
 | `nuvio` | Nuvio Cloud client |

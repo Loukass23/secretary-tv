@@ -1,0 +1,22 @@
+{
+  "name": "@secretary/app-music",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "tizen": "node ../tv-kit/scripts/tizen.mjs",
+    "cdp": "node ../tv-kit/scripts/cdp.mjs"
+  },
+  "dependencies": {
+    "@secretary/tv-kit": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "vite": "^6.0.0"
+  },
+  "tizen": {
+    "packageIdEnv": "SECRETARY_TV_MUSIC_ID"
+  }
+}

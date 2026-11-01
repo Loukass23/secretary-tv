@@ -4,3 +4,4 @@ export * from "./keys.ts";
 export * from "./perf.ts";
 export * from "./storage.ts";
 export * from "./use-keys.ts";
+export * from "./now-playing.ts";

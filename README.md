@@ -1,7 +1,7 @@
 # Secretary TV
 
-Small, fast apps for Samsung Tizen TVs: **Secretary Cinema** (films), **Secretary Shows** (series), **Secretary Anime**
-and **Secretary Nest**, a glass home screen with your apps, Continue Watching, reminders, an assistant and your
+Small, fast apps for Samsung Tizen TVs: **Secretary Cinema** (films), **Secretary Shows** (series), **Secretary Anime**,
+**Secretary Music** (YouTube music) and **Secretary Nest**, a glass home screen with your apps, Continue Watching, reminders, an assistant and your
 lights. **Secretary Desk** is the phone companion, served by a small home server.
 
 Named after the **Secretary Bird** (_Sagittarius serpentarius_), the tall African raptor crowned with black quill
@@ -50,6 +50,14 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
   (`docs/nuvio-cloud.md`).
 - Watch party client: watch together across TVs (`docs/watch-party.md`; needs the Worker deployed).
 
+### Secretary Music
+
+- Trending music, recently played, search and playlists from YouTube (your own Data API key), in the glass style.
+- A now-playing screen with the video, the queue, shuffle and repeat; the remote's media keys and CH+/CH- work
+  everywhere.
+- Tells Nest what is playing over a Tizen message port, no server needed (`docs/music.md`). Playback needs the small
+  player page the home server serves (YouTube will not play in an app loaded from `file://`).
+
 ### Secretary Nest (launcher)
 
 - Clock, weather, installed TV apps, cross-app Continue Watching, Raptor Hunt.
@@ -71,6 +79,7 @@ Implemented:
 - **Secretary Desk** (`/companion`, `/remote`): the phone web app with reminders and the assistant.
 - `/reminders`, `/ai/ask`, `/ai/state`, `/ai/transcribe`: reminders sync and the Secretary Bird assistant (Google
   Gemini, optional), with voice from a room microphone and spoken replies.
+- `/music/player`: the page Secretary Music frames to play YouTube.
 - `/weather` (Open-Meteo, no key), `/art` (fanart.tv artwork), `/domotics` (SmartThings lights).
 - `/health`.
 - Runs at home on the LAN, or hosted on the internet from the `Dockerfile` with a secret key in every URL
@@ -100,6 +109,7 @@ Upcoming:
 | `packages/plugins` (`@secretary/plugins`) | **Secretary Plugins** | Runs Nuvio plugin repositories on the TV: manifests, one Worker per provider, id mapping, debrid for hashes. |
 | `packages/catalog-kit` (`@secretary/catalog-kit`) | **Secretary Catalog Kit** | The shared catalog engine: home, detail pages, search, sources, and the AVPlay player. |
 | `packages/app-movies`, `app-series`, `app-anime` | **Secretary Cinema**, **Secretary Shows**, **Secretary Anime** | Thin Tizen app shells over the catalog kit. |
+| `packages/app-music` (`@secretary/app-music`) | **Secretary Music** | YouTube music: browse, search, play, and what is playing for Nest. |
 | `packages/launcher` (`@secretary/launcher`) | **Secretary Nest** | The home screen. |
 | `packages/server` (`@secretary/server`) | **Secretary Desk & Server** | The home server and the phone companion. |
 | `packages/nuvio` (`@secretary/nuvio`) | **Secretary Nuvio** | Nuvio Cloud client: auth, profiles, library, progress, collections. |
@@ -139,6 +149,7 @@ pnpm typecheck
 - `docs/nuvio-cloud.md`: accounts, profiles and sync.
 - `docs/watch-party.md`: watching together, and deploying the Worker.
 - `docs/launcher.md`: Secretary Nest, and why the Home button is not rebound.
+- `docs/music.md`: Secretary Music, its YouTube key and player page, and what Nest can read.
 - `docs/performance.md`: measured numbers and the reasoning behind them.
 - `docs/lessons.md`: what the TV does and does not allow.
 - `docs/legacy-port-plan.md`: design notes for the player and sources work.

@@ -30,11 +30,12 @@ export function glow(g: CanvasRenderingContext2D, x: number, y: number, r: numbe
   g.fillRect(x - r, y - r, r * 2, r * 2);
 }
 
-/** The warm glow top right, "r,g,b": each app tints its backdrop (Nest and Cinema orange, Shows blue, Anime rose). */
+/** The warm glow top right, "r,g,b": each app tints its backdrop (Nest and Cinema orange, Shows blue, Anime rose, Music green). */
 export const TINTS = {
   orange: "255,90,38",
   blue: "90,140,255",
   rose: "236,64,122",
+  green: "52,211,153",
 } as const;
 
 function drawWallpaper(g: CanvasRenderingContext2D, tint: string): void {

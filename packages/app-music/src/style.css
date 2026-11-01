@@ -1,0 +1,103 @@
+/* Secretary Music on tv-kit glass. Flat fills, no soft shadows, focus by opacity and transform (CLAUDE.md). */
+html,
+body {
+  margin: 0;
+  background: #07080b;
+  overflow: hidden;
+}
+.music {
+  --mu-accent: #34d399;
+}
+.music h1,
+.music h2,
+.music p {
+  margin: 0;
+}
+
+/* The one YouTube player. It moves between slots only when the screen changes. */
+.mu-video {
+  position: absolute;
+  z-index: 3;
+  border: 0;
+  border-radius: 16px;
+  background: #000;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  will-change: opacity;
+}
+.mu-video.is-on { opacity: 1; }
+.on-playing .mu-video { border-radius: 24px; }
+
+.mu-brand { left: 96px; top: 58px; font-size: 52px; font-weight: 800; letter-spacing: -0.02em; }
+.mu-brand::after { content: ""; display: inline-block; width: 14px; height: 14px; margin-left: 10px; border-radius: 50%; background: var(--mu-accent); }
+.mu-clock { right: 96px; top: 66px; font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.mu-kicker {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Home: the now-playing card on the left. */
+.mu-now { padding: 22px 24px; box-sizing: border-box; }
+.mu-now-text { margin-top: 330px; }
+.mu-now-text b { display: block; font-size: 36px; font-weight: 700; line-height: 1.15; max-height: 84px; overflow: hidden; }
+.mu-now-text > small { font-size: 26px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-now-text .mu-progress { position: absolute; top: 160px; }
+.mu-now-text .mu-times { position: absolute; top: 180px; font-size: 22px; font-variant-numeric: tabular-nums; }
+.mu-empty { margin-top: 24px; }
+.mu-empty small { white-space: normal; line-height: 1.4; }
+
+/* Rows of tiles. */
+.mu-row-label { font-size: 28px; font-weight: 700; color: var(--sg-ink-dim); transition: opacity 180ms ease; }
+.mu-row-label.is-on { color: var(--sg-ink); }
+.mu-cap { position: absolute; font-size: 24px; transition: transform 220ms var(--sg-ease); will-change: transform; }
+.mu-cap b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-cap small { font-size: 20px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-cap.is-focus { transform: translate3d(0, 6px, 0); }
+.mu-message { font-size: 30px; line-height: 1.4; color: var(--sg-ink-dim); }
+
+/* Search field. */
+.mu-field { display: flex; align-items: center; gap: 22px; padding: 0 32px; box-sizing: border-box; font-size: 34px; }
+.mu-field-icon { display: flex; }
+.mu-placeholder { color: var(--sg-ink-dim); }
+.mu-field.is-focus .mu-placeholder { color: var(--sg-focus-ink-dim); }
+
+/* Progress: a track and a fill scaled by transform. */
+.mu-progress { position: absolute; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.mu-progress i { display: block; height: 100%; background: var(--mu-accent); transform-origin: left; transition: transform 1s linear; will-change: transform; }
+
+/* Now playing: title and times under the video, controls, the queue on the right. */
+.mu-title { left: 96px; top: 596px; width: 832px; }
+.mu-title b { display: block; font-size: 48px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-title small { font-size: 30px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-time-l,
+.mu-time-r { top: 740px; font-size: 22px; font-variant-numeric: tabular-nums; }
+.mu-time-l { left: 96px; }
+.mu-time-r { left: 828px; width: 100px; text-align: right; }
+.music .sg-icon { border-radius: 50%; }
+.music .sg-icon svg { display: block; }
+.mu-main::after { background: rgba(255, 255, 255, 0.16); }
+.mu-one { display: flex; align-items: center; font-size: 20px; font-weight: 800; }
+
+.mu-list { padding: 28px 32px; box-sizing: border-box; }
+.mu-list .sg-card { padding: 12px 22px; box-sizing: border-box; }
+.mu-list .sg-card-row { font-size: 28px; }
+.mu-list .sg-card small { font-size: 21px; margin: 4px 0 0; }
+.mu-list .sg-card-row .sg-dot { width: 12px; height: 12px; }
+.mu-list .is-current b { color: var(--mu-accent); }
+.mu-list .is-current.is-focus b { color: var(--sg-focus-ink); }
+
+.mu-note {
+  left: 50%;
+  bottom: 40px;
+  max-width: 1200px;
+  padding: 16px 30px;
+  border-radius: 30px;
+  background: rgba(20, 22, 28, 0.92);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12);
+  font-size: 26px;
+  transform: translate3d(-50%, 0, 0);
+}
+.music .sg-glass > .sg-badge { background: var(--mu-accent); }

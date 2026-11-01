@@ -113,6 +113,18 @@ Each item cost a debugging session. If one turns out wrong, fix it here in the s
   after the second is closed. So the next episode cannot be prepared during playback; the gap between episodes (about 3 s) is
   the floor on this firmware.
 
+## YouTube in a web app
+
+- YouTube's embed refuses to play in a page with no Referer (error 153, "video player configuration error"), and a
+  widget loaded from `file://` sends none, whatever `origin` or `widget_referrer` the player is given. Framing a page
+  served over http (the home server's `/music/player`) that hosts the player works: the TV then plays any embeddable
+  video (checked 2026-11-01). `docs/music.md`.
+- A hidden app is suspended when `background-support` is `disable`: no timers, no frames, and its message ports do not
+  answer, even its own. With `enable` it answers another app over `tizen.messageport` while hidden. YouTube still
+  pauses a video while its page is hidden.
+- CDP `Page.captureScreenshot` waits for a frame, so it hangs while the app is hidden. Check
+  `document.visibilityState` first; a system popup can hide the app for a while on its own.
+
 ## Network
 
 - The packaged widget applies no CORS, and plain `http://` LAN hosts load, so the apps talk to the server and the public

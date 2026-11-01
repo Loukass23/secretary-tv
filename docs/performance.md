@@ -354,3 +354,25 @@ in a walk, where the screen holds still.
 Gemini's free tier allows only a few spoken replies a minute, and the pro speech model none: both fallback models
 answer 429 once that is used, so a reply has no voice (the text still shows). The flash speech model took 2.5 s for a
 sentence when it answered.
+
+## Secretary Music (2026-11-01)
+
+`packages/app-music` on the reference TV, `cdp.mjs walk 250` over 18 keys through the Home rows (`docs/music.md`).
+YouTube's player runs in an `<iframe>` of a page served over http, in the same renderer as the app.
+
+| Walk | Median | p95 | Max | Over 50 ms |
+| --- | --- | --- | --- | --- |
+| Home, nothing loaded | 17 ms | 33 ms | 83 ms | 2 (first walk after launch) |
+| Home, a track paused in the card | 17 ms | 33 ms | 50 ms | 0 |
+| Home, a track playing in the card | 33 ms | 100 ms | 150 ms | 27 |
+| No keys for 5 s, a track playing | 17 ms | 83 ms | 133 ms | 20 |
+| The same, with the app ignoring the player's messages | 17 ms | 83 ms | 100 ms | 22 |
+| Playing, the iframe hidden (`visibility: hidden`) | 6 ms | 83 ms | 133 ms | 24 |
+| Playing, the iframe shrunk to 256x144 | 33 ms | 83 ms | 117 ms | 20 |
+
+The long frames come from YouTube's player while it plays, not from the screens: they are there with no key pressed,
+with the app ignoring its once-a-second updates, with the video hidden and at a quarter of the size. Paused, the same
+walk has none. The app cannot move that work off its main thread (the TV puts the frame in the same renderer), so
+navigation while music plays runs at about 30 fps with a hitch every few hundred milliseconds. The screens themselves
+follow the glass rules: tiles scale on focus, the progress bar is a `scaleX` on its own layer, the rows and the queue
+render only the items near focus, and the player moves between places only when the screen changes.
