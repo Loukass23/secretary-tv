@@ -15,7 +15,10 @@ Each item cost a debugging session. If one turns out wrong, fix it here in the s
 - The TV's DUID must be in the distributor certificate and Developer Mode must be on. Signing profile, TV address and package
   ids live in a gitignored `.env.tizen`.
 - `tz pack -w <dir>` treats the folder as a project and writes `Debug/`, `tizen_web_project.yaml` and `.tizen-rds` into it. Remove
-  them before packing again. `tz install` uninstalls first, so every install wipes the app's data.
+  them before packing again. `tz install` uninstalls first, so every install wipes the app's data (Nuvio sign-in,
+  SmartThings tokens, Nest's reminders). `tizen.mjs install` and `deploy` push the package and run the TV's own
+  `sdb shell 0 vd_appinstall <package id> <path>` instead, which upgrades in place and keeps the data (checked
+  2026-11-01). `tizen.mjs reinstall` is the wiping way, for a package signed with a new certificate.
 - `sdb dlog` prints nothing on a retail TV. Read the console over the inspector port instead (`tizen.mjs debug`, then
   `cdp.mjs <port> logs`).
 - The boot watchdog logs script errors and shows them on screen if the splash is still up after 30 s.

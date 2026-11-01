@@ -45,7 +45,7 @@ Deploy to a TV from an app folder (needs Tizen Studio CLI `tz`/`sdb`, a certific
 
 ```bash
 cd packages/app-movies
-node ../tv-kit/scripts/tizen.mjs deploy   # build, sign, install, launch
+node ../tv-kit/scripts/tizen.mjs deploy   # build, sign, install in place (keeps the app's data), launch
 node ../tv-kit/scripts/tizen.mjs debug    # prints the inspector port
 node ../tv-kit/scripts/cdp.mjs <port> walk|keys|eval|shot|logs|soak|layers
 ```
