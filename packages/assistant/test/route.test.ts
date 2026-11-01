@@ -34,6 +34,14 @@ test("watch prompts search or browse through find", async () => {
   assert.equal((await route("play nothing at all", fx)).reply, "I couldn't find anything for “nothing at all”.");
 });
 
+test("a briefing or the forecast asked with a watch verb is not a title", async () => {
+  const { fx } = effects({ find: async () => [{ type: "movie", title: { id: "tt1", name: "Briefing", year: "", rating: "" } }] });
+  assert.equal((await route("Give me a briefing", fx)).action, "briefing");
+  assert.equal((await route("show me the news", fx)).action, "briefing");
+  assert.equal((await route("show me the weather", fx)).action, "briefing");
+  assert.equal((await route("show me dune", fx)).action, "watch");
+});
+
 test("lights: scenes and levels", async () => {
   const { fx, lights } = effects();
   await route("cinema mode", fx);

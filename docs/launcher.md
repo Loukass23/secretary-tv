@@ -217,6 +217,21 @@ Verified on the reference TV (GU43DU7199UXZG, Tizen 9, Chromium 120) on 2026-10-
   asked `gemini-3.6-flash` first, which took 16 s for one sentence (the lite models answer in under 1 s). With the lite
   models first and 8 s per model, a briefing with its 9 s spoken reply comes back in about 6.7 s.
 
+Again on 2026-11-01 with Gemini called from the TV (`NEST_GEMINI_API_KEY`) and the live wave, three prompts spoken at the
+Jabra:
+
+- The wave followed the voice while listening (cool ribbons, height 0.33 on average, up to 1.09) and the reply while it
+  played on the Jabra (warm ribbons, 0.81 on average, up to 1.17), and went back to idle after each.
+- "What's the weather?" and "Remind me to water the plants at 6" were transcribed and answered about 1.2 s after the
+  speaker stopped. The spoken reply then took another 4-4.5 s to arrive from the speech model; the wave stays on
+  "thinking" meanwhile.
+- "Give me a briefing" was taken as a title to search, since "give me" leads a watch prompt. The intent parser now
+  leaves the briefing, news, summary, weather and forecast alone. That answer had no spoken reply (the speech model
+  returned nothing).
+- One press heard nothing for 6 s and said "Didn't hear anything", as designed.
+- Over the 3 minutes, 21 of about 11,000 frames were over 50 ms (worst 333 ms), not yet attributed. Starting a recording
+  (a new AudioContext) and working out a reply's envelope (decoding the WAV on the main thread) are the likely ones.
+
 To check another TV, plug in the speakerphone, deploy Nest with the privilege above, and run:
 
 ```bash

@@ -52,8 +52,9 @@ export function parseWatchIntent(prompt: string): WatchIntent | null {
   const m = text.match(BROWSE) ?? text.match(LEAD);
   if (!m) return null;
   let rest = m[1].trim();
-  // Lights and reminders have their own handlers ("show me the lights", "find my reminders").
-  if (/\b(?:lights?|lamps?|reminders?|tasks?|mode|scene)\b/.test(rest)) return null;
+  // Lights and reminders have their own handlers ("show me the lights", "find my reminders"), and the briefing and
+  // the weather are not titles ("give me a briefing", "show me the forecast").
+  if (/\b(?:lights?|lamps?|reminders?|tasks?|mode|scene|briefing|summary|news|update|weather|forecast)\b/.test(rest)) return null;
 
   let kind: CatalogKind | undefined;
   for (const [re, k] of KINDS) {
