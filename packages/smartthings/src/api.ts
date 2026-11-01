@@ -30,6 +30,14 @@ export interface StScene {
   locationId?: string;
 }
 
+/** A SmartThings location (a home); the coordinates are what the owner set in the app, when they did. */
+export interface StLocation {
+  id: string;
+  name: string;
+  lat?: number;
+  lon?: number;
+}
+
 export interface StCommand {
   capability: string;
   command: string;
@@ -144,6 +152,19 @@ export function smartThings({ token, fetch: f = fetch, base = ST_API }: SmartThi
     },
     runScene(sceneId: string): Promise<unknown> {
       return call(`/scenes/${encodeURIComponent(sceneId)}/execute`, { method: "POST" });
+    },
+    /** The account's locations with their coordinates (the list has none, so each is read once more). */
+    async locations(): Promise<StLocation[]> {
+      const body = await call<{ items?: { locationId?: string; name?: string }[] }>("/locations");
+      const ids = (body.items ?? []).filter((l) => l.locationId).map((l) => l.locationId!);
+      const out = await Promise.all(
+        ids.map((id) => call<{ locationId?: string; name?: string; latitude?: number; longitude?: number }>(`/locations/${encodeURIComponent(id)}`)),
+      );
+      return out.map((l, k) => ({
+        id: l.locationId ?? ids[k],
+        name: (l.name ?? "").trim(),
+        ...(typeof l.latitude === "number" && typeof l.longitude === "number" ? { lat: l.latitude, lon: l.longitude } : {}),
+      }));
     },
     /** Room names by id for a location. */
     async rooms(locationId: string): Promise<Record<string, string>> {

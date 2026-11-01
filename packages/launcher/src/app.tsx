@@ -1,5 +1,5 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys } from "@secretary/tv-kit";
-import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, listProfiles, type Profile, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -43,16 +43,19 @@ import {
   waveState,
   type Weather,
 } from "./assistant.ts";
+import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
-import { APP_IDS, HIDE, PINS, SERVER_URL } from "./config.ts";
-import { Home } from "./home.tsx";
+import { APP_IDS, GEMINI_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
+import { Home, type RecentCard } from "./home.tsx";
 import { clamp, type Focus, type Lengths, SECTIONS, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "./nest-nav.ts";
-import { home, homeConfigured } from "./home-control.ts";
+import { home, homeConfigured, runLights } from "./home-control.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
+import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
+import { searchCatalogs, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -62,7 +65,10 @@ const THEME_KEY = "nest.theme";
 const SPEAK_KEY = "nest.speak";
 /** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
 const ASSISTANT_POLL_MS = 2500;
-const WEATHER_POLL_MS = 10 * 60_000;
+/** Open-Meteo updates every 15 min; the header has no need to be fresher than half an hour. */
+const WEATHER_POLL_MS = 30 * 60_000;
+/** Answers and home alerts in the Recent row, newest first. */
+const MAX_RECENT = 4;
 /** SmartThings device status while Nest is up: one call per rate-limit window (10 per ~15 s, shared with commands). */
 const HOME_POLL_MS = 15_000;
 /** How long the wave keeps "speaking" after an answer arrives. */
@@ -95,6 +101,27 @@ const SCENES: readonly [Scene, string][] = [
   ["warm", "🕯 Warm lights"],
   ["off", "🌙 Lights off"],
 ];
+
+/** localStorage, or memory when the TV refuses it: the TV's reminders then last until Nest restarts. */
+const memory = new Map<string, string>();
+const storage = {
+  getItem(k: string) {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return memory.get(k) ?? null;
+    }
+  },
+  setItem(k: string, v: string) {
+    memory.set(k, v);
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      // kept in memory
+    }
+  },
+};
+const localRem = localReminders(storage);
 
 const clock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -136,7 +163,9 @@ export function App() {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [continueItems, setContinueItems] = useState<UnifiedResumeEntry[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [serverReminders, setReminders] = useState<Reminder[]>([]);
+  const [localItems, setLocalItems] = useState<Reminder[]>(() => localRem.list());
+  const reminders = useMemo(() => orderReminders([...serverReminders, ...localItems]), [serverReminders, localItems]);
   const [summary, setSummary] = useState<string | undefined>();
   const [serverOnline, setServerOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +187,10 @@ export function App() {
   const [listening, setListening] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [shownTurn, setShownTurn] = useState<AssistantTurn | null>(null);
-  const [weather, setWeather] = useState<Weather | null>(null);
+  const [weather, setWeather] = useState<Weather | null>(() => cachedWeather(storage));
+  const [weatherOpen, setWeatherOpen] = useState(false);
+  /** What the home reported lately (the phone came home, the vacuum finished), for the Recent row. */
+  const [alerts, setAlerts] = useState<{ text: string; at: number }[]>([]);
   const [themePref, setThemePref] = useState<ThemePref>(loadThemePref);
   const [speakReplies, setSpeakReplies] = useState(loadSpeakReplies);
   /** The clip being recorded from the room microphone. */
@@ -176,6 +208,20 @@ export function App() {
   const scene = useRef(0);
   const lastBack = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  /** What the TV's own assistant reads when it answers: the latest devices, scenes and forecast. */
+  const live = useRef({ devices, scenes, weather });
+  live.current = { devices, scenes, weather };
+  const brain = useMemo(
+    () =>
+      localBrain({
+        reminders: localRem,
+        lights: (cmd) => runLights(cmd, live.current.devices, live.current.scenes),
+        weather: async () => live.current.weather,
+        geminiKey: GEMINI_KEY,
+      }),
+    [],
+  );
+  const [localState, setLocalState] = useState(() => brain.state());
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -215,13 +261,16 @@ export function App() {
     if (state.aiSummary !== undefined) setSummary(state.aiSummary);
   };
 
-  /** Types a new reminder with the TV keyboard and saves it on the server. */
+  /** Types a new reminder with the TV keyboard and saves it on the server, or on the TV without one. */
   const newReminder = () => {
-    if (!SERVER_URL) return flash("Reminders need Secretary Server");
     const opened = getTvInputBridge().open("", {
       onCommit: (val) => {
         const text = val.trim();
         if (!text) return;
+        if (!SERVER_URL) {
+          setLocalItems(localRem.add(text));
+          return flash("Reminder added");
+        }
         addReminder(SERVER_URL, text).then(
           (s) => {
             applyReminders(s);
@@ -253,7 +302,16 @@ export function App() {
       setShownTurn(turn);
       if (turn.results?.length) setFocus({ area: "results", i: 0 });
     }
-    if (turn.action === "reminder_added" && SERVER_URL) fetchReminders(SERVER_URL).then(applyReminders, () => {});
+    if (turn.action === "reminder_added") {
+      setLocalItems(localRem.list());
+      if (SERVER_URL) fetchReminders(SERVER_URL).then(applyReminders, () => {});
+    }
+  };
+
+  /** An answer from the TV's own assistant. */
+  const showLocal = (turn: AssistantTurn) => {
+    setLocalState(brain.state());
+    onNewTurn(turn);
   };
 
   const applyAssistant = (st: AssistantState) => {
@@ -275,20 +333,36 @@ export function App() {
     const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes) : null;
     if (act) {
       flash(act.reply);
+      showLocal(brain.note(prompt, act.reply, "domotics_updated"));
       const done =
         act.kind === "scene"
           ? home.runScene(act.scene.id)
           : Promise.all(act.targets.map((t) => home.command(t.device.id, t.commands)));
       return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
     }
-    if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
     setAsking(true);
-    let speech: string | null | undefined;
+    const wantSpeech = spoken && speakReplies;
+    let speech: string | Uint8Array | null | undefined;
     try {
-      speech = (await askNest(SERVER_URL, prompt, fetch, spoken && speakReplies)).speech;
-      applyAssistant(await fetchAssistant(SERVER_URL));
-    } catch {
-      flash("Couldn't reach the assistant");
+      // The server first when it is up (the phone shares its turns and reminders), else the TV answers itself.
+      let reply: string | undefined;
+      if (SERVER_URL && serverOnline) {
+        try {
+          ({ reply, speech } = await askNest(SERVER_URL, prompt, fetch, wantSpeech));
+          applyAssistant(await fetchAssistant(SERVER_URL));
+        } catch {
+          reply = undefined;
+        }
+      }
+      if (reply === undefined) {
+        const turn = await brain.ask(prompt);
+        reply = turn.reply;
+        showLocal(turn);
+      }
+      if (wantSpeech && !speech && GEMINI_KEY) {
+        const wav = await speakGemini(reply, GEMINI_KEY);
+        speech = wav;
+      }
     } finally {
       setAsking(false);
     }
@@ -296,7 +370,7 @@ export function App() {
       // The wave keeps speaking for as long as the reply plays, not just SPEAK_MS.
       clearTimeout(speakTimer.current);
       setAnswered(true);
-      await play(speech);
+      await play(speech, setWaveLevel);
       setAnswered(false);
     }
   };
@@ -306,12 +380,12 @@ export function App() {
    * Falls back to the TV keyboard's dictation when the TV gives the app no microphone or the server cannot transcribe.
    */
   const listen = async () => {
-    if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
+    if (!SERVER_URL && !GEMINI_KEY) return openAsk();
     if (recording.current) return recording.current.stop();
     if (keyboardOnly.current) return openAsk();
     let rec: Recording;
     try {
-      rec = await record();
+      rec = await record(setWaveLevel);
     } catch {
       keyboardOnly.current = true;
       return openAsk();
@@ -326,12 +400,12 @@ export function App() {
     setAsking(true);
     let words = "";
     try {
-      words = await transcribeClip(SERVER_URL, clip);
+      words = GEMINI_KEY ? await transcribeOnTv(clip) : await transcribeClip(SERVER_URL, clip);
     } catch (e) {
       const reason = e instanceof VoiceError ? e.reason : "failed";
       if (reason === "unavailable") {
         keyboardOnly.current = true;
-        flash("Voice needs a Gemini key on the server");
+        flash("Voice needs a Gemini key on the server or in this build");
       } else {
         flash(reason === "no-speech" ? "Didn't catch that" : "Couldn't reach the assistant");
       }
@@ -339,6 +413,18 @@ export function App() {
       setAsking(false);
     }
     if (words) await send(words, true);
+  };
+
+  /** The words in a clip, from Gemini straight from the TV. */
+  const transcribeOnTv = async (clip: Uint8Array) => {
+    let words: string;
+    try {
+      words = await transcribeGemini(clip, "audio/wav", GEMINI_KEY);
+    } catch {
+      throw new VoiceError("failed");
+    }
+    if (!words) throw new VoiceError("no-speech");
+    return words;
   };
 
   const toggleSpeech = () => {
@@ -354,7 +440,6 @@ export function App() {
 
   /** The TV keyboard, whose microphone key dictates; OK sends the prompt. */
   const openAsk = () => {
-    if (!SERVER_URL) return flash("Ask Nest needs Secretary Server");
     setListening(true);
     const opened = getTvInputBridge().open("", {
       onCommit: (val) => {
@@ -365,16 +450,21 @@ export function App() {
     });
     if (!opened) {
       setListening(false);
-      flash(`No TV keyboard here: ask from your phone at ${SERVER_URL}/companion`);
+      flash(SERVER_URL ? `No TV keyboard here: ask from your phone at ${SERVER_URL}/companion` : "No TV keyboard here");
     } else {
       flash("🎤 Speak or type, then OK");
     }
   };
 
   const nextScene = () => {
-    if (!SERVER_URL) return flash("Lights need Secretary Server");
     const [id, label] = SCENES[scene.current];
     scene.current = (scene.current + 1) % SCENES.length;
+    if (!SERVER_URL) {
+      return void runLights({ scene: id }, devices, scenes).then(
+        () => flash(label),
+        (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the lights"),
+      );
+    }
     setScene(SERVER_URL, id).then(
       () => flash(label),
       () => flash("Couldn't reach the lights"),
@@ -476,10 +566,18 @@ export function App() {
     return () => clearInterval(t);
   }, [view]);
 
+  // Weather straight from the TV (the SmartThings home, else the build's place); the server's only as a last resort.
   useEffect(() => {
-    if (!SERVER_URL) return;
-    const get = () => void fetchWeather(SERVER_URL).then(setWeather);
-    get();
+    const get = async () => {
+      const w =
+        (await refreshWeather({
+          store: storage,
+          locations: homeConfigured() ? () => home.locations() : undefined,
+          env: WEATHER_ENV,
+        }).catch(() => null)) ?? (SERVER_URL ? await fetchWeather(SERVER_URL) : null);
+      if (w) setWeather(w);
+    };
+    void get();
     const t = setInterval(get, WEATHER_POLL_MS);
     return () => clearInterval(t);
   }, []);
@@ -494,7 +592,11 @@ export function App() {
     if (!homeConfigured() || document.visibilityState === "hidden") return;
     home.devices().then(
       (next) => {
-        if (lastDevices.current) for (const a of homeAlerts(lastDevices.current, next)) flash(a.text);
+        if (lastDevices.current) {
+          const news = homeAlerts(lastDevices.current, next);
+          for (const a of news) flash(a.text);
+          if (news.length) setAlerts((prev) => [...news.map((a) => ({ text: a.text, at: Date.now() })), ...prev].slice(0, MAX_RECENT));
+        }
         lastDevices.current = next;
         setDevices(next);
         // Scenes once per run, after the first poll that works (the sign-in may come after Nest started).
@@ -530,9 +632,40 @@ export function App() {
 
   // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
   const shownResults = shownTurn?.results ?? null;
+  const talk = mergeTurns(assistant, localState);
+  // Recent: the assistant's latest answers and the home's latest news, newest first, then Continue Watching.
+  // The same prompt asked again shows once, as its newest answer.
+  const recentTurns = talk.turns
+    .filter((t) => t.action !== "error")
+    .reverse()
+    .filter((t, k, all) => all.findIndex((u) => u.prompt.toLowerCase() === t.prompt.toLowerCase()) === k)
+    .slice(0, MAX_RECENT);
+  const latest: RecentCard[] = [
+    ...recentTurns.map((t) => ({
+      kind: "answer" as const,
+      key: `t${t.id}`,
+      at: t.at,
+      action: t.action,
+      prompt: t.prompt,
+      reply: t.reply,
+      posters: t.results?.slice(0, 3).map((r) => posterUrl(r.title)),
+    })),
+    ...alerts.map((a) => ({ kind: "alert" as const, key: `a${a.at}:${a.text}`, at: a.at, text: a.text })),
+  ]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, MAX_RECENT);
+  // A new card moves the whole row (67-83 ms frames on the TV), so the row catches up once Nest is idle again and the
+  // answer rises in the Ask panel on its own (docs/performance.md, "Voice").
+  const [recent, setRecent] = useState<RecentCard[]>(latest);
+  const latestKey = latest.map((c) => c.key).join();
+  const idle = !listening && !asking && !answered && !talk.pending;
+  useEffect(() => {
+    if (idle) setRecent(latest);
+  }, [latestKey, idle]);
+  const continueAt = focus.area === "continue" ? continueItems[focus.i - recent.length] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
-    focus.area === "continue" && continueItems[focus.i]
-      ? { src: backdropUrl(continueItems[focus.i]), type: continueItems[focus.i].type }
+    continueAt
+      ? { src: backdropUrl(continueAt), type: continueAt.type }
       : focus.area === "results" && shownResults?.[focus.i]
         ? { src: posterUrl(shownResults[focus.i].title), type: shownResults[focus.i].type }
         : null;
@@ -558,7 +691,12 @@ export function App() {
       continueItems,
       reminders,
       assistant,
-      ask: (q: string) => send(q),
+      // spoken: the reply is read aloud as after a voice prompt (Gemini speech, envelope, playback).
+      ask: (q: string, spoken = false) => send(q, spoken),
+      // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
+      wave: setWaveLevel,
+      // A reply's WAV through the real playback (envelope, speakerphone, wave), when the speech model is out of quota.
+      play: (wav: Uint8Array) => play(wav, setWaveLevel),
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => {
         setQuery(q);
@@ -570,7 +708,7 @@ export function App() {
   useEffect(() => {
     if (view !== "search") return;
     const q = query.trim();
-    if (!q || !SERVER_URL) {
+    if (!q) {
       setResults([]);
       setSearching(false);
       return;
@@ -578,11 +716,16 @@ export function App() {
     let live = true;
     setSearching(true);
     const t = setTimeout(() => {
-      fetch(`${SERVER_URL}/search?q=${encodeURIComponent(q)}`)
-        .then((r) => (r.ok ? r.json() : { results: [] }))
-        .then((body: { results?: SearchResult[] }) => {
+      // Without a server the TV searches the catalogs itself.
+      const found: Promise<SearchResult[]> = SERVER_URL
+        ? fetch(`${SERVER_URL}/search?q=${encodeURIComponent(q)}`)
+            .then((r) => (r.ok ? r.json() : { results: [] }))
+            .then((body: { results?: SearchResult[] }) => body.results ?? [])
+        : searchCatalogs(q);
+      found
+        .then((list) => {
           if (!live) return;
-          setResults(body.results ?? []);
+          setResults(list);
           setSearching(false);
         })
         .catch(() => {
@@ -599,16 +742,18 @@ export function App() {
 
   const lengths: Lengths = useMemo(
     () => ({
+      weather: weather ? 1 : 0,
       top: TOP_LENGTH,
-      apps: apps.length,
-      cards: reminders.length,
-      ask: SERVER_URL ? CHIPS.length : 0,
+      // While an answer is shown it takes the right column's place.
+      apps: shownTurn ? 0 : apps.length,
+      cards: shownTurn ? 0 : reminders.length,
+      ask: CHIPS.length,
       results: shownResults?.length ?? 0,
-      continue: shownTurn ? 0 : continueItems.length,
+      continue: recent.length + continueItems.length,
       fab: 1,
       me: cloudEnabled ? 1 : 0,
     }),
-    [apps.length, reminders.length, continueItems.length, shownTurn],
+    [apps.length, reminders.length, continueItems.length, shownTurn, recent.length, Boolean(weather)],
   );
 
   // Keep focus valid when reminders and Continue Watching change. Focus waits on the app strip
@@ -635,8 +780,28 @@ export function App() {
     if (r !== searchFocus.row || c !== searchFocus.col) setSearchFocus({ row: r, col: c });
   }, [searchLengths]);
 
+  /** OK on a Recent card: back to what that answer was about. */
+  const openRecent = (card: RecentCard) => {
+    if (card.kind === "alert") return homeConfigured() ? void setView("lights") : undefined;
+    const turn = talk.turns.find((t) => `t${t.id}` === card.key);
+    if (!turn) return;
+    if (turn.action === "watch") {
+      setShownTurn(turn);
+      if (turn.results?.length) setFocus({ area: "results", i: 0 });
+      return;
+    }
+    if (turn.action === "weather") return weather ? setWeatherOpen(true) : undefined;
+    if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
+    if (turn.action === "reminder_added") {
+      const at = reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text));
+      return setFocus({ area: "cards", i: Math.max(0, at) });
+    }
+    void send(turn.prompt);
+  };
+
   const activate = () => {
     const { area, i } = focus;
+    if (area === "weather") return setWeatherOpen((o) => !o);
     if (area === "top") {
       if (i === TOP_PARTY) return void setView("party");
       if (i === TOP_SEARCH) return openSearch();
@@ -657,7 +822,8 @@ export function App() {
     }
     if (area === "cards") {
       const r = reminders[i];
-      if (r && SERVER_URL) {
+      if (r && localRem.owns(r.id)) setLocalItems(localRem.toggle(r.id));
+      else if (r && SERVER_URL) {
         toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
       }
       return;
@@ -670,7 +836,8 @@ export function App() {
     }
     if (area === "me") return void setView(cloud.session.signedIn() ? "profiles" : "signin");
     if (area === "continue") {
-      const entry = continueItems[i];
+      if (i < recent.length) return openRecent(recent[i]);
+      const entry = continueItems[i - recent.length];
       if (entry) {
         openTitleInApp(SERVER_URL, entry.type, entry.title, true).catch(() => flash(`Couldn't open ${entry.title.name}`));
       }
@@ -697,6 +864,10 @@ export function App() {
       return;
     }
     if (key === "Enter") return void activate();
+    if (weatherOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Left" || key === "Right")) {
+      setWeatherOpen(false);
+      if (key === "Back") return;
+    }
     if (key === "Back" && shownTurn) {
       setShownTurn(null);
       setFocus({ area: "ask", i: 0 });
@@ -800,16 +971,16 @@ export function App() {
       ? "Scouring the tall grass…"
       : `${results.length} result${results.length === 1 ? "" : "s"}`;
 
-  const lastAnswer = assistant?.turns[assistant.turns.length - 1];
-  const pending = assistant?.pending ?? null;
+  const lastAnswer = talk.turns[talk.turns.length - 1];
+  const pending = talk.pending;
   const wave = waveState({ listening, asking, pending: Boolean(pending), answered });
   const askView = {
     wave,
     status: WAVE_STATUS[wave] || (lastAnswer?.source === "companion" ? "From your phone" : ""),
+    history: (pending ? talk.turns : talk.turns.slice(0, -1)).slice(-3).map((t) => t.prompt),
     prompt: listening ? undefined : (pending?.prompt ?? lastAnswer?.prompt),
     reply: pending ? "" : (lastAnswer?.reply ?? summary ?? "Ask for something to watch, a reminder, or the lights."),
     turnId: lastAnswer?.id ?? 0,
-    online: Boolean(SERVER_URL),
   };
 
   return (
@@ -861,9 +1032,10 @@ export function App() {
           ask={askView}
           results={shownTurn ? { query: shownTurn.query ?? "", items: shownResults ?? [] } : null}
           weather={weather}
+          weatherOpen={weatherOpen}
+          recent={recent}
           glow={glow}
           continueItems={continueItems}
-          serverOnline={serverOnline}
           status={status}
           me={me}
           emptyContinue={

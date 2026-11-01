@@ -16,6 +16,12 @@ export default defineConfig({
     __ST_CLIENT_ID__: JSON.stringify(process.env.SMARTTHINGS_CLIENT_ID ?? ""),
     __ST_CLIENT_SECRET__: JSON.stringify(process.env.SMARTTHINGS_CLIENT_SECRET ?? ""),
     __ST_TOKEN__: JSON.stringify(process.env.SMARTTHINGS_CLIENT_ID ? "" : (process.env.SMARTTHINGS_TOKEN ?? "")),
+    // Ask Nest on the TV (docs/launcher.md): Gemini without the server, and where the weather is for.
+    // Its own name: tizen.mjs also reads .env, and the server's GEMINI_API_KEY must not end up in a .wgt unasked.
+    __GEMINI_KEY__: JSON.stringify(process.env.NEST_GEMINI_API_KEY ?? ""),
+    __WEATHER_LAT__: JSON.stringify(process.env.WEATHER_LAT ?? ""),
+    __WEATHER_LON__: JSON.stringify(process.env.WEATHER_LON ?? ""),
+    __WEATHER_CITY__: JSON.stringify(process.env.WEATHER_CITY ?? ""),
     __SYNC_BACKEND__: JSON.stringify(process.env.SYNC_BACKEND || "nuvio"),
     __MOVIES_ID__: JSON.stringify(`${process.env.SECRETARY_TV_PACKAGE_ID || "ScrtMovies"}.Movies`),
     __SERIES_ID__: JSON.stringify(`${process.env.SECRETARY_TV_SERIES_ID || "ScrtSeries"}.Series`),

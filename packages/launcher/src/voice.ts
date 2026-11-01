@@ -1,6 +1,7 @@
 // Ask Nest by voice from a room microphone (a USB conference speaker on the TV, say): docs/launcher.md, "Room
-// microphone". Records a short clip as 16 kHz WAV, which the server sends to Gemini. No MediaRecorder: Gemini does
-// not list WebM, and the TV's MediaRecorder support varies, so the samples are taken with Web Audio and encoded here.
+// microphone". Records a short clip as 16 kHz WAV for Gemini (from the TV or through the server). No MediaRecorder:
+// Gemini does not list WebM, and the TV's MediaRecorder support varies, so the samples are taken with Web Audio and
+// encoded here. The wave follows the clip's level while recording, and the reply's while it plays.
 
 /** Sample rate of the clip sent to the server: plenty for speech, a third of the bytes of 48 kHz. */
 export const CLIP_RATE = 16000;
@@ -85,6 +86,53 @@ export function encodeWav(samples: Float32Array, rate: number): Uint8Array<Array
   return out;
 }
 
+/** RMS of a loud voice at the speakerphone; levels are scaled so this fills the wave. */
+const LOUD_RMS = 0.12;
+
+/** A frame's RMS as the wave's 0..1 height: quiet speech still shows, shouting does not clip at once. */
+export const levelOf = (r: number) => Math.min(1, (r / LOUD_RMS) ** 0.6);
+
+/** Step of a reply's loudness envelope, in ms. */
+export const ENVELOPE_MS = 50;
+
+/**
+ * How loud a 16-bit PCM WAV is every ENVELOPE_MS, as wave levels: worked out before the reply plays, so the wave
+ * follows Nest's voice without routing the audio through Web Audio (that would undo setSinkId on the speakerphone).
+ */
+export function envelope(wav: Uint8Array): number[] {
+  const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  const tag = (at: number) => String.fromCharCode(wav[at], wav[at + 1], wav[at + 2], wav[at + 3]);
+  if (wav.length < 12 || tag(0) !== "RIFF" || tag(8) !== "WAVE") return [];
+  let rate = 0;
+  let channels = 1;
+  let bits = 0;
+  for (let at = 12; at + 8 <= wav.length; ) {
+    const size = v.getUint32(at + 4, true);
+    if (tag(at) === "fmt ") {
+      channels = v.getUint16(at + 10, true);
+      rate = v.getUint32(at + 12, true);
+      bits = v.getUint16(at + 22, true);
+    } else if (tag(at) === "data") {
+      if (bits !== 16 || !rate) return [];
+      const frames = Math.floor(Math.min(size, wav.length - at - 8) / (2 * channels));
+      const step = Math.max(1, Math.round((rate * ENVELOPE_MS) / 1000));
+      const out: number[] = [];
+      for (let start = 0; start < frames; start += step) {
+        let sum = 0;
+        const end = Math.min(frames, start + step);
+        for (let f = start; f < end; f++) {
+          const s = v.getInt16(at + 8 + f * 2 * channels, true) / 0x8000;
+          sum += s * s;
+        }
+        out.push(levelOf(Math.sqrt(sum / (end - start))));
+      }
+      return out;
+    }
+    at += 8 + size + (size & 1);
+  }
+  return [];
+}
+
 /** A speakerphone by its device label, for both its microphone and its speaker. */
 // Not a bare "speak": the TV calls its own output "builtin-speaker".
 const ROOM_DEVICE = /jabra|speakerphone|conference/i;
@@ -121,8 +169,10 @@ export interface Recording {
   name: string;
 }
 
-/** Starts a clip; rejects when the TV gives the app no microphone. */
-export async function record(): Promise<Recording> {
+let audio: AudioContext | null = null;
+
+/** Starts a clip; rejects when the TV gives the app no microphone. `onLevel` gets each frame's wave level, then null. */
+export async function record(onLevel?: (level: number | null) => void): Promise<Recording> {
   if (!mic) mic = openMic();
   let stream: MediaStream;
   try {
@@ -131,8 +181,14 @@ export async function record(): Promise<Recording> {
     mic = null;
     throw e;
   }
-  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new Ctx();
+  // One context for every clip, suspended in between: creating one cost 67-133 ms on the TV's main thread, and closing
+  // it 67 ms (docs/performance.md, "Voice").
+  if (!audio) {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    audio = new Ctx();
+  }
+  const ctx = audio;
+  if (ctx.state === "suspended") await ctx.resume();
   const source = ctx.createMediaStreamSource(stream);
   // ScriptProcessor is deprecated but present on every TV; AudioWorklet would need a separate module file.
   const node = ctx.createScriptProcessor(4096, 1, 1);
@@ -146,9 +202,10 @@ export async function record(): Promise<Recording> {
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    onLevel?.(null);
     node.disconnect();
     source.disconnect();
-    void ctx.close();
+    void ctx.suspend();
     if (!ends.heard) return finish(null);
     const all = new Float32Array(frames.reduce((n, f) => n + f.length, 0));
     let at = 0;
@@ -163,7 +220,9 @@ export async function record(): Promise<Recording> {
     if (stopped) return;
     const frame = new Float32Array(e.inputBuffer.getChannelData(0));
     frames.push(frame);
-    if (ends.feed(rms(frame), frameMs)) stop();
+    const level = rms(frame);
+    onLevel?.(levelOf(level));
+    if (ends.feed(level, frameMs)) stop();
   };
   source.connect(node);
   // A ScriptProcessor only runs while connected to the output; it writes silence there.
@@ -171,9 +230,22 @@ export async function record(): Promise<Recording> {
   return { stop, done, name: micName(stream) };
 }
 
-/** Plays a spoken reply (a data: URL from the server) on the speakerphone when there is one, else the TV's output. */
-export async function play(src: string): Promise<void> {
-  const audio = new Audio(src) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+/**
+ * Plays a spoken reply on the speakerphone when there is one, else the TV's output: WAV bytes (Gemini from the TV) or a
+ * WAV data: URL (from the server). `onLevel` gets the reply's loudness as it plays, then null.
+ */
+export async function play(src: string | Uint8Array, onLevel?: (level: number | null) => void): Promise<void> {
+  // The bytes behind a Blob URL: an <audio> on a 300 KB data: URL took 64 ms of the main thread on the TV, and decoding
+  // base64 by hand 35 ms more; fetch() decodes it off the main thread (docs/performance.md, "Voice").
+  let wav: Uint8Array;
+  try {
+    wav = typeof src === "string" ? new Uint8Array(await (await fetch(src)).arrayBuffer()) : src;
+  } catch {
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: "audio/wav" }));
+  const audio = new Audio(url) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+  const levels = onLevel ? envelope(wav) : [];
   try {
     // The TV lists a USB speakerphone as an output too, but keeps playing on its own speakers unless told.
     const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
@@ -182,8 +254,16 @@ export async function play(src: string): Promise<void> {
   } catch {
     // The default output it is.
   }
-  return new Promise((resolve) => {
+  // 50 ms steps are enough: the wave eases between them.
+  const meter = levels.length
+    ? setInterval(() => onLevel!(levels[Math.floor((audio.currentTime * 1000) / ENVELOPE_MS)] ?? 0), ENVELOPE_MS)
+    : undefined;
+  return new Promise<void>((resolve) => {
     audio.onended = audio.onerror = () => resolve();
     audio.play().catch(() => resolve());
+  }).finally(() => {
+    clearInterval(meter);
+    URL.revokeObjectURL(url);
+    if (levels.length) onLevel!(null);
   });
 }

@@ -111,41 +111,75 @@ The home screen (`src/home.tsx`) is a glass dashboard; `src/nest-nav.ts` moves f
 
 | Area | Where | OK does |
 | --- | --- | --- |
+| Weather and clock | top left | opens the forecast over the Ask panel (next 6 hours, today and 3 days); Back closes it |
 | Section pill: Nest, Cinema, Shows, Anime | top centre | opens that app (Nest is this screen) |
-| Search, Lights, Bell | top right | opens search; cycles the Cinema, Warm and Off scenes (`POST /domotics/command`); jumps to the first open reminder (the badge counts them) |
+| Search, Lights, Bell | top right | opens search; cycles the Cinema, Warm and Off scenes; jumps to the first open reminder (the badge counts them) |
 | Ask Nest chips | left, under the wave | Ask listens on the room microphone (or opens the TV keyboard, whose microphone dictates); the others send that prompt |
-| Ask Nest results | bottom left, in place of Continue Watching | opens the title in its app; Back closes the row |
+| Ask Nest results | right, in place of the apps and reminders | opens the title in its app; Back closes the row |
 | App strip | top right, under the buttons | opens the app |
-| Reminders | right column | marks it done or open again (`POST /reminders/:id/toggle`) |
-| Continue Watching | bottom left | opens the title in its app and resumes |
-| + | bottom right | types a new reminder with the TV keyboard (`POST /reminders`) |
+| Reminders | right column | marks it done or open again (on the server, or on the TV for its own) |
+| Recent, then Continue Watching | bottom left | a Recent card goes back to that answer (the titles, the forecast, the lights, the reminder, or asks again); a tile opens the title in its app and resumes |
+| + | bottom right | types a new reminder with the TV keyboard (on the server, or on the TV without one) |
 
 Focus starts on the first app. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone key
-asks Nest by voice (see "Room microphone"), Green cycles the theme (automatic, Daylight, Night), Blue mutes spoken replies, and Back twice leaves. Without a server, the apps and the section pill still work and the other panels say what they need.
+asks Nest by voice (see "Room microphone"), Green cycles the theme (automatic, Daylight, Night), Blue mutes spoken replies, and Back twice leaves. Without a server, everything but the phone companion still works (see "Ask Nest on the TV").
 
 ## Ask Nest, weather and Daylight
 
 Ideas taken from a light, glassy TV concept video: an assistant panel with a voice wave, answers that lay out titles next
-to it, an artwork-coloured glow, weather in the header and a light theme.
+to it, an artwork-coloured glow, a quiet weather and clock header, a Recent row and a light theme. Its shopping flow is
+out of scope, and so are its small grey text, large soft shadows and all-white screen at night.
 
-- **Ask Nest** (`src/assistant.ts`, the panel in `home.tsx`) replaced the Briefing card. It shows the last prompt and
-  answer, a wave (`VoiceWave` in tv-kit glass) and four chips. The wave is idle, listening (TV keyboard open), thinking
-  (a prompt in flight on this TV or reported by the server) or speaking (for 3 s after an answer).
-- Prompts go to `POST /ai/ask` with `source: "tv"`. Nest polls `GET /ai/state` every 2.5 s while the home screen is up,
-  so prompts typed on the phone companion show on the TV too ("From your phone"). The server keeps the last 8 turns in
-  memory only.
-- **Watch prompts** (`packages/server/src/intent.ts`): "play dune", "show me a comedy", "something for tonight", "find me
-  scary anime". A named title is searched; a kind or genre alone browses Cinemeta's top catalogs (Kitsu's trending or
-  popular for anime). The titles replace Continue Watching until Back; OK opens one in its app. Reminders, lights and the
-  Gemini briefing work as before.
-- "light theme", "dark mode" and "auto theme" are answered on the TV without the server.
-- **Weather**: `GET /weather` uses Open-Meteo (no key). Set `WEATHER_CITY` (looked up once) or `WEATHER_LAT` and
-  `WEATHER_LON` in `.env`; without them Nest shows no weather.
+- **Ask Nest** (`src/assistant.ts`, the panel in `home.tsx`) shows the conversation: up to three earlier prompts above
+  the current one, each older one fainter, then the answer and the wave (`VoiceWave` in tv-kit glass) and four chips.
+- **The wave follows the voice.** While the room microphone records, each frame's level drives it (`record(onLevel)`);
+  while a spoken reply plays, a loudness envelope worked out from the WAV before playback does (`envelope()` in
+  `src/voice.ts`, 50 ms steps), so the audio never goes through Web Audio and `setSinkId` still picks the speakerphone.
+  `setWaveLevel()` writes each ribbon's `scaleY` straight to the DOM (no Preact render), and the ribbons ease towards
+  the level at their own pace. Cool ribbons while the room speaks, warm ones while Nest answers (two sets swapped by
+  opacity). Without a live level the wave is idle, listening, thinking or speaking, as before.
+- **Answers take the stage**: titles from a watch prompt replace the apps and reminders on the right, four posters
+  across, until Back. Every answer also becomes a card in **Recent** (bottom left, before Continue Watching), with home
+  alerts from SmartThings ("the vacuum finished"): Watch, Reminder, Lights, Weather, Briefing and Home cards.
+- Prompts go to the server's `POST /ai/ask` with `source: "tv"` when a server is configured and up. Nest polls
+  `GET /ai/state` every 2.5 s while the home screen is up, so prompts typed on the phone companion show on the TV too
+  ("From your phone"). The server keeps the last 8 turns in memory only.
+- **Watch prompts** (`packages/assistant/src/intent.ts`): "play dune", "show me a comedy", "something for tonight",
+  "find me scary anime". A named title is searched; a kind or genre alone browses Cinemeta's top catalogs (Kitsu's
+  trending or popular for anime).
+- "light theme", "dark mode" and "auto theme" are answered on the TV, and so is a light, a scene or the vacuum by name
+  (SmartThings from the TV).
 - **Glow**: the focused tile gets a halo in its artwork's colour. Artwork hosts send no CORS headers, so Nest reads the
   colour through `GET /art?u=` (metahub, Kitsu, TMDB and fanart.tv only). Without a server the glow uses the app's tint.
   The halo is a blurred canvas drawn once per colour, moved and faded with transform and opacity.
 - **Daylight** (`drawBackdrop(tint, "day")` and the `sg-day` class): pale glass on a lavender and pink wash. Automatic
   by default (07:00–18:59), Green or a theme prompt changes it, and the choice is kept in `localStorage["nest.theme"]`.
+
+## Ask Nest on the TV
+
+The answers live in `packages/assistant` (`route()`), which the server and Nest share. Nest runs it itself
+(`src/brain.ts`) when it has no server or the server is down, so the server is optional:
+
+- **Reminders** are kept on the TV (`localStorage["nest.reminders"]`, source "local", shown as "Added on the TV") next to
+  the server's.
+- **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
+  a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
+- **Watch prompts and Spotlight Search** ask the catalogs straight from the TV.
+- **The weather** ("what's the weather", "do I need an umbrella") is answered from the forecast, with no Gemini call.
+- **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has
+  its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`
+  unasked. The key ships inside the package: restrict it to the Generative Language API. With it, Nest transcribes and
+  speaks on the TV even when a server is up (one hop less); without it, voice still goes through the server.
+
+## Weather
+
+`src/weather.ts`, Open-Meteo straight from the TV (no key, CORS open). The place is the SmartThings home's coordinates
+(`locations()` in `packages/smartthings`, looked up once a day), else `WEATHER_LAT`/`WEATHER_LON` or `WEATHER_CITY` from
+`.env.tizen` (a city is geocoded once). Both are kept in `localStorage["nest.place"]`; when SmartThings is down the last
+home still serves. The forecast (now, the next 6 hours, today and 3 days) is refreshed every 30 min and kept in
+`localStorage["nest.weather"]`, so the header has weather from the first frame after a restart (not when older than
+3 h). The server's `GET /weather` is only asked when the TV knows no place. Icons are one-colour line glyphs drawn as CSS
+masks, so they take the theme's ink.
 
 ## Room microphone
 
@@ -157,8 +191,8 @@ output only.
 - **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or the Ask chip) records from the first input
   whose name looks like a speakerphone ("Jabra", "Speakerphone", "Conference"), else the default input. The clip ends after
   1.2 s of quiet following speech, after 6 s with no speech, at 15 s, or on the key again. Nest encodes it as 16 kHz WAV
-  with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and posts it to `POST /ai/transcribe`,
-  which returns only the words. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
+  with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and sends it to Gemini, from the TV with
+  `NEST_GEMINI_API_KEY` or through the server's `POST /ai/transcribe`, which returns only the words. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
   TV and never reaches the lights.
 - **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
   speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on
@@ -182,6 +216,21 @@ Verified on the reference TV (GU43DU7199UXZG, Tizen 9, Chromium 120) on 2026-10-
 - Spoken replies play on the Jabra (`setSinkId`) and were heard. The first try was silent for about 25 s: the server
   asked `gemini-3.6-flash` first, which took 16 s for one sentence (the lite models answer in under 1 s). With the lite
   models first and 8 s per model, a briefing with its 9 s spoken reply comes back in about 6.7 s.
+
+Again on 2026-11-01 with Gemini called from the TV (`NEST_GEMINI_API_KEY`) and the live wave, three prompts spoken at the
+Jabra:
+
+- The wave followed the voice while listening (cool ribbons, height 0.33 on average, up to 1.09) and the reply while it
+  played on the Jabra (warm ribbons, 0.81 on average, up to 1.17), and went back to idle after each.
+- "What's the weather?" and "Remind me to water the plants at 6" were transcribed and answered about 1.2 s after the
+  speaker stopped. The spoken reply then took another 4-4.5 s to arrive from the speech model; the wave stays on
+  "thinking" meanwhile.
+- "Give me a briefing" was taken as a title to search, since "give me" leads a watch prompt. The intent parser now
+  leaves the briefing, news, summary, weather and forecast alone.
+- One press heard nothing for 6 s and said "Didn't hear anything", as designed.
+- Over the 3 minutes, 21 of about 11,000 frames were over 50 ms (worst 333 ms): a new AudioContext per recording, the
+  reply's base64 round trip and a new Recent card arriving with each answer. docs/performance.md, "Voice", has the fixes.
+- The briefing had no voice because Gemini's free speech quota was used up (429 from both speech models).
 
 To check another TV, plug in the speakerphone, deploy Nest with the privilege above, and run:
 

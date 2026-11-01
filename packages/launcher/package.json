@@ -9,6 +9,7 @@
     "cdp": "node ../tv-kit/scripts/cdp.mjs"
   },
   "dependencies": {
+    "@secretary/assistant": "workspace:*",
     "@secretary/nuvio": "workspace:*",
     "@secretary/party": "workspace:*",
     "@secretary/smartthings": "workspace:*",

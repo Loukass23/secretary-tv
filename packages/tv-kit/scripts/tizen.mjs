@@ -101,7 +101,25 @@ function pack() {
   console.log(`\npackaged ${wgtPath()}`);
 }
 
-const install = () => run("tz", ["install", "-e", serial(), "-p", wgtPath()]);
+// `tz install` uninstalls first, which wipes the app's localStorage: the Nuvio sign-in, Nest's SmartThings tokens,
+// reminders and cached weather. The TV's own installer upgrades in place and keeps it (checked on the reference TV,
+// 2026-11-01). `reinstall` is the old way, for when the package's signature changed and an upgrade is refused.
+function install() {
+  const target = serial();
+  const id = packageId();
+  const remote = `/home/owner/share/tmp/sdk_tools/${id}.wgt`;
+  run("sdb", ["-s", target, "push", `"${wgtPath()}"`, remote]);
+  console.log(`\n> sdb -s ${target} shell 0 vd_appinstall ${id} ${remote}`);
+  const res = spawnSync("sdb", ["-s", target, "shell", "0", "vd_appinstall", id, remote], { cwd: APP, shell: true, encoding: "utf8" });
+  const out = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+  console.log(out.trim().split(/\r?\n/).slice(-2).join("\n"));
+  // sdb's shell exits 0 whatever the installer says, so read its last word.
+  if (!/install completed/.test(out)) {
+    throw new Error("in-place install failed (a new signing certificate?); `reinstall` uninstalls first and wipes the app's data");
+  }
+}
+
+const reinstall = () => run("tz", ["install", "-e", serial(), "-p", wgtPath()]);
 const launch = () => run("tz", ["run", "-e", serial(), "-p", packageId()]);
 
 function debug() {
@@ -119,6 +137,7 @@ const commands = {
   build,
   package: pack,
   install,
+  reinstall,
   launch,
   debug,
   deploy() {

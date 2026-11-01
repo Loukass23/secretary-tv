@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clamp, type Lengths, step, TOP_BELL, TOP_LENGTH, TOP_LIGHTS, TOP_PARTY, TOP_SEARCH } from "../src/nest-nav.ts";
 
-const full: Lengths = { top: TOP_LENGTH, apps: 8, cards: 4, ask: 0, results: 0, continue: 3, fab: 1, me: 1 };
+const full: Lengths = { weather: 0, top: TOP_LENGTH, apps: 8, cards: 4, ask: 0, results: 0, continue: 3, fab: 1, me: 1 };
 
 test("apps lead up to Search and down into the reminders", () => {
   assert.deepEqual(step({ area: "apps", i: 5 }, "Up", full), { area: "top", i: TOP_SEARCH });
@@ -59,14 +59,26 @@ test("Ask Nest sits between the section pill and Continue Watching", () => {
   assert.deepEqual(step({ area: "ask", i: 0 }, "Left", ask), { area: "ask", i: 0 });
 });
 
-test("results take Continue Watching's place while shown", () => {
-  const shown: Lengths = { ...ask, results: 6, continue: 0 };
-  assert.deepEqual(step({ area: "ask", i: 1 }, "Down", shown), { area: "results", i: 0 });
-  assert.deepEqual(step({ area: "results", i: 5 }, "Right", shown), { area: "cards", i: 0 });
-  assert.deepEqual(step({ area: "results", i: 3 }, "Up", shown), { area: "ask", i: 0 });
-  assert.deepEqual(step({ area: "cards", i: 1 }, "Left", shown), { area: "results", i: 0 });
-  assert.deepEqual(step({ area: "me", i: 0 }, "Up", shown), { area: "results", i: 0 });
+test("results take the right column's place while shown", () => {
+  const shown: Lengths = { ...ask, results: 6, apps: 0, cards: 0 };
+  assert.deepEqual(step({ area: "ask", i: 3 }, "Right", shown), { area: "results", i: 0 });
+  assert.deepEqual(step({ area: "results", i: 0 }, "Left", shown), { area: "ask", i: 3 });
+  assert.deepEqual(step({ area: "results", i: 5 }, "Right", shown), { area: "results", i: 5 });
+  assert.deepEqual(step({ area: "results", i: 3 }, "Up", shown), { area: "top", i: TOP_SEARCH });
+  assert.deepEqual(step({ area: "results", i: 3 }, "Down", shown), { area: "fab", i: 0 });
+  assert.deepEqual(step({ area: "continue", i: 2 }, "Right", shown), { area: "results", i: 0 });
+  assert.deepEqual(step({ area: "top", i: TOP_BELL }, "Down", shown), { area: "results", i: 0 });
+  assert.deepEqual(step({ area: "fab", i: 0 }, "Up", shown), { area: "results", i: 0 });
   assert.deepEqual(clamp({ area: "results", i: 4 }, { ...ask, results: 0 }), { area: "apps", i: 0 });
+});
+
+test("the weather sits left of the section pill and above Ask Nest", () => {
+  const wx: Lengths = { ...ask, weather: 1 };
+  assert.deepEqual(step({ area: "top", i: 0 }, "Left", wx), { area: "weather", i: 0 });
+  assert.deepEqual(step({ area: "top", i: 0 }, "Left", ask), { area: "top", i: 0 });
+  assert.deepEqual(step({ area: "weather", i: 0 }, "Right", wx), { area: "top", i: 0 });
+  assert.deepEqual(step({ area: "weather", i: 0 }, "Down", wx), { area: "ask", i: 0 });
+  assert.deepEqual(step({ area: "ask", i: 2 }, "Up", wx), { area: "weather", i: 0 });
 });
 
 test("the bell is the last button across the top", () => {

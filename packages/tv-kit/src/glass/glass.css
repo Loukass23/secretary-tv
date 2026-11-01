@@ -291,6 +291,13 @@
 .sg-wave.is-thinking .sg-wave-amp i.sg-wave-r1 { animation-duration: 0.7s; }
 .sg-wave.is-thinking .sg-wave-amp i.sg-wave-r2 { animation-duration: 1.1s; }
 .sg-wave.is-speaking .sg-wave-amp { transform: scaleY(0.85); opacity: 1; }
+/* Two ribbon sets: cool while the room speaks, warm while Nest answers. Swapped by opacity on their own layers. */
+.sg-wave-set { position: absolute; inset: 0; transition: opacity 500ms var(--sg-ease); will-change: opacity; }
+.sg-wave-nest { opacity: 0; }
+.sg-wave.is-speaking .sg-wave-nest { opacity: 1; }
+.sg-wave.is-speaking .sg-wave-room { opacity: 0; }
+/* A live voice (setWaveLevel): VoiceWave writes each ribbon's scaleY every frame, so no transition. */
+.sg-wave.is-live .sg-wave-amp { transition: none; opacity: 1; }
 
 /* --- glow: a pre-drawn soft blob behind the focused tile, moved and faded on its own layer --- */
 .sg-glow {

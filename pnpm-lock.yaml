@@ -239,6 +239,8 @@ importers:
         specifier: ^6.0.0
         version: 6.4.5(@types/node@22.20.5)
 
+  packages/assistant: {}
+
   packages/catalog-kit:
     dependencies:
       '@secretary/core':
@@ -270,6 +272,9 @@ importers:
 
   packages/launcher:
     dependencies:
+      '@secretary/assistant':
+        specifier: workspace:*
+        version: link:../assistant
       '@secretary/nuvio':
         specifier: workspace:*
         version: link:../nuvio
@@ -308,6 +313,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@secretary/assistant':
+        specifier: workspace:*
+        version: link:../assistant
       '@secretary/core':
         specifier: workspace:*
         version: link:../core

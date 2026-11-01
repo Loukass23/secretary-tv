@@ -7,6 +7,7 @@
     "start": "node --env-file-if-exists=../../.env --experimental-strip-types src/main.ts"
   },
   "dependencies": {
+    "@secretary/assistant": "workspace:*",
     "@secretary/core": "workspace:*"
   }
 }

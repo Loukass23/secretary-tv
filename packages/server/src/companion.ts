@@ -1,26 +1,13 @@
-import { parseWatchIntent, type WatchIntent } from "./intent.ts";
-import type { SearchResult } from "./search.ts";
+import { type Answer, describeIntent, type LightsCommand, route, type SearchResult, type WatchIntent } from "@secretary/assistant";
 import type { createStateStore, DomoticDevice, StoredReminder } from "./state.ts";
+
+export { describeIntent, pcmToWav, speak, transcribe, VOICE_MAX_BYTES, VOICE_TYPES } from "@secretary/assistant";
 
 type StateStore = ReturnType<typeof createStateStore>;
 
-export interface AiCommandResult {
-  reply: string;
-  action: "reminder_added" | "domotics_updated" | "briefing" | "watch";
+export interface AiCommandResult extends Answer {
   reminders: StoredReminder[];
   domotics: DomoticDevice[];
-  /** For "watch": what was searched or browsed, and the titles Nest shows next to the assistant. */
-  query?: string;
-  results?: SearchResult[];
-}
-
-const KIND_LABEL = { movie: "films", series: "series", anime: "anime" } as const;
-
-/** What a watch prompt searched or browsed, in words for the TV ("comedy films", "“dune”"). */
-export function describeIntent(intent: WatchIntent): string {
-  if (intent.term) return `“${intent.term}”`;
-  const kind = intent.kind ? KIND_LABEL[intent.kind] : "films and series";
-  return intent.genre ? `${intent.genre.toLowerCase()} ${kind}` : `top ${kind}`;
 }
 
 export interface SmartThingsPhonePresence {
@@ -224,125 +211,6 @@ export async function forwardSmartThingsScene(
   );
 }
 
-// Fastest first: measured on 2026-10-31, a one-line reply took 0.4-0.6 s on the lite models, 16 s on 3.6-flash (it
-// thinks first) and over two minutes on 3.8-flash. Someone is waiting at the TV, so the lite models lead.
-const GEMINI_FALLBACK_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-flash-lite-latest",
-  "gemini-3.5-flash",
-  "gemini-3.6-flash",
-  "gemini-3.8-flash",
-] as const;
-
-/** Audio Gemini takes inline. Nest and Desk record WAV themselves, since Gemini does not list WebM. */
-export const VOICE_TYPES = ["audio/wav", "audio/x-wav", "audio/ogg", "audio/flac", "audio/mpeg", "audio/aac"];
-/** About 30 s of 16 kHz mono WAV; Nest stops recording at 15 s. */
-export const VOICE_MAX_BYTES = 1_000_000;
-
-/** Gemini models with speech output; GEMINI_TTS_MODEL puts another first. */
-const GEMINI_TTS_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
-
-const geminiUrl = (model: string, key: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-
-interface GeminiPart {
-  text?: string;
-  inlineData?: { mimeType?: string; data?: string };
-}
-
-/** How long one model may take before the next is tried: someone is waiting at the TV. */
-const GEMINI_TIMEOUT_MS = 8000;
-
-/** Posts one request to each model in turn until one answers with a part; null when none does. */
-async function firstPart(models: readonly string[], key: string, body: unknown, f: typeof fetch): Promise<GeminiPart | null> {
-  const payload = JSON.stringify(body);
-  for (const model of models) {
-    try {
-      const res = await f(geminiUrl(model, key), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-      });
-      if (!res.ok) continue;
-      const out = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] };
-      const part = out.candidates?.[0]?.content?.parts?.[0];
-      if (part) return part;
-    } catch {
-      // Try the next model.
-    }
-  }
-  return null;
-}
-
-/** What was said in a short clip, or "" when there was no speech (or Gemini is down). */
-export async function transcribe(audio: Uint8Array, mimeType: string, key: string, f: typeof fetch = fetch): Promise<string> {
-  const part = await firstPart(
-    GEMINI_FALLBACK_MODELS,
-    key,
-    {
-      contents: [
-        {
-          parts: [
-            { inlineData: { mimeType, data: Buffer.from(audio).toString("base64") } },
-            {
-              text: "Transcribe this spoken request to a TV assistant exactly, in the language spoken. Reply with the transcript only, or with nothing if there is no speech.",
-            },
-          ],
-        },
-      ],
-    },
-    f,
-  );
-  // Gemini punctuates like dictation ("Remind me to water the plants."); a typed prompt has no full stop, and the
-  // reminder would keep it. Quotes go too.
-  return part?.text?.trim().replace(/^["“]|["”]$/g, "").replace(/[.。!！]+$/u, "").trim() ?? "";
-}
-
-/** A reply read aloud as WAV, or null without a speech model. Emoji are dropped first: they would be read out. */
-export async function speak(text: string, key: string, f: typeof fetch = fetch, model?: string): Promise<Uint8Array<ArrayBuffer> | null> {
-  const plain = text.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "").trim();
-  if (!plain) return null;
-  const part = await firstPart(
-    model ? [model, ...GEMINI_TTS_MODELS] : GEMINI_TTS_MODELS,
-    key,
-    {
-      contents: [{ parts: [{ text: plain }] }],
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } } },
-      },
-    },
-    f,
-  );
-  const data = part?.inlineData?.data;
-  if (!data) return null;
-  // Gemini sends raw 16-bit PCM ("audio/L16;codec=pcm;rate=24000"), which <audio> cannot play without a header.
-  const rate = Number(part.inlineData?.mimeType?.match(/rate=(\d+)/)?.[1] ?? 24000);
-  return pcmToWav(new Uint8Array(Buffer.from(data, "base64")), rate);
-}
-
-/** 16-bit little-endian mono PCM in a WAV file. */
-export function pcmToWav(pcm: Uint8Array, rate: number): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(44 + pcm.length);
-  const v = new DataView(out.buffer);
-  const ascii = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
-  ascii(0, "RIFF");
-  v.setUint32(4, 36 + pcm.length, true);
-  ascii(8, "WAVEfmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  ascii(36, "data");
-  v.setUint32(40, pcm.length, true);
-  out.set(pcm, 44);
-  return out;
-}
-
 export async function handleAiPrompt(
   prompt: string,
   state: StateStore,
@@ -355,162 +223,29 @@ export async function handleAiPrompt(
     find?: (intent: WatchIntent) => Promise<SearchResult[]>;
   } = {},
 ): Promise<AiCommandResult> {
-  const clean = prompt.trim();
-  const lower = clean.toLowerCase();
-
-  // 1. Check for reminder intent: "remind me to <task> [at <time>]" or "add reminder <task>"
-  const remMatch =
-    clean.match(/^(?:remind\s+me\s+to|add\s+(?:a\s+)?reminder\s+to|remind\s+me|reminder:?)\s+(.+)$/i);
-  if (remMatch) {
-    let taskText = remMatch[1].trim();
-    let due: string | undefined;
-    const timeMatch = taskText.match(/\s+(?:at|by|on)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|tomorrow|tonight|today)$/i);
-    if (timeMatch) {
-      due = timeMatch[1];
-      taskText = taskText.slice(0, timeMatch.index).trim();
+  const lights = async (cmd: LightsCommand) => {
+    if ("scene" in cmd) {
+      const prev = structuredClone(state.getDomotics());
+      await forwardSmartThingsScene(opts.smartThingsToken, prev, state.applyDomoticScene(cmd.scene), opts.fetch, opts.dryRun);
+      return;
     }
-    const reminders = state.addReminder({ text: taskText, due, source: "gemini" });
-    const reply = `Added to your Secretary Nest reminders: “${taskText}”${due ? ` (${due})` : ""}.`;
-    state.setAiSummary(reply);
-    return {
-      reply,
-      action: "reminder_added",
-      reminders,
-      domotics: state.getDomotics(),
-    };
-  }
-
-  // 2. Something to watch: "show me a comedy", "play dune", "something for tonight".
-  const watch = opts.find ? parseWatchIntent(clean) : null;
-  if (watch && opts.find) {
-    const query = describeIntent(watch);
-    let results: SearchResult[] = [];
-    try {
-      results = await opts.find(watch);
-    } catch {
-      // The catalogs are down; say so below.
+    const on = cmd.level > 0;
+    for (const d of state.getDomotics()) {
+      state.updateDomoticDevice(d.id, { on, level: cmd.level });
+      await forwardSmartThingsCommand(opts.smartThingsToken, d.id, { on, level: cmd.level }, opts.fetch, opts.dryRun);
     }
-    const reply = results.length
-      ? watch.term
-        ? `Here is what I found for ${query}.`
-        : `Here are ${query} worth a look.`
-      : `I couldn't find anything for ${query}.`;
-    return {
-      reply,
-      action: "watch",
-      reminders: state.getReminders(),
-      domotics: state.getDomotics(),
-      query,
-      results,
-    };
-  }
-
-  // 3. Check for lighting / domotics intent: "cinema mode", "dim lights to 20%", "turn off lights", "turn on lights"
-  if (/(?:light|lamp|cinema|dim|bright)/i.test(lower)) {
-    const prevDomotics = structuredClone(state.getDomotics());
-    let domotics = prevDomotics;
-    let reply = "";
-    const pctMatch = lower.match(/(\d{1,3})\s*%/);
-    if (lower.includes("cinema") || lower.includes("movie mode")) {
-      domotics = state.applyDomoticScene("cinema");
-      await forwardSmartThingsScene(
-        opts.smartThingsToken,
-        prevDomotics,
-        domotics,
-        opts.fetch,
-        opts.dryRun,
-      );
-      reply = "🦅 Cinema stomp executed: Dimmable lights crushed to 15%, glare eliminated.";
-    } else if (lower.includes("off")) {
-      domotics = state.applyDomoticScene("off");
-      await forwardSmartThingsScene(
-        opts.smartThingsToken,
-        prevDomotics,
-        domotics,
-        opts.fetch,
-        opts.dryRun,
-      );
-      reply = "🦅 All territory lights extinguished.";
-    } else if (pctMatch) {
-      const level = Math.max(0, Math.min(100, Number(pctMatch[1])));
-      for (const d of domotics) {
-        state.updateDomoticDevice(d.id, { on: level > 0, level });
-        await forwardSmartThingsCommand(
-          opts.smartThingsToken,
-          d.id,
-          { on: level > 0, level },
-          opts.fetch,
-          opts.dryRun,
-        );
-      }
-      domotics = state.getDomotics();
-      reply = `Adjusted lights to ${level}%.`;
-    } else {
-      domotics = state.applyDomoticScene("warm");
-      await forwardSmartThingsScene(
-        opts.smartThingsToken,
-        prevDomotics,
-        domotics,
-        opts.fetch,
-        opts.dryRun,
-      );
-      reply = "Set SmartThings lights to Warm 70%.";
-    }
-    state.setAiSummary(reply);
-    return {
-      reply,
-      action: "domotics_updated",
-      reminders: state.getReminders(),
-      domotics,
-    };
-  }
-
-  // 4. Optional Gemini REST API call for general assistant queries / briefings when GEMINI_API_KEY is present.
-  if (opts.geminiApiKey) {
-    const f = opts.fetch ?? fetch;
-    const activeReminders = state
-      .getReminders()
-      .filter((r) => !r.completed)
-      .map((r) => r.text)
-      .join("; ");
-    const part = await firstPart(
-      GEMINI_FALLBACK_MODELS,
-      opts.geminiApiKey,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${activeReminders || "none"}. Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
-              },
-            ],
-          },
-        ],
-      },
-      f,
-    );
-    const text = part?.text?.trim();
-    if (text) {
-      state.setAiSummary(text);
-      return {
-        reply: text,
-        action: "briefing",
-        reminders: state.getReminders(),
-        domotics: state.getDomotics(),
-      };
-    }
-  }
-
-  const pendingCount = state.getReminders().filter((r) => !r.completed).length;
-  const lightsOn = state.getDomotics().filter((d) => d.on).length;
-  const reply = `🪶 Secretary Briefing: ${pendingCount} pending task${pendingCount === 1 ? "" : "s"} on my quill, ${lightsOn} lamp${lightsOn === 1 ? "" : "s"} lit. Dictate “Remind me to ... at 20:00” or “Cinema mode” before I lose my temper.`;
-  state.setAiSummary(reply);
-  return {
-    reply,
-    action: "briefing",
-    reminders: state.getReminders(),
-    domotics: state.getDomotics(),
   };
+  const answer = await route(prompt, {
+    addReminder: (text, due) => state.addReminder({ text, due, source: "gemini" }),
+    openReminders: () => state.getReminders().filter((r) => !r.completed).map((r) => r.text),
+    lights,
+    lightsOn: () => state.getDomotics().filter((d) => d.on).length,
+    find: opts.find,
+    geminiKey: opts.geminiApiKey,
+    fetch: opts.fetch,
+  });
+  if (answer.action !== "watch") state.setAiSummary(answer.reply);
+  return { ...answer, reminders: state.getReminders(), domotics: state.getDomotics() };
 }
 
 export function renderCompanionHtml(baseUrl: string): string {

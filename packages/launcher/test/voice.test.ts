@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { transcribeClip, VoiceError } from "../src/assistant.ts";
-import { downsample, encodeWav, endpointer, MAX_CLIP_MS, rms } from "../src/voice.ts";
+import { downsample, encodeWav, endpointer, envelope, levelOf, MAX_CLIP_MS, rms } from "../src/voice.ts";
 
 test("level is RMS", () => {
   assert.equal(rms(new Float32Array(8)), 0);
@@ -63,4 +63,18 @@ test("transcription failures say why", async () => {
     throw new TypeError("offline");
   }) as unknown as typeof fetch;
   await assert.rejects(transcribeClip("http://s", wav, offline), (e) => e instanceof VoiceError && e.reason === "failed");
+});
+
+test("a reply's envelope follows its loudness every 50 ms", () => {
+  // 100 ms of silence then 100 ms of a loud tone, at 16 kHz.
+  const rate = 16000;
+  const samples = new Float32Array(rate / 5);
+  for (let i = rate / 10; i < samples.length; i++) samples[i] = 0.3 * Math.sin(i / 3);
+  const env = envelope(encodeWav(samples, rate));
+  assert.equal(env.length, 4);
+  assert.deepEqual(env.slice(0, 2), [0, 0]);
+  assert.ok(env[2] > 0.9 && env[3] > 0.9);
+  assert.deepEqual(envelope(new Uint8Array(8)), []);
+  assert.equal(levelOf(0), 0);
+  assert.equal(levelOf(1), 1);
 });
