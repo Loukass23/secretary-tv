@@ -2,6 +2,7 @@
 // quiet buttons top right; the assistant on the wallpaper at the left with its wave; and a row of content cards, one per
 // app, running off the right edge. Layout only; data and keys live in app.tsx.
 import { windowOf } from "@secretary/tv-kit";
+import { useRef } from "preact/hooks";
 import { Avatar, Glass, Glow, IconButton, MediaTile, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
 import type { Weather } from "./assistant.ts";
@@ -18,10 +19,10 @@ const ICONS_X = 1920 - PAD - 4 * ICON.w - 3 * ICON.gap;
 const ASK = { x: PAD, y: 300, w: 480 };
 /** Starts at the text column's edge: at rest the ribbons draw into the orb there. */
 const WAVE = { x: PAD, y: 640, w: ASK.w, h: 60 };
-/** The content row: from right of the assistant to past the screen's edge. */
-const ROW = { x: 620, y: 300, w: 1920 - 620, h: LABEL_H + CARD_H };
-/** How much of the row is in view before it scrolls. */
-const ROW_VIEW = ROW.w - 60;
+/** The content row starts right of the assistant; it scrolls across the whole screen, taking the assistant with it. */
+const ROW = { x: 620, y: 300, h: LABEL_H + CARD_H };
+/** The right edge a focused card is kept inside of. */
+const VIEW_RIGHT = 1920 - 60;
 const HIT_W = 190;
 const HIT_H = 285;
 const HIT_STRIDE = 210;
@@ -113,9 +114,14 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
 
   // The row scrolls just enough to keep the focused column whole.
   const layout = rowLayout(columns);
-  const colAt = focus?.area === "row" ? (focus.col ?? 0) : 0;
-  const rowScroll = Math.max(0, Math.min(layout.x[colAt] ?? 0, (layout.x[colAt] ?? 0) + (layout.w[colAt] ?? 0) - ROW_VIEW));
-  const [kFrom, kTo] = windowOf(colAt, columns.length, 3, 7);
+  // The row and the assistant scroll as one strip: a card past the right edge brings the row left, and the assistant
+  // slides off and fades. The header keeps the scroll it was reached from; the assistant itself scrolls back to 0.
+  const lastCol = useRef(0);
+  if (focus?.area === "row") lastCol.current = focus.col ?? 0;
+  else if (focus?.area !== "header") lastCol.current = 0;
+  const colAt = lastCol.current;
+  const left = ROW.x + (layout.x[colAt] ?? 0);
+  const rowScroll = Math.max(0, Math.min(left - PAD, left + (layout.w[colAt] ?? 0) - VIEW_RIGHT));
   const hitAt = focus?.area === "results" ? focus.i : 0;
   const hitScroll = Math.max(0, hitAt - 3) * HIT_STRIDE;
   const [hFrom, hTo] = windowOf(hitAt, results?.items.length ?? 0, 3, 7);
@@ -162,7 +168,11 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
         />
       ))}
 
-      {/* The assistant, on the wallpaper: no card, like the reference. */}
+      {/* The assistant, on the wallpaper: no card, like the reference. It scrolls away with the row. */}
+      <div
+        class="nest-assist"
+        style={{ transform: `translate3d(${-rowScroll}px,0,0)`, opacity: Math.max(0, 1 - rowScroll / (ROW.x - PAD)) }}
+      >
       <div class="nest-ask" style={{ left: `${ASK.x}px`, top: `${ASK.y}px`, width: `${ASK.w}px` }}>
         <small class="nest-ask-status">{ask.status}</small>
         <div class="nest-ask-stack">
@@ -181,6 +191,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
       <span class={`nest-chip nest-ask-button${on("ask", 0) ? " is-focus" : ""}`} style={{ left: `${ASK.x}px`, top: `${WAVE.y + WAVE.h + 28}px` }}>
         Ask Assistant
       </span>
+      </div>
 
       <Glow at={glowAt} src={glow} />
 
@@ -192,7 +203,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
           </div>
           {results.items.length ? (
             <>
-              <Scroller x={ROW.x} y={ROW.y + LABEL_H} w={ROW.w} h={HIT_H} axis="x" offset={hitScroll}>
+              <Scroller x={ROW.x} y={ROW.y + LABEL_H} w={1920 - ROW.x} h={HIT_H} axis="x" offset={hitScroll}>
                 {results.items.slice(hFrom, hTo).map((r, k) => {
                   const c = hFrom + k;
                   return (
@@ -220,14 +231,14 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
           )}
         </>
       ) : (
-        <Scroller x={ROW.x} y={ROW.y} w={ROW.w} h={ROW.h} axis="x" offset={rowScroll}>
-          {columns.slice(kFrom, kTo).map((col, k) => {
-            const c = kFrom + k;
+        <Scroller x={0} y={ROW.y} w={1920} h={ROW.h} axis="x" offset={rowScroll}>
+          {/* Seven cards at most, all drawn: with the assistant gone the whole width shows them, the first ones included. */}
+          {columns.map((col, c) => {
             return (
               <RowCard
                 key={col.key}
                 col={col}
-                x={layout.x[c]}
+                x={ROW.x + layout.x[c]}
                 page={[ROW.x + layout.x[c] - rowScroll, ROW.y + LABEL_H]}
                 picked={focus?.area === "row" && !inside && colAt === c}
                 focus={inside && colAt === c ? focus!.i : null}

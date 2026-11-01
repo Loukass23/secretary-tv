@@ -128,7 +128,9 @@ off the right edge (`src/cards.tsx`). `src/nest-nav.ts` moves focus between them
 
 Left and Right move from card to card, a ring around the whole card. OK goes inside it: on an app card (Cinema, Shows,
 Anime) its Launch button comes first, in place of the label, then its titles; on the others their first item. Inside,
-the arrows stay in the card, Up from the top goes back to the card, and Back leaves it. Up from a card goes to the header. The row scrolls just enough to keep the focused card whole and renders only the cards around focus.
+the arrows stay in the card, Up from the top goes back to the card, and Back leaves it. Up from a card goes to the header. The row and the assistant scroll as one strip: once a card would pass the right edge, the row moves left and the
+assistant slides off and fades with it (transform and opacity, on the row's timing), so the cards get the whole width.
+Back at the first cards, or on Ask Assistant, it slides back in. All the cards are drawn (seven at most).
 Trending titles come from the catalogs straight from the TV once a day (`localStorage["nest.trending"]`).
 
 Focus starts on the first card. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone

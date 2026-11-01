@@ -391,3 +391,6 @@ orb that breathes by transform. Reference TV, 20-key walks across the cards and 
 The orb costs nothing measurable: still or breathing, the same walk gave 288-325 frames from run to run, about 60 fps.
 The ribbons, hidden at rest, now pause there too. p95 sat at 33 ms for every variant in this stretch, the orb still
 included, so it is the TV's state that day rather than the cards; it is worth comparing against a fresh baseline.
+
+The assistant now scrolls off with the row (one transform and opacity on its own layer, in step with the row) and all the
+cards are drawn: the same 20-key walk across the cards gave 290-294 frames, nothing over 50 ms, as before.
