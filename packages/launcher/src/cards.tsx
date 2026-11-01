@@ -21,8 +21,11 @@ export interface ListItem {
   done?: boolean;
 }
 
-/** One column of the row; `run(i)` is what OK does on its item `i`. */
-export type RowColumn = { key: string; label: string; run: (i: number) => void } & (
+/**
+ * One card of the row; `run(i)` is what OK does on its item `i`. An app card has a `launch` button that opens the app
+ * itself, shown in place of its label once the remote is inside the card.
+ */
+export type RowColumn = { key: string; label: string; run: (i: number) => void; launch?: { label: string; run: () => void } } & (
   | { kind: "poster"; tile: Tile }
   | { kind: "stack"; tiles: Tile[] }
   | { kind: "grid"; tiles: Tile[] }
@@ -48,6 +51,10 @@ const ACTION_H = 58;
 
 /** How wide a column is and how its items run for the remote. */
 export function columnShape(c: RowColumn): { w: number } & Column {
+  return { ...shape(c), launch: Boolean(c.launch) };
+}
+
+function shape(c: RowColumn): { w: number; count: number; across: number } {
   switch (c.kind) {
     case "poster":
       return { w: POSTER.w, count: 1, across: 1 };
@@ -74,10 +81,24 @@ export function rowLayout(cols: readonly RowColumn[]): { x: number[]; w: number[
     const s = columnShape(c);
     x.push(at);
     w.push(s.w);
-    nav.push({ count: s.count, across: s.across });
+    nav.push({ count: s.count, across: s.across, launch: s.launch });
     at += s.w + GAP;
   }
   return { x, w, nav, width: Math.max(0, at - GAP) };
+}
+
+/** How tall a column's card is, for the ring around it while it is picked. */
+export function columnHeight(c: RowColumn): number {
+  switch (c.kind) {
+    case "grid":
+      return 2 * GRID.h + GRID.gap;
+    case "list":
+      return c.items.length * (LIST.h + 14) + (c.add ? ADD_H : -14);
+    case "apps":
+      return Math.ceil(c.apps.length / APP.across) * (APP.h + APP.gap) - APP.gap;
+    default:
+      return CARD_H;
+  }
 }
 
 /** Where item `i` of a column sits inside it, for the glow behind a focused picture. */
@@ -99,16 +120,26 @@ interface ColumnProps {
   x: number;
   /** The on-screen position of the column's card (under its label), for the frost of glass surfaces inside it. */
   page: [number, number];
-  /** The focused item, or -1. */
-  focus: number;
+  /** The remote is on this card as a whole (left and right move between cards). */
+  picked: boolean;
+  /** Inside the card: the focused item, or -1 for its Launch button; null when the remote is elsewhere. */
+  focus: number | null;
 }
 
-export function RowCard({ col, x, page, focus }: ColumnProps) {
+export function RowCard({ col, x, page, picked, focus: inside }: ColumnProps) {
   const at = (dx: number, dy: number): [number, number] => [page[0] + dx, page[1] + dy];
+  const focus = inside ?? -2;
+  const w = columnShape(col).w;
   return (
     <div class="nest-col" style={{ left: `${x}px`, top: 0 }}>
-      <span class="nest-col-label">{col.label}</span>
+      {col.launch && inside !== null ? (
+        <span class={`nest-launch${focus === -1 ? " is-focus" : ""}`}>{col.launch.label}</span>
+      ) : (
+        <span class="nest-col-label">{col.label}</span>
+      )}
       <div class="nest-col-body">
+        {/* The whole card picked: a ring faded in on its own layer, nothing moves. */}
+        <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${columnHeight(col)}px` }} />
       {col.kind === "poster" && (
         <MediaTile x={0} y={0} w={POSTER.w} h={POSTER.h} {...col.tile} focused={focus === 0} />
       )}

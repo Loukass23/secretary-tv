@@ -51,6 +51,7 @@ import { rowLayout } from "./cards.tsx";
 import { Home } from "./home.tsx";
 import {
   clamp,
+  enter,
   type Focus,
   HEADER_BELL,
   HEADER_LIGHTS,
@@ -58,7 +59,9 @@ import {
   HEADER_PROFILE,
   HEADER_SEARCH,
   HEADER_WEATHER,
+  LAUNCH,
   type Layout,
+  leave,
   step,
 } from "./nest-nav.ts";
 import { home, homeConfigured, runLights } from "./home-control.ts";
@@ -730,6 +733,7 @@ export function App() {
 
   // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
   const failed = (name: string) => () => flash(`Couldn't open ${name}`);
+  const launch = (id: string, name: string) => void openApp(id).catch(failed(name));
   const resume = (e: UnifiedResumeEntry) => void openTitleInApp(SERVER_URL, e.type, e.title, true).catch(failed(e.title.name));
   const openHit = (r: SearchResult) => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name));
   const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
@@ -762,6 +766,7 @@ export function App() {
       {
         kind: "poster",
         key: "cinema",
+        launch: { label: "▶  Open Cinema", run: () => launch(APP_IDS.movie, "Cinema") },
         label: "Continue · Cinema",
         // The poster carries its own title; a badge says what OK does.
         tile: { src: posterUrl(film.title), badge: "▶ Resume", progress: progressOf(film) },
@@ -771,7 +776,14 @@ export function App() {
     );
   } else if (pick) {
     push(
-      { kind: "poster", key: "cinema", label: "Tonight · Cinema", tile: { src: posterUrl(pick.title), badge: "Top film" }, run: () => openHit(pick) },
+      {
+        kind: "poster",
+        key: "cinema",
+        label: "Tonight · Cinema",
+        launch: { label: "▶  Open Cinema", run: () => launch(APP_IDS.movie, "Cinema") },
+        tile: { src: posterUrl(pick.title), badge: "Top film" },
+        run: () => openHit(pick),
+      },
       [{ src: posterUrl(pick.title), type: "movie" }],
     );
   }
@@ -791,6 +803,7 @@ export function App() {
       {
         kind: "stack",
         key: "shows",
+        launch: { label: "▶  Open Shows", run: () => launch(APP_IDS.series, "Shows") },
         label: shows.length ? "Next up · Shows" : "Top · Shows",
         tiles,
         run: (i) => (i < shows.length ? resume(shows[i]) : openHit(showPicks[i - shows.length])),
@@ -806,6 +819,7 @@ export function App() {
       {
         kind: "grid",
         key: "anime",
+        launch: { label: "▶  Open Anime", run: () => launch(APP_IDS.anime, "Anime") },
         label: "Anime",
         tiles: [
           ...anime.map((e) => ({ src: posterUrl(e.title), badge: "▶", progress: progressOf(e) })),
@@ -850,7 +864,7 @@ export function App() {
     });
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
-  const rowArt = colAt >= 0 ? art[colAt]?.[focus.i] : undefined;
+  const rowArt = colAt >= 0 && focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
     rowArt
       ? rowArt
@@ -938,7 +952,8 @@ export function App() {
   const layout: Layout = useMemo(
     () => ({
       weather: Boolean(weather),
-      ask: CHIPS.length,
+      // One button: Ask Assistant.
+      ask: 1,
       // While an answer is shown it takes the row's place.
       cols: shownTurn ? [] : rowLayout(columns).nav,
       results: shownResults?.length ?? 0,
@@ -952,7 +967,7 @@ export function App() {
   useEffect(() => {
     if (focus.area === "row" && !layout.cols.some((c) => c.count > 0) && !shownTurn && !error) return;
     const next = clamp(focus, layout);
-    if (next.area !== focus.area || next.i !== focus.i || next.col !== focus.col) setFocus(next);
+    if (next.area !== focus.area || next.i !== focus.i || next.col !== focus.col || next.inside !== focus.inside) setFocus(next);
   }, [layout]);
 
   const showRecent = view === "search" && !query.trim() && recentSearches.length > 0;
@@ -990,7 +1005,7 @@ export function App() {
   /** The Reminders card, at reminder `at` (or its first). */
   function focusReminders(at = 0) {
     const col = columns.findIndex((c) => c.key === "reminders");
-    if (col >= 0) setFocus({ area: "row", col, i: Math.max(0, Math.min(at, 2)) });
+    if (col >= 0) setFocus({ area: "row", col, i: Math.max(0, Math.min(at, 2)), inside: true });
   }
 
   function toggleReminderAt(r: Reminder) {
@@ -1053,13 +1068,19 @@ export function App() {
       }
       return;
     }
-    if (area === "ask") return void (i === 0 ? listen() : send(CHIPS[i].prompt));
+    if (area === "ask") return void listen();
     if (area === "results") {
       const hit = shownResults?.[i];
       if (hit) openHit(hit);
       return;
     }
-    if (area === "row") columns[focus.col ?? 0]?.run(i);
+    if (area === "row") {
+      // A card as a whole: OK goes inside it. Inside: its Launch button opens the app, an item does its own thing.
+      if (!focus.inside) return setFocus(enter(focus, layout));
+      const col = columns[focus.col ?? 0];
+      if (i === LAUNCH) return col?.launch?.run();
+      col?.run(i);
+    }
   };
 
   useKeys(view === "home", (key) => {
@@ -1086,6 +1107,7 @@ export function App() {
       setWeatherOpen(false);
       if (key === "Back") return;
     }
+    if (key === "Back" && focus.area === "row" && focus.inside) return setFocus(leave(focus));
     if (key === "Back" && shownTurn) {
       setShownTurn(null);
       setFocus({ area: "ask", i: 0 });

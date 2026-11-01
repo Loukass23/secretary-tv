@@ -4,7 +4,7 @@
 import { windowOf } from "@secretary/tv-kit";
 import { Avatar, Glass, Glow, IconButton, MediaTile, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
-import { CHIPS, type Weather } from "./assistant.ts";
+import type { Weather } from "./assistant.ts";
 import { CARD_H, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, HEADER_SEARCH, HEADER_WEATHER } from "./nest-nav.ts";
 import { glyphMask } from "./weather.ts";
@@ -16,7 +16,8 @@ const ICON = { w: 72, h: 64, gap: 14 };
 const ICONS_X = 1920 - PAD - 4 * ICON.w - 3 * ICON.gap;
 /** The assistant's column, on the wallpaper. */
 const ASK = { x: PAD, y: 300, w: 480 };
-const WAVE = { x: PAD - 10, y: 640, w: ASK.w + 20, h: 60 };
+/** Starts at the text column's edge: at rest the ribbons draw into the orb there. */
+const WAVE = { x: PAD, y: 640, w: ASK.w, h: 60 };
 /** The content row: from right of the assistant to past the screen's edge. */
 const ROW = { x: 620, y: 300, w: 1920 - 620, h: LABEL_H + CARD_H };
 /** How much of the row is in view before it scrolls. */
@@ -119,7 +120,8 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
   const hitScroll = Math.max(0, hitAt - 3) * HIT_STRIDE;
   const [hFrom, hTo] = windowOf(hitAt, results?.items.length ?? 0, 3, 7);
   const hit = results?.items[hitAt];
-  const focusBox = focus?.area === "row" && columns[colAt] ? itemBox(columns[colAt], focus.i) : null;
+  const inside = focus?.area === "row" && focus.inside;
+  const focusBox = inside && columns[colAt] && focus.i >= 0 ? itemBox(columns[colAt], focus.i) : null;
   const glowAt = focusBox
     ? { x: ROW.x + layout.x[colAt] - rowScroll + focusBox.x, y: ROW.y + LABEL_H + focusBox.y, w: focusBox.w, h: focusBox.h }
     : focus?.area === "results"
@@ -176,13 +178,9 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
         </div>
       </div>
       <VoiceWave {...WAVE} state={ask.wave} />
-      <div class="nest-chips" style={{ left: `${ASK.x}px`, top: `${WAVE.y + WAVE.h + 24}px`, width: `${ASK.w + 40}px` }}>
-        {CHIPS.map((c, i) => (
-          <span key={c.label} class={`nest-chip${on("ask", i) ? " is-focus" : ""}`}>
-            {c.label}
-          </span>
-        ))}
-      </div>
+      <span class={`nest-chip nest-ask-button${on("ask", 0) ? " is-focus" : ""}`} style={{ left: `${ASK.x}px`, top: `${WAVE.y + WAVE.h + 28}px` }}>
+        Ask Assistant
+      </span>
 
       <Glow at={glowAt} src={glow} />
 
@@ -231,7 +229,8 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
                 col={col}
                 x={layout.x[c]}
                 page={[ROW.x + layout.x[c] - rowScroll, ROW.y + LABEL_H]}
-                focus={focus?.area === "row" && colAt === c ? focus.i : -1}
+                picked={focus?.area === "row" && !inside && colAt === c}
+                focus={inside && colAt === c ? focus!.i : null}
               />
             );
           })}

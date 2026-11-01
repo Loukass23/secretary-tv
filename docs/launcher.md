@@ -116,18 +116,19 @@ off the right edge (`src/cards.tsx`). `src/nest-nav.ts` moves focus between them
 | Profile | top left | opens the profile menu: Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
 | Weather | top right | opens the forecast under it (next 6 hours, today and 3 days); Back or an arrow closes it |
 | Watch together, Search, Lights, Bell | top right, no fill until focused | the party; search; the Lights panel (or the next scene); the first open reminder in its card (the badge counts them) |
-| Ask Nest chips | left, under the wave | Ask listens on the room microphone (or opens the TV keyboard); the others send that prompt |
+| Ask Assistant | left, under the orb | listens on the room microphone (or opens the TV keyboard). At rest the wave draws into a small orb; it opens into the ribbons while Nest listens, thinks or speaks |
 | Recent | first card, while there is an answer | goes back to that answer (the titles, the forecast, the lights, the reminder, or asks again) |
-| Continue · Cinema | a tall poster | resumes the film in Cinema; with nothing in progress it shows tonight's top film |
-| Next up · Shows | two stacked backdrops | resumes the episode in Shows; top series fill an empty slot |
-| Anime | a 3×2 grid of covers | resumes or opens in Anime; trending covers fill the grid |
+| Continue · Cinema | a tall poster | inside: "▶ Open Cinema", then resumes the film; with nothing in progress it shows tonight's top film |
+| Next up · Shows | two stacked backdrops | inside: "▶ Open Shows", then resumes the episode; top series fill an empty slot |
+| Anime | a 3×2 grid of covers | inside: "▶ Open Anime", then resumes or opens the title; trending covers fill the grid |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
 | Ask Nest results | in place of the row | opens the title in its app; Back brings the row back |
 
-Arrows move along a card's items and then on to the next card, keeping to the same line; Up from the top of a card goes
-to the header. The row scrolls just enough to keep the focused card whole and renders only the cards around focus.
+Left and Right move from card to card, a ring around the whole card. OK goes inside it: on an app card (Cinema, Shows,
+Anime) its Launch button comes first, in place of the label, then its titles; on the others their first item. Inside,
+the arrows stay in the card, Up from the top goes back to the card, and Back leaves it. Up from a card goes to the header. The row scrolls just enough to keep the focused card whole and renders only the cards around focus.
 Trending titles come from the catalogs straight from the TV once a day (`localStorage["nest.trending"]`).
 
 Focus starts on the first card. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone

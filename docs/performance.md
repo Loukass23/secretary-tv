@@ -375,3 +375,19 @@ Not settled yet: opening the profile menu and the forecast for the first time sh
 p95 33 ms. Both came from a later stretch where every walk, the idle ones included, ran slower (about 280 frames
 instead of 360 for the same walk) and Nest kept dropping to the background with nothing open. That looks like the TV
 going idle after hours without a real remote press, so those runs need repeating in daytime use.
+
+### Card focus and the resting orb (2026-11-02)
+
+Left and Right now move between whole cards (a ring faded in on its own layer), OK goes inside, and the wave rests as an
+orb that breathes by transform. Reference TV, 20-key walks across the cards and 25-key walks in and out of them:
+
+| Walk (3 each) | Median frame | p95 | Worst | Frames over 50 ms |
+| --- | --- | --- | --- | --- |
+| Across the cards | 17 ms | 33 ms | 33-50 ms | 0 |
+| In and out of the cards | 17 ms | 33 ms | 33-83 ms | 0-2 |
+| Across, orb still | 17 ms | 33 ms | 33-50 ms | 0 |
+| Across, hidden ribbons paused | 17 ms | 33 ms | 33-83 ms | 0-2 |
+
+The orb costs nothing measurable: still or breathing, the same walk gave 288-325 frames from run to run, about 60 fps.
+The ribbons, hidden at rest, now pause there too. p95 sat at 33 ms for every variant in this stretch, the orb still
+included, so it is the TV's state that day rather than the cards; it is worth comparing against a fresh baseline.
