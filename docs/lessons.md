@@ -117,7 +117,7 @@ Each item cost a debugging session. If one turns out wrong, fix it here in the s
 
 - YouTube's embed refuses to play in a page with no Referer (error 153, "video player configuration error"), and a
   widget loaded from `file://` sends none, whatever `origin` or `widget_referrer` the player is given. Framing a page
-  served over http (the home server's `/music/player`) that hosts the player works: the TV then plays any embeddable
+  served over http(s) that hosts the player works (Secretary Music's page on Cloudflare Pages): the TV then plays any embeddable
   video (checked 2026-11-01). `docs/music.md`.
 - A hidden app is suspended when `background-support` is `disable`: no timers, no frames, and its message ports do not
   answer, even its own. With `enable` it answers another app over `tizen.messageport` while hidden. YouTube still

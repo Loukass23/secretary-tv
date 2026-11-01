@@ -55,8 +55,8 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
 - Trending music, recently played, search and playlists from YouTube (your own Data API key), in the glass style.
 - A now-playing screen with the video, the queue, shuffle and repeat; the remote's media keys and CH+/CH- work
   everywhere.
-- Tells Nest what is playing over a Tizen message port, no server needed (`docs/music.md`). Playback needs the small
-  player page the home server serves (YouTube will not play in an app loaded from `file://`).
+- Tells Nest what is playing over a Tizen message port, no server needed (`docs/music.md`). Playback goes through a
+  small static player page on Cloudflare Pages (YouTube will not play in an app loaded from `file://`).
 
 ### Secretary Nest (launcher)
 
@@ -79,7 +79,6 @@ Implemented:
 - **Secretary Desk** (`/companion`, `/remote`): the phone web app with reminders and the assistant.
 - `/reminders`, `/ai/ask`, `/ai/state`, `/ai/transcribe`: reminders sync and the Secretary Bird assistant (Google
   Gemini, optional), with voice from a room microphone and spoken replies.
-- `/music/player`: the page Secretary Music frames to play YouTube.
 - `/weather` (Open-Meteo, no key), `/art` (fanart.tv artwork), `/domotics` (SmartThings lights).
 - `/health`.
 - Runs at home on the LAN, or hosted on the internet from the `Dockerfile` with a secret key in every URL

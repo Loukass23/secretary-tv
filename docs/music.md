@@ -20,15 +20,17 @@ search, playlists and a now-playing screen in the glass style. It is a thin Tize
    of normal use stays far below it. Without a key the home screen says so and nothing can be browsed.
 
 2. **The player page.** YouTube will not play in an embed whose page sends no Referer (error 153), and a Tizen web
-   app runs from `file://`, which sends none. The home server serves a small page at `GET /music/player` that hosts
-   YouTube's IFrame player; the app frames that page and drives it with `postMessage`. So the app needs either:
+   app runs from `file://`, which sends none. So the app frames a small static page served over https,
+   `packages/app-music/player/index.html`, which hosts YouTube's IFrame player; the app drives it with `postMessage`.
+   It needs no server: the page is published on Cloudflare Pages at `https://secretary-music-player.pages.dev/`, the
+   app's default. To publish it (once, and again when the page changes), signed in with `npx wrangler login`:
 
-   - `SECRETARY_TV_SERVER_URL` (the home server, LAN or hosted with its key, `docs/hosting.md`): the player is
-     `<server>/music/player`; or
-   - `MUSIC_PLAYER_URL`: any http(s) address that serves the same page (the HTML is `MUSIC_PLAYER_HTML` in
-     `packages/server/src/music.ts`; a static host works, it needs no state and no key).
+   ```bash
+   pnpm --filter @secretary/app-music player
+   ```
 
-   The page loads only YouTube's own script. Without either variable the app browses but says it has no player page.
+   `MUSIC_PLAYER_URL` in `.env.tizen` points the app at another copy instead (any https host; the page has no key and
+   no state, and loads only YouTube's own script).
 
 3. **A package id**, exactly 10 letters or digits, in `.env.tizen`:
 
@@ -112,7 +114,7 @@ that card is a plain `launchApp("<id>.Music")`.
 
 - YouTube's embed straight from the app's `file://` page: the player loads, then error 153 for every video. The same
   embed inside a page served over http from the LAN plays (state playing, position moving, the duration reported).
-- The app with the player page served from a computer on the LAN: OK on a trending tile plays and opens Now playing;
+- The app with the player page served over http from a computer on the LAN (before it moved to Cloudflare Pages): OK on a trending tile plays and opens Now playing;
   Play/Pause, CH+ (next), CH- (restart, then previous), shuffle, repeat all and one, and choosing a track in the queue
   all work. A track that does not exist showed "can't be played outside YouTube" and the queue moved on. Back from
   Now playing kept the music playing in the Home card. Search through the keyboard field returned songs and
@@ -120,8 +122,8 @@ that card is a plain `launchApp("<id>.Music")`.
 - Leaving for Nest and coming back: playback paused while hidden and resumed on return.
 - Nest (in front, inspector) asked the music app (hidden) over the message port and got the record back within the
   same second: title, artist, cover, position 3.0 s, duration, state `paused`.
-- Browsing was checked with Data API answers stood in by the inspector (no key on this TV yet); parsing of the real
-  answers is covered by `packages/app-music/test/youtube.test.ts`.
+- With the page on Cloudflare Pages and a real key, no server running: trending music and playlists loaded, a trending
+  track played, a search returned songs and playlists, and a playlist opened as a 10-track queue and played.
 - CDP screenshots show the video area black or blank (the TV draws video on its own plane), as with AVPlay.
 
 Frame numbers are in `docs/performance.md` ("Secretary Music"). In short: the screens alone walk at a 17 ms median

@@ -1,8 +1,7 @@
-// GET /music/player: the page Secretary Music frames to play YouTube (docs/music.md). The TV app runs from file://
-// and sends no Referer, which YouTube's embed refuses with error 153; this page is served over http, so the embed
-// inside it has one. It only hosts the IFrame player and relays it over postMessage: the protocol's other half is
-// packages/app-music/src/bridge.ts. No key and no state; the page loads YouTube's script and nothing else.
-export const MUSIC_PLAYER_HTML = `<!doctype html>
+<!doctype html>
+<!-- Secretary Music's YouTube player (docs/music.md), hosted on Cloudflare Pages: `pnpm --filter @secretary/app-music player`.
+     YouTube refuses an embed whose page sends no Referer (error 153) and the TV app runs from file://, so the app
+     frames this page and drives it with postMessage; the other half of the protocol is src/bridge.ts. No key, no state. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -51,4 +50,3 @@ export const MUSIC_PLAYER_HTML = `<!doctype html>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
-`;

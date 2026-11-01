@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { errorText, parsePlayerMessage, SOURCE, stateName } from "../src/bridge.ts";
 import { decodeNowPlaying, encodeNowPlaying, type NowPlaying, positionAt } from "../../tv-kit/src/now-playing.ts";
-import { MUSIC_PLAYER_HTML } from "../../server/src/music.ts";
-import { createApp } from "../../server/src/app.ts";
 // @ts-expect-error plain .mjs without types
 import { renderManifest, readApplicationId } from "../../tv-kit/scripts/manifest.mjs";
+
+const MUSIC_PLAYER_HTML = readFileSync(new URL("../player/index.html", import.meta.url), "utf8");
 
 const msg = (m: object) => JSON.stringify({ src: SOURCE, ...m });
 
@@ -35,23 +35,12 @@ test("YouTube states and errors", () => {
   assert.match(errorText(100), /removed/);
 });
 
-test("the server's player page speaks the same protocol", () => {
+test("the player page speaks the same protocol", () => {
   assert.ok(MUSIC_PLAYER_HTML.includes(`var SRC = "${SOURCE}"`));
   for (const cmd of ["load", "play", "pause", "seek", "stop"]) assert.ok(MUSIC_PLAYER_HTML.includes(`c.cmd === "${cmd}"`), cmd);
   for (const ev of ["ready", "state", "time", "error"]) assert.ok(MUSIC_PLAYER_HTML.includes(`ev: "${ev}"`), ev);
 });
 
-test("the server serves the player page, keyed when hosted", async () => {
-  const home = createApp({ apiKey: "k", baseUrl: "http://192.0.2.10:7000", upstream: "" });
-  const res = await home(new Request("http://192.0.2.10:7000/music/player"));
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get("content-type") ?? "", /text\/html/);
-  assert.equal(await res.text(), MUSIC_PLAYER_HTML);
-  const key = "k".repeat(32);
-  const hosted = createApp({ apiKey: "k", baseUrl: `https://example.com/${key}`, upstream: "", key });
-  assert.equal((await hosted(new Request("https://example.com/music/player"))).status, 404);
-  assert.equal((await hosted(new Request(`https://example.com/${key}/music/player`))).status, 200);
-});
 
 const record: NowPlaying = {
   v: 1,

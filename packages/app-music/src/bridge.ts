@@ -1,7 +1,7 @@
-// The YouTube player, through a small page served over http (packages/server, GET /music/player). YouTube refuses to
-// play in an embed without a Referer (error 153), and the app runs from file://, which sends none; the page does
+// The YouTube player, through a small page served over https (player/index.html, on Cloudflare Pages). YouTube refuses
+// to play in an embed without a Referer (error 153), and the app runs from file://, which sends none; the page does
 // send one, hosts the IFrame player, and talks to the app with postMessage. The other half of this protocol is
-// packages/server/src/music.ts. docs/music.md has the measurements.
+// player/index.html. docs/music.md has the measurements.
 
 export type PlayerState = "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued";
 

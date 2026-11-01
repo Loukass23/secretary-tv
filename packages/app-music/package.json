@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "tizen": "node ../tv-kit/scripts/tizen.mjs",
-    "cdp": "node ../tv-kit/scripts/cdp.mjs"
+    "cdp": "node ../tv-kit/scripts/cdp.mjs",
+    "player": "pnpm dlx wrangler@4 pages deploy player --project-name secretary-music-player --branch main"
   },
   "dependencies": {
     "@secretary/tv-kit": "workspace:*",

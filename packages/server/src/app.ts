@@ -13,7 +13,6 @@ import {
   VOICE_TYPES,
 } from "./companion.ts";
 import { type EpisodeHint, episodeHint, pickFile } from "./files.ts";
-import { MUSIC_PLAYER_HTML } from "./music.ts";
 import { discoverCatalog, rankSearch, searchCatalogs, type SearchResult } from "./search.ts";
 import { type Weather, fetchWeather, type WeatherPlace } from "./weather.ts";
 import {
@@ -261,10 +260,6 @@ export function createApp(cfg: AppConfig) {
           status: 200,
           headers: { "content-type": "text/html; charset=utf-8", ...CORS },
         });
-      }
-      if (pathname === "/music/player" && req.method === "GET") {
-        // Secretary Music's YouTube player (docs/music.md); framed by the TV app, so no CORS headers needed.
-        return new Response(MUSIC_PLAYER_HTML, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
       }
       if (pathname === "/reminders") {
         if (req.method === "GET") {
