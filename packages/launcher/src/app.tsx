@@ -634,7 +634,12 @@ export function App() {
   const shownResults = shownTurn?.results ?? null;
   const talk = mergeTurns(assistant, localState);
   // Recent: the assistant's latest answers and the home's latest news, newest first, then Continue Watching.
-  const recentTurns = talk.turns.filter((t) => t.action !== "error").slice(-MAX_RECENT).reverse();
+  // The same prompt asked again shows once, as its newest answer.
+  const recentTurns = talk.turns
+    .filter((t) => t.action !== "error")
+    .reverse()
+    .filter((t, k, all) => all.findIndex((u) => u.prompt.toLowerCase() === t.prompt.toLowerCase()) === k)
+    .slice(0, MAX_RECENT);
   const recent: RecentCard[] = [
     ...recentTurns.map((t) => ({
       kind: "answer" as const,
@@ -679,6 +684,8 @@ export function App() {
       reminders,
       assistant,
       ask: (q: string) => send(q),
+      // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
+      wave: setWaveLevel,
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => {
         setQuery(q);

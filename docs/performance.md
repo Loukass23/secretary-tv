@@ -315,11 +315,22 @@ node ../tv-kit/scripts/cdp.mjs <port> walk 900 Left,Left,Left,Left,Left,Left
 - The resume point uses the same IDLE seek, so prepare-ahead prepares at the resume point: OK to first frame 0.38 s at
   57:28, with no seek after play.
 
-## Live wave and the Nest relayout (2026-11-01): not yet measured
+## Live wave and the Nest relayout (2026-11-01)
 
 The wave now follows the room microphone and spoken replies (`setWaveLevel`, docs/launcher.md "Ask Nest"): each
 ribbon's `scaleY` is written straight to the DOM every frame while a voice is live, with no Preact render and no
-transition. The home screen also gained a forecast sheet, a Recent row of glass cards and answer posters on the right.
-Expected cost is that of the old wave (transform only, six ribbon layers instead of three, two of them at opacity 0),
-but it has not been measured on the reference TV yet. To do: `cdp.mjs walk` and `soak` on the home screen while
-recording and while a reply plays, and the walk with the Recent row and the results on the right.
+transition. The home screen also gained the weather and clock header, a forecast sheet, a Recent row of glass cards and
+answer posters on the right. Reference TV, Night theme, no server (Ask Nest answering on the TV), after one warm-up
+walk. "Live" drives the wave like a voice: `__sectv.wave()` with a random level every 93 ms, the microphone's frame rate.
+
+| Walk (3 each) | Median frame | p95 | Worst | Frames over 50 ms |
+| --- | --- | --- | --- | --- |
+| Default walk, wave idle | 17 ms | 17 ms | 33 ms | 0 |
+| Default walk, wave live | 17 ms | 17 ms | 33-50 ms | 0-1 |
+| 26 keys through the chips and 6 answer posters on the right | 17 ms | 17 ms | 33 ms | 0 |
+| 20 keys through the Recent row (3 answer cards) | 17 ms | 17 ms | 33-50 ms | 0 |
+
+The live wave costs nothing measurable: six ribbon layers, three of them at opacity 0, moved by transform. Ten walks in
+a row with the wave live kept the heap at 3-4 MB and the page at 146 elements. The first walk after a launch had 3
+frames over 50 ms (worst 117 ms) while the app icons decoded, as before. Asks on the TV took 0.3 s (weather, a
+reminder), 0.6 s (a comedy, catalogs from the TV) and 1 s (a Gemini briefing, called from the TV). JS 47 KB gzip.
