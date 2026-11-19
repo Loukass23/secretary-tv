@@ -394,3 +394,17 @@ included, so it is the TV's state that day rather than the cards; it is worth co
 
 The assistant now scrolls off with the row (one transform and opacity on its own layer, in step with the row) and all the
 cards are drawn: the same 20-key walk across the cards gave 290-294 frames, nothing over 50 ms, as before.
+
+### Sofa size, opening cards and card styles (2026-11-19)
+
+Nest's home a quarter bigger (cards 540px tall, text 24-44px), media cards that open in place into a row of up to 8
+titles (the cards after it slide by transform, the others fade to 35%, the titles rise in 30 ms apart), and the long-OK
+style menu. Reference TV, real data (Nuvio profile, 8 films, server offline), three walks each at 300-400 ms a key:
+
+| Walk | Median frame | p95 | Worst | Frames over 50 ms |
+| --- | --- | --- | --- | --- |
+| Home row, default 22-key path | 17 ms | 33 ms | 34-83 ms | 0-2 (of ~350) |
+| Open Cinema, all 8 + Open, fold; open Shows and Anime, fold (23 keys) | 17 ms | 33 ms | 67-100 ms | 1-4 (of ~430) |
+
+The few long frames in the second walk are most likely the opens decoding the titles' art the first time (not traced
+frame by frame); the medians match the home row's. The page is 1920x1080 at devicePixelRatio 1 on this TV.

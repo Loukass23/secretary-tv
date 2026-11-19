@@ -11,23 +11,23 @@ import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, HEADER_SEARCH, HEADER_WEATHER } from "./nest-nav.ts";
 
 const PAD = 80;
-const HEAD_Y = 56;
+const HEAD_Y = 44;
 /** Party, Search, Lights and Bell, right to left from the edge. */
-const ICON = { w: 72, h: 64, gap: 14 };
+const ICON = { w: 88, h: 78, gap: 16 };
 const ICONS_X = 1920 - PAD - 4 * ICON.w - 3 * ICON.gap;
 /** The assistant's column, on the wallpaper. */
-const ASK = { x: PAD, y: 300, w: 480 };
+const ASK = { x: PAD, y: 236, w: 500 };
 /** Starts at the text column's edge: at rest the ribbons draw into the orb there. */
-const WAVE = { x: PAD, y: 640, w: ASK.w, h: 60 };
+const WAVE = { x: PAD, y: 690, w: ASK.w, h: 72 };
 /** The content row starts right of the assistant; it scrolls across the whole screen, taking the assistant with it. */
-const ROW = { x: 620, y: 300, h: LABEL_H + CARD_H };
+const ROW = { x: 640, y: 236, h: LABEL_H + CARD_H };
 /** The right edge a focused card is kept inside of. */
 const VIEW_RIGHT = 1920 - 60;
-const HIT_W = 190;
-const HIT_H = 285;
-const HIT_STRIDE = 210;
-const MENU = { x: PAD, y: 150, w: 400, item: 64 };
-const SHEET = { x: 1000, y: 150, w: 820, h: 388 };
+const HIT_W = 240;
+const HIT_H = 360;
+const HIT_STRIDE = 264;
+const MENU = { x: PAD, y: 150, w: 480, item: 76 };
+const SHEET = { x: 880, y: 150, w: 960, h: 470 };
 
 /** The assistant on the left: the conversation so far, the last answer, and the wave. */
 export interface AskView {
@@ -65,25 +65,25 @@ interface Props {
   styleMenu?: StyleMenu | null;
 }
 
-const STYLE_W = 380;
-const STYLE_LINE = 58;
+const STYLE_W = 460;
+const STYLE_LINE = 72;
 
 /** The long-OK menu beside a media card: its layouts, then its size. The card shows each choice as it is picked. */
 function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; name: string }) {
   const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`];
   return (
-    <Glass x={x} y={y} w={STYLE_W} h={86 + lines.length * STYLE_LINE + 52} class="nest-menu nest-style">
+    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 64} class="nest-menu nest-style">
       <span class="nest-kicker nest-style-head">{name} · card style</span>
       {lines.map((label, i) => (
         <span
           key={i}
           class={`nest-menu-item${m.line === i ? " is-focus" : ""}${i < SIZE_LINE && LAYOUTS[i] === m.style.layout ? " is-picked" : ""}`}
-          style={{ top: `${64 + i * STYLE_LINE}px` }}
+          style={{ top: `${76 + i * STYLE_LINE}px` }}
         >
           {label}
         </span>
       ))}
-      <small class="nest-style-hint" style={{ top: `${72 + lines.length * STYLE_LINE}px` }}>
+      <small class="nest-style-hint" style={{ top: `${88 + lines.length * STYLE_LINE}px` }}>
         OK keeps · Back undoes
       </small>
     </Glass>
@@ -109,7 +109,7 @@ function WeatherSheet({ w }: { w: Weather }) {
         <small>Back closes</small>
       </div>
       <div class="nest-forecast-now">
-        <Glyph of={w.glyph} size={64} />
+        <Glyph of={w.glyph} size={78} />
         <b>{w.tempC}°</b>
         <small>{w.label}</small>
       </div>
@@ -117,7 +117,7 @@ function WeatherSheet({ w }: { w: Weather }) {
         {(w.hours ?? []).map((h) => (
           <div key={h.hour}>
             <small>{h.hour}h</small>
-            <Glyph of={h.glyph} size={34} />
+            <Glyph of={h.glyph} size={42} />
             <b>{h.tempC}°</b>
           </div>
         ))}
@@ -126,7 +126,7 @@ function WeatherSheet({ w }: { w: Weather }) {
         {(w.days ?? []).map((d, k) => (
           <div key={d.date}>
             <small>{day(d.date, k)}</small>
-            <Glyph of={d.glyph} size={34} />
+            <Glyph of={d.glyph} size={42} />
             <b>
               {d.maxC}° <span>{d.minC}°</span>
             </b>
@@ -172,7 +172,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
       <div class="nest-head" style={{ right: `${1920 - ICONS_X + 36}px`, top: `${HEAD_Y}px` }}>
         {weather && (
           <div class={`nest-weather${on("header", HEADER_WEATHER) ? " is-focus" : ""}`}>
-            <Glyph of={weather.glyph} size={46} />
+            <Glyph of={weather.glyph} size={56} />
             <div>
               <b>{weather.tempC}°</b>
               <small>{weather.place ? `${weather.place} · ${weather.label}` : weather.label}</small>
@@ -218,7 +218,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
         </div>
       </div>
       <VoiceWave {...WAVE} state={ask.wave} />
-      <span class={`nest-chip nest-ask-button${on("ask", 0) ? " is-focus" : ""}`} style={{ left: `${ASK.x}px`, top: `${WAVE.y + WAVE.h + 28}px` }}>
+      <span class={`nest-chip nest-ask-button${on("ask", 0) ? " is-focus" : ""}`} style={{ left: `${ASK.x}px`, top: `${WAVE.y + WAVE.h + 30}px` }}>
         Ask Assistant
       </span>
       </div>
@@ -244,7 +244,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
               {hit && (
                 <div
                   class={`nest-result-cap${focus?.area === "results" ? " is-on" : ""}`}
-                  style={{ left: 0, top: 0, transform: `translate3d(${ROW.x + hitAt * HIT_STRIDE - hitScroll}px,${ROW.y + LABEL_H + HIT_H + 14}px,0)` }}
+                  style={{ left: 0, top: 0, transform: `translate3d(${ROW.x + hitAt * HIT_STRIDE - hitScroll}px,${ROW.y + LABEL_H + HIT_H + 30}px,0)` }}
                 >
                   <b>{hit.title.name}</b>
                   <small>

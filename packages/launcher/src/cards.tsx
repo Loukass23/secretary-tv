@@ -50,15 +50,15 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
 );
 
 /** Card height: the tallest layout fills it, the others sit at its top. */
-export const CARD_H = 420;
+export const CARD_H = 540;
 /** Room for the column's label above its card. */
-export const LABEL_H = 44;
-const GAP = 44;
-const LIST = { w: 320, h: 108 };
-const ADD_H = 60;
-const APP = { w: 140, h: 128, gap: 14, across: 2 };
-const HOME_W = 300;
-const ACTION_H = 58;
+export const LABEL_H = 54;
+const GAP = 48;
+const LIST = { w: 420, h: 136 };
+const ADD_H = 76;
+const APP = { w: 176, h: 160, gap: 18, across: 2 };
+const HOME_W = 380;
+const ACTION_H = 72;
 
 /** How wide a column is and how its items run for the remote; an expanded media card is one long row. */
 export function columnShape(c: RowColumn, expanded = false): { w: number } & Column {
@@ -102,7 +102,7 @@ export function columnHeight(c: RowColumn): number {
     case "media":
       return collapsedShape(c.style).h;
     case "list":
-      return c.items.length * (LIST.h + 14) + (c.add ? ADD_H : -14);
+      return c.items.length * (LIST.h + 18) + (c.add ? ADD_H : -18);
     case "apps":
       return Math.ceil(c.apps.length / APP.across) * (APP.h + APP.gap) - APP.gap;
     default:
@@ -201,7 +201,7 @@ function MediaRow({ col, focus, page }: { col: Extract<RowColumn, { kind: "media
         })}
       </Scroller>
       {hit && (
-        <div class="nest-result-cap is-on" style={{ left: 0, top: 0, transform: `translate3d(${at * EXPANDED.stride - scroll}px,${EXPANDED.h + 14}px,0)` }}>
+        <div class="nest-result-cap is-on" style={{ left: 0, top: 0, transform: `translate3d(${at * EXPANDED.stride - scroll}px,${EXPANDED.h + 30}px,0)` }}>
           <b>{hit.title}</b>
           {hit.sub && <small>{hit.sub}</small>}
         </div>
@@ -234,7 +234,7 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
             <span
               key={a}
               class={`nest-home-action${focus === i ? " is-focus" : ""}`}
-              style={{ top: `${CARD_H - (col.actions.length - i) * (ACTION_H + 10) - 12}px` }}
+              style={{ top: `${CARD_H - (col.actions.length - i) * (ACTION_H + 12) - 16}px` }}
             >
               {a}
             </span>
@@ -247,10 +247,10 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
             <ListCard
               key={i}
               x={0}
-              y={i * (LIST.h + 14)}
+              y={i * (LIST.h + 18)}
               w={LIST.w}
               h={LIST.h}
-              page={at(0, i * (LIST.h + 14))}
+              page={at(0, i * (LIST.h + 18))}
               class={it.done ? "is-done" : undefined}
               title={it.title}
               sub={it.sub}
@@ -262,10 +262,10 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
           {col.add && (
             <Glass
               x={0}
-              y={col.items.length * (LIST.h + 14)}
+              y={col.items.length * (LIST.h + 18)}
               w={LIST.w}
               h={ADD_H}
-              page={at(0, col.items.length * (LIST.h + 14))}
+              page={at(0, col.items.length * (LIST.h + 18))}
               focused={focus === col.items.length}
               class="nest-add"
             >

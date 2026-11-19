@@ -12,8 +12,8 @@ html, body {
 }
 
 /* --- header (home.tsx): the person top left; the weather, the time and quiet buttons top right --- */
-.nest-head { position: absolute; display: flex; align-items: center; gap: 40px; height: 64px; }
-.nest-weather { position: relative; display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 64px; border-radius: 20px; isolation: isolate; }
+.nest-head { position: absolute; display: flex; align-items: center; gap: 44px; height: 78px; }
+.nest-weather { position: relative; display: flex; align-items: center; gap: 16px; padding: 0 18px; height: 78px; border-radius: 22px; isolation: isolate; }
 .nest-weather::before,
 .nest-menu-item::before,
 .nest-home-action::before {
@@ -31,20 +31,20 @@ html, body {
 .nest-menu-item.is-focus::before,
 .nest-home-action.is-focus::before { opacity: 1; }
 .nest-weather.is-focus { color: var(--sg-focus-ink); }
-.nest-weather b, .nest-time b { display: block; font-size: 30px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
-.nest-weather small, .nest-time small { font-size: 19px; white-space: nowrap; }
+.nest-weather b, .nest-time b { display: block; font-size: 38px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+.nest-weather small, .nest-time small { font-size: 24px; white-space: nowrap; }
 /* The place and the sky on one line; a long place name ends in an ellipsis rather than pushing the clock. */
-.nest-weather small { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+.nest-weather small { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
 .nest-weather.is-focus small { color: var(--sg-focus-ink-dim); }
 .nest-time { text-align: right; }
 /* Header buttons: no fill until focused, so the top stays as quiet as the reference's single bell. */
 .sg-glass.nest-quiet > .sg-frost,
 .sg-glass.nest-quiet::after { opacity: 0; }
-.sg-glass.nest-quiet { font-size: 30px; }
+.sg-glass.nest-quiet { font-size: 38px; }
 .nest-label { font-size: 30px; font-weight: 600; }
 .nest-kicker {
   display: block;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -57,35 +57,35 @@ html, body {
 .nest-menu-item {
   left: 12px;
   right: 12px;
-  height: 56px;
+  height: 68px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  border-radius: 16px;
-  font-size: 23px;
+  padding: 0 24px;
+  border-radius: 18px;
+  font-size: 28px;
   font-weight: 600;
   isolation: isolate;
 }
 .nest-menu-item.is-focus { color: var(--sg-focus-ink); }
 /* The card style menu: the picked layout carries a dot, the hint sits under the lines. */
 .sg-glass > .nest-style-head, .sg-glass > .nest-style-hint { position: absolute; left: 32px; right: 32px; }
-.nest-style-head { top: 24px; }
+.nest-style-head { top: 28px; }
 .nest-menu-item.is-picked::after { content: ""; width: 10px; height: 10px; margin-left: auto; border-radius: 50%; background: currentColor; }
-.nest-style-hint { font-size: 19px; }
+.nest-style-hint { font-size: 23px; }
 
 /* --- the assistant (home.tsx): on the wallpaper, no card; earlier prompts fade as they rise --- */
 .nest-ask { position: absolute; }
-.nest-ask-status { display: block; height: 26px; font-size: 19px; }
-.nest-ask-stack { display: flex; flex-direction: column; justify-content: flex-end; height: 96px; }
-.nest-ask-old { font-size: 22px; line-height: 32px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-ask-status { display: block; height: 32px; font-size: 24px; }
+.nest-ask-stack { display: flex; flex-direction: column; justify-content: flex-end; height: 114px; }
+.nest-ask-old { font-size: 27px; line-height: 38px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nest-ask-old.is-1 { opacity: 0.75; }
 .nest-ask-old.is-2 { opacity: 0.45; }
 .nest-ask-old.is-3 { opacity: 0.22; }
 .nest-ask-log { margin-top: 10px; animation: nestRise 420ms var(--sg-ease) both; }
-.nest-ask-log b { display: block; font-size: 34px; font-weight: 500; line-height: 1.2; letter-spacing: -0.01em; }
+.nest-ask-log b { display: block; font-size: 44px; font-weight: 500; line-height: 1.2; letter-spacing: -0.01em; }
 .nest-ask-log p {
-  margin: 10px 0 0;
-  font-size: 23px;
+  margin: 12px 0 0;
+  font-size: 29px;
   line-height: 1.35;
   color: var(--sg-ink-dim);
   overflow: hidden;
@@ -103,11 +103,11 @@ html, body {
   position: relative;
   display: flex;
   align-items: center;
-  height: 42px;
-  padding: 0 18px;
-  border-radius: 21px;
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 26px;
   box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  font-size: 19px;
+  font-size: 24px;
   font-weight: 600;
   white-space: nowrap;
   isolation: isolate;
@@ -127,18 +127,18 @@ html, body {
 .nest-chip.is-focus::before { opacity: 1; }
 
 /* --- the forecast (home.tsx WeatherSheet), dropping down under the weather --- */
-.nest-forecast { padding: 22px 30px 18px; }
-.nest-forecast-head { display: flex; align-items: baseline; justify-content: space-between; height: 24px; }
-.nest-forecast-head small { font-size: 19px; }
-.nest-forecast-now { display: flex; align-items: center; gap: 18px; height: 92px; margin-top: 8px; }
-.nest-forecast-now b { font-size: 60px; font-weight: 600; letter-spacing: -0.02em; }
-.nest-forecast-now small { font-size: 24px; }
-.nest-forecast-row { display: flex; justify-content: space-between; height: 108px; padding-top: 10px; box-shadow: inset 0 1px 0 var(--sg-line); }
-.nest-forecast-row > div { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 96px; }
-.nest-forecast-row small { font-size: 19px; }
-.nest-forecast-row b { font-size: 24px; font-weight: 600; }
+.nest-forecast { padding: 26px 36px 20px; }
+.nest-forecast-head { display: flex; align-items: baseline; justify-content: space-between; height: 30px; }
+.nest-forecast-head small { font-size: 24px; }
+.nest-forecast-now { display: flex; align-items: center; gap: 22px; height: 112px; margin-top: 10px; }
+.nest-forecast-now b { font-size: 72px; font-weight: 600; letter-spacing: -0.02em; }
+.nest-forecast-now small { font-size: 29px; }
+.nest-forecast-row { display: flex; justify-content: space-between; height: 134px; padding-top: 12px; box-shadow: inset 0 1px 0 var(--sg-line); }
+.nest-forecast-row > div { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 116px; }
+.nest-forecast-row small { font-size: 23px; }
+.nest-forecast-row b { font-size: 29px; font-weight: 600; }
 .nest-forecast-row b span { font-weight: 500; opacity: 0.55; }
-.nest-forecast-row.is-days > div { min-width: 150px; }
+.nest-forecast-row.is-days > div { min-width: 180px; }
 
 /* --- the content row (cards.tsx): one column per app, a small label over each --- */
 /* Cards are placed by transform, so when one opens the cards after it slide aside on the compositor; the others step
@@ -163,22 +163,22 @@ html, body {
 /* The opened row: each title rises in a beat after the one before it (the delay is set per tile). */
 .nest-rise { position: absolute; left: 0; top: 0; animation: nestRise 420ms var(--sg-ease) both; }
 .nest-col .nest-result-cap { position: absolute; }
-.nest-open { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; text-align: center; font-size: 24px; }
+.nest-open { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 22px; text-align: center; font-size: 30px; }
 .nest-open b { font-weight: 600; }
-.nest-open small { font-size: 18px; }
-.nest-col-label { position: absolute; left: 2px; top: 6px; font-size: 20px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
-.nest-col-label.is-answer { font-size: 22px; color: var(--sg-ink); }
-.nest-col-body { position: absolute; left: 0; top: 44px; }
+.nest-open small { font-size: 22px; }
+.nest-col-label { position: absolute; left: 2px; top: 6px; font-size: 26px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
+.nest-col-label.is-answer { font-size: 28px; color: var(--sg-ink); }
+.nest-col-body { position: absolute; left: 0; top: 54px; }
 .sg-glass > .nest-add { position: absolute; }
-.nest-add { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; }
+.nest-add { display: flex; align-items: center; justify-content: center; font-size: 27px; font-weight: 600; }
 /* Home: like the reference's speaker card, the state on top and the scenes as buttons below. */
-.nest-home-card { padding: 30px 26px; text-align: center; }
-.nest-home-card b { display: block; margin-top: 16px; font-size: 28px; font-weight: 600; }
-.nest-home-card small { font-size: 20px; }
+.nest-home-card { padding: 36px 30px; text-align: center; }
+.nest-home-card b { display: block; margin-top: 20px; font-size: 34px; font-weight: 600; }
+.nest-home-card small { font-size: 25px; }
 .nest-home-bulb {
   display: block;
-  width: 96px;
-  height: 96px;
+  width: 116px;
+  height: 116px;
   margin: 0 auto;
   border-radius: 50%;
   background: #ffc94d;
@@ -188,34 +188,34 @@ html, body {
 .nest-home-action {
   left: 20px;
   right: 20px;
-  height: 58px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 29px;
+  border-radius: 36px;
   box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  font-size: 22px;
+  font-size: 27px;
   font-weight: 600;
   isolation: isolate;
 }
 .nest-home-action.is-focus { color: var(--sg-focus-ink); }
 
-.nest-label-hint { margin-left: 14px; font-size: 19px; font-weight: 500; color: var(--sg-ink-dim); }
+.nest-label-hint { margin-left: 16px; font-size: 24px; font-weight: 500; color: var(--sg-ink-dim); }
 .nest-result-cap {
-  width: 360px;
+  width: 440px;
   opacity: 0;
   transition: opacity var(--sg-fade) var(--sg-ease), transform var(--sg-move) var(--sg-ease);
   will-change: transform, opacity;
 }
 .nest-result-cap.is-on { opacity: 1; }
-.nest-result-cap b { display: block; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nest-result-cap small { font-size: 18px; }
+.nest-result-cap b { display: block; font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-result-cap small { font-size: 23px; }
 
 .nest-empty { display: flex; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
-.nest-empty small { font-size: 24px; }
+.nest-empty small { font-size: 29px; }
 .sg-card.is-done b { text-decoration: line-through; }
 
-.nest-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 22px; font-weight: 600; }
+.nest-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 28px; font-weight: 600; }
 
 /* --- search --- */
 .nest-search-pill { display: flex; align-items: center; gap: 18px; padding: 0 22px 0 26px; border-radius: 34px; }
@@ -310,7 +310,7 @@ html, body {
 }
 .nest-col-ring.is-on { opacity: 1; }
 /* The assistant's one button, under the orb. */
-.nest-ask-button { position: absolute; height: 48px; padding: 0 24px; border-radius: 24px; font-size: 21px; }
+.nest-ask-button { position: absolute; height: 60px; padding: 0 30px; border-radius: 30px; font-size: 26px; }
 
 /* The assistant scrolls off with the row (home.tsx): moved and faded on its own layer, in step with the row. */
 .nest-assist {
@@ -320,3 +320,16 @@ html, body {
   transition: transform var(--sg-move) var(--sg-ease), opacity var(--sg-move) var(--sg-ease);
   will-change: transform, opacity;
 }
+
+/* --- the glass components on Nest's home, at sofa size: the catalog apps keep tv-kit's own sizes --- */
+.nest .sg-user { font-size: 34px; }
+.nest .sg-user small { font-size: 26px; }
+.nest .sg-card-row { font-size: 38px; }
+.nest .sg-card-meta { font-size: 29px; }
+.nest .sg-card small { font-size: 28px; margin: 10px 0 0 30px; }
+.nest .sg-tile-cap { left: 22px; bottom: 18px; font-size: 27px; }
+.nest .sg-tile-cap small { font-size: 23px; }
+.nest .sg-tile-badge { left: 18px; top: 16px; padding: 5px 14px; border-radius: 16px; font-size: 21px; }
+.nest .sg-app img, .nest .sg-app-letter { width: 80px; height: 80px; }
+.nest .sg-app-letter { font-size: 42px; line-height: 80px; border-radius: 20px; }
+.nest .sg-app small { font-size: 23px; }

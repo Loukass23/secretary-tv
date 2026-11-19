@@ -26,7 +26,7 @@ export const styleFor = (styles: Record<string, CardStyle>, key: string): CardSt
   styles[key] ?? DEFAULT_STYLES[key] ?? FALLBACK;
 
 /** Card height at Large: the tallest layout fills it, the others sit at its top. Same as CARD_H in cards.tsx. */
-const FULL_H = 420;
+const FULL_H = 540;
 const SCALE: Record<CardSize, number> = { s: 0.7, m: 0.85, l: 1 };
 
 export interface ItemBox {
@@ -54,13 +54,13 @@ export function collapsedShape(style: CardStyle): CardShape {
   const r = (v: number) => Math.round(v * k);
   switch (style.layout) {
     case "poster": {
-      const w = r(280);
+      const w = r(360);
       const h = r(FULL_H);
       return { w, h, count: 1, across: 1, boxes: [{ x: 0, y: 0, w, h, art: "poster" }] };
     }
     case "stills": {
-      const gap = r(18);
-      const w = r(340);
+      const gap = r(22);
+      const w = r(436);
       const h = Math.round((r(FULL_H) - gap) / 2);
       return {
         w,
@@ -71,9 +71,9 @@ export function collapsedShape(style: CardStyle): CardShape {
       };
     }
     case "grid": {
-      const w = r(112);
-      const h = r(168);
-      const gap = r(12);
+      const w = r(144);
+      const h = r(216);
+      const gap = r(16);
       return {
         w: 3 * w + 2 * gap,
         h: 2 * h + gap,
@@ -83,9 +83,9 @@ export function collapsedShape(style: CardStyle): CardShape {
       };
     }
     case "row": {
-      const w = r(180);
-      const h = r(270);
-      const gap = r(14);
+      const w = r(230);
+      const h = r(345);
+      const gap = r(18);
       return {
         w: 3 * w + 2 * gap,
         h,
@@ -99,7 +99,7 @@ export function collapsedShape(style: CardStyle): CardShape {
 
 // --- the expanded card: every item in one row, as the Ask answer row shows titles, then the app's Open tile ---
 
-export const EXPANDED = { w: 190, h: 285, stride: 210 } as const;
+export const EXPANDED = { w: 240, h: 360, stride: 264 } as const;
 /** The expanded card spans the screen between the 80px insets. */
 export const EXPANDED_W = 1920 - 2 * 80;
 

@@ -49,7 +49,9 @@ const write = (store: KeyValue, key: string, v: unknown) => {
 /** Where the weather is for: the SmartThings home first, then the build's place; null when neither is known. */
 export async function findPlace({ store, locations, env, fetch: f = fetch, now = Date.now() }: PlaceDeps): Promise<Place | null> {
   const cached = read<Place>(store, PLACE_KEY);
-  if (cached && (cached.from === "env" || now - cached.at < PLACE_TTL_MS)) return cached;
+  // A place from the build is kept until the build names a different one (an older TV kept it without its name).
+  const envName = env.WEATHER_CITY?.trim() || undefined;
+  if (cached && ((cached.from === "env" && cached.name === envName) || (cached.from !== "env" && now - cached.at < PLACE_TTL_MS))) return cached;
   if (locations) {
     try {
       const home = (await locations()).find((l) => typeof l.lat === "number" && typeof l.lon === "number");
@@ -67,8 +69,10 @@ export async function findPlace({ store, locations, env, fetch: f = fetch, now =
   if (!fromEnv) return cached;
   try {
     const at = "city" in fromEnv ? await geocode(fromEnv.city, f) : fromEnv;
+    // The name the build gave wins over the geocoder's spelling.
     if (!at) return cached;
-    const p: Place = { lat: at.lat, lon: at.lon, ...(at.name ? { name: at.name } : {}), from: "env", at: now };
+    const name = envName ?? at.name;
+    const p: Place = { lat: at.lat, lon: at.lon, ...(name ? { name } : {}), from: "env", at: now };
     write(store, PLACE_KEY, p);
     return p;
   } catch {
