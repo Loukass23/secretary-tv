@@ -13,6 +13,7 @@ import {
   Glass,
   type GlassMode,
   GlassRoot,
+  Icon,
   IconButton,
   ListCard,
   MediaTile,
@@ -137,7 +138,7 @@ export function Lab({ initial }: { initial: GlassMode }) {
           y={SEG.y}
           w={ICON_W}
           h={SEG.h}
-          icon={ICONS[i]}
+          icon={<Icon name={ICONS[i]} />}
           badge={i === 1}
           focused={on("top", SEGMENTS.length + i)}
         />

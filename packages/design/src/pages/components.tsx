@@ -11,7 +11,10 @@ import {
   GlassRoot,
   Glow,
   glowImage,
+  Icon,
   IconButton,
+  type IconName,
+  ICON_PATHS,
   ListCard,
   MediaTile,
   Scroller,
@@ -46,6 +49,14 @@ const ROW_GAP = 40;
 const WAVES: readonly WaveState[] = ["idle", "listening", "thinking", "speaking"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
 const CHIP = { w: 112, h: 120, stride: 126 };
+const NAMES = Object.keys(ICON_PATHS) as IconName[];
+const ACTIONS = NAMES.slice(0, NAMES.indexOf("clear"));
+const WEATHER = NAMES.slice(NAMES.indexOf("clear"));
+
+/** One icon at the IconButton's 34px on a glass square, with its name. */
+function iconSpec(name: IconName): Spec {
+  return { name, w: 96, h: 96, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name={name} />} /> };
+}
 
 export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: PageProps & { art: Art; group: number }) {
   const [focus, setFocus] = useState<Focus>({ row: 0, col: 0 });
@@ -60,9 +71,9 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
         specs: [
           { name: "Glass", w: 300, h: 120, render: (b, f) => <Glass {...b} focused={f} class="dz-panel"><b>Glass panel</b><small>Frost, fill and hairline</small></Glass> },
           { name: "Segmented", w: 470, h: 68, render: (b, f) => <Segmented {...b} items={["Home", "Films", "Shows", "Anime"]} picked={1} focusIndex={f ? 2 : -1} /> },
-          { name: "IconButton", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon="⌕" /> },
-          { name: "badge", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon="☾" badge /> },
-          { name: "count", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon="🔔" badge={3} /> },
+          { name: "IconButton", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="search" />} /> },
+          { name: "badge", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="lights" />} badge /> },
+          { name: "count", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="bell" />} badge={3} /> },
           { name: "Fab", w: 88, h: 88, render: (b, f) => <Fab x={b.x} y={b.y} focused={f} /> },
         ],
       },
@@ -152,6 +163,16 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
           },
         ],
       },
+    ],
+    // Every line icon, on a quiet button as Nest's header shows them, and bare at the forecast's size.
+    [
+      { title: "Icons · actions", specs: ACTIONS.map((n) => iconSpec(n)) },
+      { title: "Icons · weather", specs: WEATHER.map((n) => iconSpec(n)) },
+      { title: "In use", specs: [
+        { name: "Header button", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} class="nest-quiet" icon={<Icon name="bell" />} badge={2} /> },
+        { name: "Settings button", w: 120, h: 68, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="settings" />} /> },
+        { name: "Voice, listening", w: 140, h: 68, render: (b, f) => <IconButton {...b} focused={f} icon={<><Icon name="mic" />…</>} /> },
+      ] },
     ],
   ];
   const rows = groups[group] ?? groups[0];

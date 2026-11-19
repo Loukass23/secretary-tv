@@ -2,6 +2,7 @@
 // from the caller, so screens keep their own remote navigation (see grid.ts / use-keys.ts).
 import type { ComponentChildren } from "preact";
 import { type BoxProps, Glass } from "./Glass.tsx";
+import { type IconName, iconMask } from "./icons.ts";
 
 /** The control's own class plus any the caller passed. */
 const cx = (own: string, extra?: string) => (extra ? `${own} ${extra}` : own);
@@ -194,4 +195,14 @@ export function Scroller({
       </div>
     </div>
   );
+}
+
+/**
+ * One line icon in the surrounding text colour. Without `size` it is 1em, so it follows the font size of
+ * whatever holds it (an IconButton's 34px, a header's 30px).
+ */
+export function Icon({ name, size, class: cls }: { name: IconName; size?: number; class?: string }) {
+  const mask = iconMask(name);
+  const s = size ? `${size}px` : "1em";
+  return <i class={cls ? `sg-ic ${cls}` : "sg-ic"} style={{ width: s, height: s, WebkitMaskImage: mask, maskImage: mask }} aria-hidden="true" />;
 }

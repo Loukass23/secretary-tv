@@ -98,6 +98,16 @@
 
 /* --- icon button --- */
 .sg-icon { display: flex; align-items: center; justify-content: center; font-size: 34px; border-radius: 20px; }
+.sg-icon > span { display: flex; align-items: center; }
+
+/* --- line icons (icons.tsx): one-colour masks in the text colour, so focus switches their ink with the text --- */
+.sg-ic {
+  display: block;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
 .sg-glass > .sg-badge {
   position: absolute;
   bottom: 8px;

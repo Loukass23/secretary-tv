@@ -18,6 +18,8 @@ same screen.
 - **Components**: every glass component (`Glass`, `Segmented`, `IconButton`, `DateChip`, `AppChip`, `Avatar`, `Fab`,
   `ListCard`, `MediaTile`, `Scroller`, `VoiceWave`, `Glow`) in its states, in two groups. Arrows move between them; OK
   goes inside the Scroller (Back leaves) and cycles the wave's state. "Focus all" shows every focused state at once.
+  A third group shows the line icon set (`glass/icons.ts`, drawn by `Icon`): every action and weather icon, and
+  the icon buttons as the apps use them.
 - **Screens**: Nest's home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), Nest showing an answer,
   and the catalog home (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the

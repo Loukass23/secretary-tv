@@ -1,6 +1,6 @@
 // Raptor Spotlight search in glass. Layout only; data and keys live in app.tsx.
 import { type Focus, windowOf } from "@secretary/tv-kit";
-import { Glass, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, Icon, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
 
 export const KEY_ROWS: readonly (readonly string[])[] = [
@@ -55,7 +55,7 @@ export function Search({ focus, time, query, imeActive, recent, showRecent, resu
   return (
     <>
       <Glass x={PAD} y={96} w={1420} h={68} class="nest-search-pill">
-        <span class="nest-search-icon">⌕</span>
+        <Icon name="search" class="nest-search-icon" />
         {query ? (
           <span class="nest-search-query">
             {query}

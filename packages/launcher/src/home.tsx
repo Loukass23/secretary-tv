@@ -3,12 +3,11 @@
 // app, running off the right edge. Layout only; data and keys live in app.tsx.
 import { windowOf } from "@secretary/tv-kit";
 import { useRef } from "preact/hooks";
-import { Avatar, Glass, Glow, IconButton, MediaTile, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
+import { Avatar, Glass, Glow, Icon, IconButton, type IconName, MediaTile, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
 import type { Weather } from "./assistant.ts";
 import { CARD_H, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, HEADER_SEARCH, HEADER_WEATHER } from "./nest-nav.ts";
-import { glyphMask } from "./weather.ts";
 
 const PAD = 80;
 const HEAD_Y = 56;
@@ -67,8 +66,7 @@ const day = (iso: string, k: number) =>
   k === 0 ? "Today" : new Date(`${iso}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
 
 function Glyph({ of, size }: { of: Weather["glyph"]; size: number }) {
-  if (!of) return null;
-  return <i class="nest-glyph" style={{ width: `${size}px`, height: `${size}px`, WebkitMaskImage: glyphMask(of), maskImage: glyphMask(of) }} />;
+  return of ? <Icon name={of} size={size} /> : null;
 }
 
 /** The forecast under the weather: now, the next six hours, today and the next three days. */
@@ -145,7 +143,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
             <Glyph of={weather.glyph} size={46} />
             <div>
               <b>{weather.tempC}°</b>
-              <small>{weather.label}</small>
+              <small>{weather.place ? `${weather.place} · ${weather.label}` : weather.label}</small>
             </div>
           </div>
         )}
@@ -154,7 +152,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
           <small>{now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</small>
         </div>
       </div>
-      {(["👥", "⌕", "💡", "🔔"] as const).map((icon, k) => (
+      {(["party", "search", "lights", "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
         <IconButton
           key={icon}
           x={ICONS_X + k * (ICON.w + ICON.gap)}
@@ -162,7 +160,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
           w={ICON.w}
           h={ICON.h}
           class="nest-quiet"
-          icon={icon}
+          icon={<Icon name={icon} />}
           badge={k === 3 ? open : undefined}
           focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_BELL][k])}
         />

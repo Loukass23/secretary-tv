@@ -6,7 +6,7 @@ import {
   useKeys,
   windowOf,
 } from "@secretary/tv-kit";
-import { Glass, GlassRoot, IconButton, ListCard, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, GlassRoot, Icon, IconButton, ListCard, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { posterUrl, searchCatalogsClient } from "../lib/cinemeta.ts";
 import { addonStore, loadDebrid, pluginStore, saveDebrid } from "../lib/plugins.ts";
@@ -574,7 +574,7 @@ export function HubOverlay({
     <div class="hub-glass" style={active ? undefined : "display:none"}>
       <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={base.backdrop?.frost} class="hub">
         <Glass x={PAD} y={TOP_Y} w={760} h={68} focused={focus.row === 0 && focus.col === 0} class="hub-search">
-          <span class="hub-search-icon">⌕</span>
+          <Icon name="search" class="hub-search-icon" />
           {query ? (
             <span class="hub-search-query">
               {query}
@@ -585,7 +585,7 @@ export function HubOverlay({
           )}
           <span class="hub-keycap">CH-</span>
         </Glass>
-        <IconButton x={860} y={TOP_Y} w={140} h={68} icon={imeActive ? "🎤…" : "🎤"} focused={focus.row === 0 && focus.col === 1} />
+        <IconButton x={860} y={TOP_Y} w={140} h={68} icon={imeActive ? <><Icon name="mic" />…</> : <Icon name="mic" />} focused={focus.row === 0 && focus.col === 1} />
         <Segmented
           x={1030}
           y={TOP_Y}
@@ -595,7 +595,7 @@ export function HubOverlay({
           picked={sectionIdx + 1}
           focusIndex={focus.row === 0 && focus.col >= 2 && focus.col <= 5 ? focus.col - 2 : -1}
         />
-        <IconButton x={1610} y={TOP_Y} w={110} h={68} icon="⚙" focused={focus.row === 0 && focus.col === 6} />
+        <IconButton x={1610} y={TOP_Y} w={110} h={68} icon={<Icon name="settings" />} focused={focus.row === 0 && focus.col === 6} />
         <div class="hub-clock">{clockText}</div>
 
         {tab === "settings" && (

@@ -31,23 +31,16 @@ html, body {
 .nest-menu-item.is-focus::before,
 .nest-home-action.is-focus::before { opacity: 1; }
 .nest-weather.is-focus { color: var(--sg-focus-ink); }
-.nest-weather.is-focus .nest-glyph { background: var(--sg-focus-ink); }
 .nest-weather b, .nest-time b { display: block; font-size: 30px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
 .nest-weather small, .nest-time small { font-size: 19px; white-space: nowrap; }
+/* The place and the sky on one line; a long place name ends in an ellipsis rather than pushing the clock. */
+.nest-weather small { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 .nest-weather.is-focus small { color: var(--sg-focus-ink-dim); }
 .nest-time { text-align: right; }
 /* Header buttons: no fill until focused, so the top stays as quiet as the reference's single bell. */
 .sg-glass.nest-quiet > .sg-frost,
 .sg-glass.nest-quiet::after { opacity: 0; }
 .sg-glass.nest-quiet { font-size: 30px; }
-/* Weather line icons (weather.ts): one-colour masks in the theme's ink. */
-.nest-glyph {
-  display: block;
-  flex: none;
-  background: var(--sg-ink);
-  -webkit-mask: center / contain no-repeat;
-  mask: center / contain no-repeat;
-}
 .nest-label { font-size: 30px; font-weight: 600; }
 .nest-kicker {
   display: block;
