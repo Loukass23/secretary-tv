@@ -26,16 +26,16 @@ export const NIGHT: ColourTokens = {
   "focus-ink-dim": "rgba(16, 17, 20, 0.6)",
 };
 
-/** Daylight: the light glass (`.sg-root.sg-day`). */
+/** Daylight: the light glass (`.sg-root.sg-day`). Both dim inks hold 4.5:1 on their grounds, even over the lavender glow. */
 export const DAY: ColourTokens = {
   fill: "rgba(255, 255, 255, 0.42)",
   line: "rgba(255, 255, 255, 0.8)",
   raised: "rgba(44, 38, 110, 0.09)",
   ink: "#1d1c2b",
-  "ink-dim": "rgba(29, 28, 43, 0.56)",
+  "ink-dim": "rgba(29, 28, 43, 0.7)",
   focus: "#5b52e6",
   "focus-ink": "#ffffff",
-  "focus-ink-dim": "rgba(255, 255, 255, 0.78)",
+  "focus-ink-dim": "rgba(255, 255, 255, 0.88)",
 };
 
 /** Page colour behind the wallpaper, per theme. */
