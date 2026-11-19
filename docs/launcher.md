@@ -113,22 +113,41 @@ off the right edge (`src/cards.tsx`). `src/nest-nav.ts` moves focus between them
 
 | Area | Where | OK does |
 | --- | --- | --- |
-| Profile | top left | opens the profile menu: Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
+| Profile | top left; under the name, an icon for Nuvio sync and one for the server (an alert dot when it is offline), or a line when something needs doing | opens the profile menu: what the TV is connected to in words, then Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
 | Weather | top right | opens the forecast under it (next 6 hours, today and 3 days); Back or an arrow closes it |
 | Watch together, Search, Lights, Bell | top right, no fill until focused | the party; search; the Lights panel (or the next scene); the first open reminder in its card (the badge counts them) |
-| Ask Nest chips | left, under the wave | Ask listens on the room microphone (or opens the TV keyboard); the others send that prompt |
+| Ask Assistant | left, under the orb | listens on the room microphone (or opens the TV keyboard). At rest the wave draws into a small orb; it opens into the ribbons while Nest listens, thinks or speaks |
 | Recent | first card, while there is an answer | goes back to that answer (the titles, the forecast, the lights, the reminder, or asks again) |
-| Continue · Cinema | a tall poster | resumes the film in Cinema; with nothing in progress it shows tonight's top film |
-| Next up · Shows | two stacked backdrops | resumes the episode in Shows; top series fill an empty slot |
-| Anime | a 3×2 grid of covers | resumes or opens in Anime; trending covers fill the grid |
+| Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
+| Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
+| Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
 | Ask Nest results | in place of the row | opens the title in its app; Back brings the row back |
 
-Arrows move along a card's items and then on to the next card, keeping to the same line; Up from the top of a card goes
-to the header. The row scrolls just enough to keep the focused card whole and renders only the cards around focus.
-Trending titles come from the catalogs straight from the TV once a day (`localStorage["nest.trending"]`).
+Left and Right move from card to card, a ring around the whole card. OK goes inside it, on its first item. Inside,
+the arrows stay in the card, Up from the top goes back to the card, and Back leaves it.
+
+### Opening a media card
+
+Cinema, Shows and Anime hold up to 8 titles each: what is in progress first, then the catalog's picks. OK opens the card
+in place into one row of all of them, at the Ask results size, with the app's "Open Cinema" tile last (`src/cards.tsx`,
+`MediaRow`). The cards after it slide right by transform and every other card steps back to 35% opacity; the folded
+tiles fade out and the titles rise in a beat apart (opacity and transform only, on their own layers). Focus lands on the
+first title. The focused title's name, its line (episode or year) and up to three lines of its synopsis sit in a fixed
+panel at the left under the row (from the catalog, or Cinemeta and Kitsu for titles in progress). Up or Back folds the card again.
+
+### Card styles (long OK)
+
+A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu
+beside it: Poster, Stills, Grid or Row, and a size (Small, Medium, Large); every layout is the same height at a size. The card previews each line as the remote
+reaches it; OK keeps it, Back puts the old style back. Styles are saved on the TV (`localStorage["nest.cardStyles"]`,
+`src/card-style.ts`); the defaults are today's (a poster, two stills, a grid). A short OK on such a card acts on the
+keyup, so the hold can be told apart; OK everywhere else still acts on the keydown. Up from a card goes to the header. The row and the assistant scroll as one strip: once a card would pass the right edge, the row moves left and the
+assistant slides off and fades with it (transform and opacity, on the row's timing), so the cards get the whole width.
+Back at the first cards, or on Ask Assistant, it slides back in. All the cards are drawn (seven at most).
+Trending titles come from the catalogs straight from the TV once a day (`localStorage["nest.trending.2"]`).
 
 Focus starts on the first card. CH- or Search opens search from anywhere, CH+ jumps to the Search button, the microphone
 key asks Nest by voice (see "Room microphone"), Green cycles the theme (automatic, Daylight, Night), Blue mutes spoken

@@ -23,6 +23,8 @@ export interface SlimTitle {
   rating: string;
   poster?: string;
   background?: string;
+  /** A few lines about it, from the catalog, when it has them. */
+  description?: string;
 }
 
 export interface UnifiedResumeEntry {

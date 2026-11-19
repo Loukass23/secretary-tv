@@ -2,6 +2,7 @@
 // vignette live in one bitmap: gradients are the slowest fill on the TV (docs/lessons.md), so
 // they are painted here once, never by CSS.
 import { blurBackdrop, PAGE_H as H, PAGE_W as W } from "./backdrop.ts";
+import { TINTS } from "./tokens.ts";
 
 export interface Backdrop {
   wallpaper: string;
@@ -30,12 +31,7 @@ export function glow(g: CanvasRenderingContext2D, x: number, y: number, r: numbe
   g.fillRect(x - r, y - r, r * 2, r * 2);
 }
 
-/** The warm glow top right, "r,g,b": each app tints its backdrop (Nest and Cinema orange, Shows blue, Anime rose). */
-export const TINTS = {
-  orange: "255,90,38",
-  blue: "90,140,255",
-  rose: "236,64,122",
-} as const;
+export { TINTS } from "./tokens.ts";
 
 function drawWallpaper(g: CanvasRenderingContext2D, tint: string): void {
   g.fillStyle = "#07080b";

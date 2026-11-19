@@ -8,7 +8,8 @@ Thanks for helping. A few rules keep the project small and safe to host:
 - **No credentials.** Keys live in `.env` / `.env.tizen` (gitignored) and on the TV. Never commit a built `.wgt`.
 - **Debrid code** goes in `packages/core`, one file per service behind the shared interface in `debrid.ts`.
 - **Measure on a TV** when a change touches the player, focus or rendering, and note the numbers in
-  `docs/performance.md`. `docs/lessons.md` lists what Tizen does not allow.
+  `docs/performance.md`. `docs/lessons.md` lists what Tizen does not allow. Try UI first in the design workbench
+  (`pnpm design`, `docs/design.md`), whose linter flags those rules on a desktop.
 
 Before opening a PR:
 

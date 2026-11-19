@@ -23,7 +23,7 @@ export const EVENTS = [
   ["Sleep", "Alarm 7:00am", "11:45pm", "#9c9b97"],
 ];
 
-export const ICONS = ["⌕", "🔔"];
+export const ICONS = ["search", "bell"] as const;
 
 export type Area = "top" | "dates" | "cards" | "weather" | "tiles";
 const LENGTH: Record<Area, number> = {

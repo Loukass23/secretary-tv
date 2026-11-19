@@ -2,7 +2,8 @@
    Rules measured on the reference TV (docs/performance.md, glass lab):
    - no live blur: the frost is a once-blurred backdrop (backdrop.ts); "live" exists for comparison only
    - no soft outer shadows: repainting them on focus changes cost long frames; hairlines instead
-   - focus fades a white sheet in with opacity on its own layer; movement is transform only */
+   - focus fades a white sheet in with opacity on its own layer; movement is transform only
+   Tokens: tokens.ts holds the same values as data (test/tokens.test.ts keeps them in step). */
 .sg-root {
   --sg-fill: rgba(255, 255, 255, 0.07);
   --sg-line: rgba(255, 255, 255, 0.11);
@@ -97,6 +98,16 @@
 
 /* --- icon button --- */
 .sg-icon { display: flex; align-items: center; justify-content: center; font-size: 34px; border-radius: 20px; }
+.sg-icon > span { display: flex; align-items: center; }
+
+/* --- line icons (icons.tsx): one-colour masks in the text colour, so focus switches their ink with the text --- */
+.sg-ic {
+  display: block;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
 .sg-glass > .sg-badge {
   position: absolute;
   bottom: 8px;
@@ -172,10 +183,12 @@
   box-shadow: inset 0 0 0 4px var(--sg-focus);
   opacity: 0;
   transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
 }
 .sg-tile.is-focus { transform: scale(1.06); }
 .sg-tile.is-focus::before { opacity: 1; }
-.sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: 22px; }
+/* Captions sit on artwork, so they keep a light ink in both themes (sg-ink is dark by day). */
+.sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: 22px; color: #f4f4f6; }
 .sg-tile-cap small { font-size: 19px; color: rgba(255, 255, 255, 0.75); }
 .sg-tile-count {
   position: absolute;
@@ -222,6 +235,7 @@
   background: #1d2240;
   box-shadow: inset 0 0 0 2px rgba(120, 140, 255, 0.5), inset 0 0 0 26px #1d2240, inset 0 0 0 40px #9aa6d8;
   transition: transform var(--sg-move) var(--sg-ease);
+  will-change: transform;
 }
 .sg-avatar.is-own {
   display: flex;
@@ -245,6 +259,7 @@
   line-height: 86px;
   text-align: center;
   transition: transform 220ms var(--sg-ease);
+  will-change: transform;
 }
 .sg-fab.is-focus { transform: scale(1.1); }
 
@@ -282,9 +297,28 @@
   from { transform: translate3d(-3%, 0, 0) scaleY(1); }
   to { transform: translate3d(3%, 0, 0) scaleY(-0.8); }
 }
+/* At rest the ribbons draw in to the middle and fade, and the orb grows in their place (transform and opacity only). */
 .sg-wave.is-idle .sg-wave-amp i { animation-duration: 5s; }
 .sg-wave.is-idle .sg-wave-amp i.sg-wave-r1 { animation-duration: 3.8s; }
 .sg-wave.is-idle .sg-wave-amp i.sg-wave-r2 { animation-duration: 6.4s; }
+.sg-wave-orb {
+  position: absolute;
+  top: 0;
+  background: center / 100% 100% no-repeat;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 500ms var(--sg-ease), transform 600ms var(--sg-ease);
+  will-change: transform, opacity;
+}
+.sg-wave.is-idle:not(.is-live) .sg-wave-orb { opacity: 1; transform: scale(1); animation: sgOrb 4s ease-in-out 600ms infinite alternate; }
+@keyframes sgOrb {
+  from { transform: scale(1); }
+  to { transform: scale(0.9); }
+}
+.sg-wave.is-idle:not(.is-live) .sg-wave-set { opacity: 0; transform: scale(0.08, 0.3); }
+/* Hidden at rest, so they need not move. */
+.sg-wave.is-idle:not(.is-live) .sg-wave-amp i { animation-play-state: paused; }
 .sg-wave.is-listening .sg-wave-amp { transform: scaleY(1); opacity: 1; }
 .sg-wave.is-thinking .sg-wave-amp { transform: scaleY(0.65); opacity: 1; }
 .sg-wave.is-thinking .sg-wave-amp i { animation-duration: 0.9s; }
@@ -292,7 +326,7 @@
 .sg-wave.is-thinking .sg-wave-amp i.sg-wave-r2 { animation-duration: 1.1s; }
 .sg-wave.is-speaking .sg-wave-amp { transform: scaleY(0.85); opacity: 1; }
 /* Two ribbon sets: cool while the room speaks, warm while Nest answers. Swapped by opacity on their own layers. */
-.sg-wave-set { position: absolute; inset: 0; transition: opacity 500ms var(--sg-ease); will-change: opacity; }
+.sg-wave-set { position: absolute; inset: 0; transition: opacity 500ms var(--sg-ease), transform 600ms var(--sg-ease); will-change: opacity, transform; }
 .sg-wave-nest { opacity: 0; }
 .sg-wave.is-speaking .sg-wave-nest { opacity: 1; }
 .sg-wave.is-speaking .sg-wave-room { opacity: 0; }
@@ -316,10 +350,10 @@
   --sg-line: rgba(255, 255, 255, 0.8);
   --sg-raised: rgba(44, 38, 110, 0.09);
   --sg-ink: #1d1c2b;
-  --sg-ink-dim: rgba(29, 28, 43, 0.56);
+  --sg-ink-dim: rgba(29, 28, 43, 0.7);
   --sg-focus: #5b52e6;
   --sg-focus-ink: #ffffff;
-  --sg-focus-ink-dim: rgba(255, 255, 255, 0.78);
+  --sg-focus-ink-dim: rgba(255, 255, 255, 0.88);
   background-color: #eee9f3;
 }
 

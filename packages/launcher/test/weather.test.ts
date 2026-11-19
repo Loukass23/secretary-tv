@@ -38,6 +38,17 @@ test("without SmartThings coordinates, the build's place; a city is looked up on
   assert.equal(await findPlace({ store: memory(), env: {} }), null);
 });
 
+test("coordinates and a city: the forecast is for the coordinates, under the city's name", async () => {
+  const env = { WEATHER_LAT: "52.52", WEATHER_LON: "13.41", WEATHER_CITY: "Example Bay" };
+  const p = await findPlace({ store: memory(), env, fetch: forecast });
+  assert.deepEqual([p?.lat, p?.lon, p?.name], [52.52, 13.41, "Example Bay"]);
+  // A place an older build kept without its name is looked up again once the build names it.
+  const store = memory();
+  store.setItem("nest.place", JSON.stringify({ lat: 52.52, lon: 13.41, from: "env", at: 0 }));
+  const q = await findPlace({ store, env, fetch: forecast, now: 1 });
+  assert.equal(q?.name, "Example Bay");
+});
+
 test("SmartThings down: yesterday's home still serves", async () => {
   const store = memory();
   await findPlace({ store, locations: async () => [{ id: "l", name: "Home", lat: 1, lon: 2 }], env: {}, now: 0 });

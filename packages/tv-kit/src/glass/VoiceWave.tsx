@@ -1,10 +1,11 @@
 // The assistant's wave: three tapered ribbons, drawn once as SVG images and moved by transform only
 // (translate and a flipping scaleY), so it animates on the compositor like the rest of the glass
 // (docs/performance.md, glass lab). The state sets how tall and how fast it moves; while someone speaks (the room
-// microphone) or Nest does (a spoken reply), setWaveLevel() drives its height from the voice instead.
+// microphone) or Nest does (a spoken reply), setWaveLevel() drives its height from the voice instead. At rest
+// ("idle") the ribbons draw in to the middle and an orb takes their place, all by transform and opacity.
 import { useEffect, useRef } from "preact/hooks";
 
-/** idle: a slow ripple; listening: full height; thinking: low and fast; speaking: tall while a reply arrives. */
+/** idle: the orb at rest; listening: full height; thinking: low and fast; speaking: tall while a reply arrives. */
 export type WaveState = "idle" | "listening" | "thinking" | "speaking";
 
 const W = 800;
@@ -42,6 +43,16 @@ const NEST = [
   ribbon(2, 1.6, 26, 5, "#ffb36b", "#b06cff"),
   ribbon(1, 3.1, 20, 9, "#ff7ad9", "#ffd36b"),
 ];
+
+/** The orb the ribbons retract into: a soft violet sphere with a highlight, drawn once. */
+const ORB = (() => {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+    `<defs><radialGradient id="b" cx=".38" cy=".34" r=".7"><stop offset="0" stop-color="#e8e2ff"/>` +
+    `<stop offset=".35" stop-color="#9b8cff"/><stop offset=".75" stop-color="#5b6cff"/><stop offset="1" stop-color="#4fc3ff"/>` +
+    `</radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#b)"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+})();
 
 // --- the level bus: one voice at a time, read by every mounted wave ---
 
@@ -107,8 +118,10 @@ export function VoiceWave({ x, y, w, h, state }: { x: number; y: number; w: numb
       class={`sg-wave is-${state}`}
       style={{ left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` }}
     >
+      {/* The orb sits at the wave's start, under the text column; the ribbons draw back into it. */}
+      <span class="sg-wave-orb" style={{ backgroundImage: ORB, width: `${h}px`, height: `${h}px`, left: 0 }} />
       {[ROOM, NEST].map((set, s) => (
-        <span key={s} class={`sg-wave-set sg-wave-${s ? "nest" : "room"}`}>
+        <span key={s} class={`sg-wave-set sg-wave-${s ? "nest" : "room"}`} style={{ transformOrigin: `${h / 2}px 50%` }}>
           {set.map((bg, i) => (
             <span key={i} class="sg-wave-amp">
               <i class={`sg-wave-r${i}`} style={{ backgroundImage: bg }} />

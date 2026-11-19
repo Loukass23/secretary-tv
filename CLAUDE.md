@@ -28,7 +28,8 @@ pnpm workspace, one package per folder in `packages/`. Packages import each othe
 | `nuvio` | Nuvio Cloud client |
 | `smartthings` | SmartThings client used from the TV: devices, scenes, OAuth refresh, home alerts and by-name commands |
 | `party` | Watch-party Cloudflare Worker and Durable Object |
-| `tv-kit` | Focus grid, keys, glass components, perf marks, Vite plugin, deploy and inspector scripts |
+| `tv-kit` | Focus grid, keys, glass components and tokens, perf marks, Vite plugin, deploy and inspector scripts |
+| `design` | Desktop design workbench (`pnpm design`): tokens, components and real screens with a TV-rules linter |
 
 ## Commands
 
@@ -70,7 +71,10 @@ canvas UI framework. The measured reasons are in `docs/performance.md` (Glass la
 - Full-page art goes on its own layer, decoded before it is shown; frost swaps wait until focus rests. Long lists
   render only the rows around focus.
 
-When a change touches the player, focus or rendering, measure it on a TV with `cdp.mjs walk` and add the numbers to
+Try designs first in the workbench (`pnpm design`, `docs/design.md`): the TV's own components at 1920x1080 with
+the keyboard as the remote, Night/Daylight, and a linter for the rules above. Tokens live in `glass/tokens.ts` and
+`glass.css` together (a test keeps them in step). The workbench does not measure frames: when a change touches the
+player, focus or rendering, measure it on a TV with `cdp.mjs walk` and add the numbers to
 `docs/performance.md`.
 
 ### Restyle status (checked 2026-10-31)

@@ -62,8 +62,9 @@ export function weatherGlyph(code: number, isDay: boolean): WeatherGlyph {
 export function weatherPlaceFromEnv(env: Record<string, string | undefined>): WeatherPlace | undefined {
   const lat = Number(env.WEATHER_LAT);
   const lon = Number(env.WEATHER_LON);
-  if (env.WEATHER_LAT && env.WEATHER_LON && Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
   const city = env.WEATHER_CITY?.trim();
+  // Coordinates win for the forecast; the city, when given too, is the name the TV shows.
+  if (env.WEATHER_LAT && env.WEATHER_LON && Number.isFinite(lat) && Number.isFinite(lon)) return city ? { lat, lon, name: city } : { lat, lon };
   return city ? { city } : undefined;
 }
 

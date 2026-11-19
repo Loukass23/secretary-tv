@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@secretary/launcher", "exec", "vite", "--port", "5179", "--strictPort"],
       "port": 5179
+    },
+    {
+      "name": "design",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@secretary/design", "dev"],
+      "port": 5180
     }
   ]
 }

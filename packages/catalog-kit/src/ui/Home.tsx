@@ -5,6 +5,7 @@ import { type Dir, type Focus, move, useKeys, windowOf } from "@secretary/tv-kit
 import {
   Glass,
   GlassRoot,
+  Icon,
   IconButton,
   MediaTile,
   Segmented,
@@ -282,8 +283,8 @@ export function Home({
         {clockText}
       </div>
       <Segmented {...SEG} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
-      <IconButton x={ICON_X[0]} y={SEG.y} w={ICON_W} h={SEG.h} icon="⌕" focused={topIdx === TOP_SEARCH} />
-      <IconButton x={ICON_X[1]} y={SEG.y} w={ICON_W} h={SEG.h} icon="⚙" focused={topIdx === TOP_SETTINGS} />
+      <IconButton x={ICON_X[0]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
+      <IconButton x={ICON_X[1]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
 
       <Glass {...INFO} class="cat-info">
         <span class="cat-kicker">{kicker}</span>

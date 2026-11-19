@@ -13,6 +13,7 @@ interface RawSearchMeta {
   imdbRating?: string;
   poster?: string;
   background?: string;
+  description?: string;
 }
 
 function stripSeasonSuffix(name: string): string {
@@ -48,6 +49,7 @@ function groupAnimeSearch(metas: readonly RawSearchMeta[]): SlimTitle[] {
       rating: base.imdbRating ?? "",
       poster: base.poster?.replace("/medium.", "/small."),
       background: base.background,
+      ...(about(base.description) ? { description: about(base.description) } : {}),
     });
   }
   return out;
@@ -164,7 +166,13 @@ export async function discoverCatalog(
   return out;
 }
 
+/** A catalog's description, trimmed to what fits under a title on the TV. */
+export const about = (d: string | undefined): string | undefined => {
+  const t = d?.replace(/\s+/g, " ").trim();
+  return t ? (t.length > 320 ? `${t.slice(0, 317).replace(/\s\S*$/, "")}…` : t) : undefined;
+};
+
 function withArt(t: SlimTitle | null, m: RawSearchMeta): SlimTitle | null {
   if (!t) return null;
-  return { ...t, poster: m.poster?.replace("/medium/", "/small/"), background: m.background };
+  return { ...t, poster: m.poster?.replace("/medium/", "/small/"), background: m.background, ...(about(m.description) ? { description: about(m.description) } : {}) };
 }

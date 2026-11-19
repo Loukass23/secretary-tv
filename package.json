@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.8.1",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "design": "pnpm --filter @secretary/design dev",
     "test": "node --test --experimental-strip-types \"packages/*/test/*.test.ts\""
   },
   "devDependencies": {
