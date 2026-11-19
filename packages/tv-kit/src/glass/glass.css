@@ -2,7 +2,8 @@
    Rules measured on the reference TV (docs/performance.md, glass lab):
    - no live blur: the frost is a once-blurred backdrop (backdrop.ts); "live" exists for comparison only
    - no soft outer shadows: repainting them on focus changes cost long frames; hairlines instead
-   - focus fades a white sheet in with opacity on its own layer; movement is transform only */
+   - focus fades a white sheet in with opacity on its own layer; movement is transform only
+   Tokens: tokens.ts holds the same values as data (test/tokens.test.ts keeps them in step). */
 .sg-root {
   --sg-fill: rgba(255, 255, 255, 0.07);
   --sg-line: rgba(255, 255, 255, 0.11);
