@@ -140,6 +140,7 @@ pnpm typecheck
 - `docs/watch-party.md`: watching together, and deploying the Worker.
 - `docs/launcher.md`: Secretary Nest, and why the Home button is not rebound.
 - `docs/performance.md`: measured numbers and the reasoning behind them.
+- `docs/design.md`: the design workbench (`pnpm design`), tokens and the TV rules linter.
 - `docs/lessons.md`: what the TV does and does not allow.
 - `docs/legacy-port-plan.md`: design notes for the player and sources work.
 

@@ -1,0 +1,20 @@
+{
+  "name": "@secretary/design",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop design workbench for the glass UI: tokens, components and real screens at 1920x1080, never built for the TV",
+  "scripts": {
+    "dev": "vite --port 5180 --strictPort"
+  },
+  "dependencies": {
+    "@secretary/catalog-kit": "workspace:*",
+    "@secretary/launcher": "workspace:*",
+    "@secretary/tv-kit": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "vite": "^6.0.0"
+  }
+}
