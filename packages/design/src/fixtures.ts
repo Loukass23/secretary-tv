@@ -3,7 +3,8 @@
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
-import type { RowColumn, Tile } from "@secretary/launcher/src/cards.tsx";
+import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
+import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
 import { type Art, TITLES } from "./art.ts";
 
@@ -57,33 +58,37 @@ const title = (art: Art, i: number): Title => ({
   background: art.backgrounds[i % art.backgrounds.length],
 });
 
-export function nestColumns(art: Art): RowColumn[] {
-  const tile = (i: number, extra: Partial<Tile> = {}): Tile => ({
-    src: art.posters[i],
-    title: TITLES[i],
-    ...extra,
+/** A media card's titles: the first `going` in progress, the rest picks. */
+function media(art: Art, from: number, n: number, going: number, sub: (i: number) => string): MediaItem[] {
+  return Array.from({ length: n }, (_, k) => {
+    const i = (from + k) % TITLES.length;
+    return {
+      poster: art.posters[i],
+      still: art.stills[i],
+      title: TITLES[i],
+      sub: sub(k),
+      ...(k < going ? { resume: true, progress: 0.25 + 0.15 * k } : k === going ? { badge: "Top pick" } : {}),
+    };
+  });
+}
+
+/** Today's styles unless the workbench's own menu changed them (`styles`). */
+export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): RowColumn[] {
+  const card = (key: string, name: string, unit: string, label: string, items: MediaItem[]): RowColumn => ({
+    kind: "media",
+    key,
+    name,
+    unit,
+    label,
+    items,
+    style: styleFor(styles, key),
+    open: { label: `Open ${name}`, run: noop },
+    run: noop,
   });
   return [
-    {
-      key: "cinema",
-      label: "Cinema",
-      run: noop,
-      launch: { label: "Open Cinema", run: noop },
-      kind: "stack",
-      tiles: [
-        { src: art.stills[0], title: TITLES[0], sub: "42 min left", progress: 0.6 },
-        { src: art.stills[1], title: TITLES[1], sub: "New", badge: "4K" },
-      ],
-    },
-    { key: "shows", label: "Shows", run: noop, launch: { label: "Open Shows", run: noop }, kind: "poster", tile: tile(2, { sub: "S02E05", progress: 0.3 }) },
-    {
-      key: "anime",
-      label: "Anime",
-      run: noop,
-      launch: { label: "Open Anime", run: noop },
-      kind: "grid",
-      tiles: [3, 4, 5, 6, 7, 8].map((i) => ({ src: art.posters[i] })),
-    },
+    card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 8, 2, (k) => (k < 2 ? "42 min left" : "Drama · 2019"))),
+    card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 6, 2, (k) => `S0${k + 1} · E0${k + 3}`)),
+    card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 1, () => "12 episodes")),
     { key: "home", label: "Home", run: noop, kind: "home", title: "Living room", sub: "3 lights on · 21°", actions: ["Movie night", "All off", "Warm"] },
     {
       key: "reminders",

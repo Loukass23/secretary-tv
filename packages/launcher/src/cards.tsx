@@ -1,13 +1,24 @@
 // The content cards on Nest's home row (docs/launcher.md): one column per app, each laid out for what it holds, like
 // the concept's "Playing Music", "Searching Places" and "Playing Netflix" cards. Layout only; app.tsx builds the columns
 // and runs OK. Built on tv-kit glass, with hairlines and opacity/transform focus (docs/performance.md).
-import { AppChip, Glass, ListCard, MediaTile } from "@secretary/tv-kit/src/glass/index.ts";
+//
+// A media card (Cinema, Shows, Anime) has a style the viewer picks with a long OK (card-style.ts). OK expands it in
+// place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
+import { AppChip, Glass, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
+import { type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
 import type { Column } from "./nest-nav.ts";
 
-export interface Tile {
-  src: string;
-  title?: string;
+/** A title on a media card. */
+export interface MediaItem {
+  /** Portrait art, for posters, grids and the expanded row. */
+  poster: string;
+  /** Landscape art for the stills layout; the poster stands in without it. */
+  still?: string;
+  title: string;
   sub?: string;
+  /** In progress: OK resumes it. */
+  resume?: boolean;
+  /** A label for titles not in progress ("Top film"). */
   badge?: string;
   /** Watched fraction, 0..1. */
   progress?: number;
@@ -21,14 +32,18 @@ export interface ListItem {
   done?: boolean;
 }
 
-/**
- * One card of the row; `run(i)` is what OK does on its item `i`. An app card has a `launch` button that opens the app
- * itself, shown in place of its label once the remote is inside the card.
- */
-export type RowColumn = { key: string; label: string; run: (i: number) => void; launch?: { label: string; run: () => void } } & (
-  | { kind: "poster"; tile: Tile }
-  | { kind: "stack"; tiles: Tile[] }
-  | { kind: "grid"; tiles: Tile[] }
+/** One card of the row; `run(i)` is what OK does on its item `i`. */
+export type RowColumn = { key: string; label: string; run: (i: number) => void } & (
+  | {
+      kind: "media";
+      /** "Cinema", and what its titles are ("films"), for the expanded card's label. */
+      name: string;
+      unit: string;
+      items: MediaItem[];
+      style: CardStyle;
+      /** The last tile of the expanded card: opens the app itself. */
+      open: { label: string; run: () => void };
+    }
   | { kind: "home"; title: string; sub: string; actions: string[] }
   | { kind: "list"; items: ListItem[]; add?: string }
   | { kind: "apps"; apps: { icon?: string; label: string }[] }
@@ -39,29 +54,20 @@ export const CARD_H = 420;
 /** Room for the column's label above its card. */
 export const LABEL_H = 44;
 const GAP = 44;
-const STACK_GAP = 18;
-const POSTER = { w: 280, h: CARD_H };
-const STACK = { w: 340, h: (CARD_H - STACK_GAP) / 2 };
-const GRID = { w: 112, h: 168, gap: 12, across: 3 };
 const LIST = { w: 320, h: 108 };
 const ADD_H = 60;
 const APP = { w: 140, h: 128, gap: 14, across: 2 };
 const HOME_W = 300;
 const ACTION_H = 58;
 
-/** How wide a column is and how its items run for the remote. */
-export function columnShape(c: RowColumn): { w: number } & Column {
-  return { ...shape(c), launch: Boolean(c.launch) };
-}
-
-function shape(c: RowColumn): { w: number; count: number; across: number } {
+/** How wide a column is and how its items run for the remote; an expanded media card is one long row. */
+export function columnShape(c: RowColumn, expanded = false): { w: number } & Column {
   switch (c.kind) {
-    case "poster":
-      return { w: POSTER.w, count: 1, across: 1 };
-    case "stack":
-      return { w: STACK.w, count: c.tiles.length, across: 1 };
-    case "grid":
-      return { w: GRID.across * GRID.w + (GRID.across - 1) * GRID.gap, count: c.tiles.length, across: GRID.across };
+    case "media": {
+      if (expanded) return { w: EXPANDED_W, count: c.items.length + 1, across: c.items.length + 1 };
+      const s = collapsedShape(c.style);
+      return { w: s.w, count: Math.min(c.items.length, s.count), across: s.across };
+    }
     case "home":
       return { w: HOME_W, count: c.actions.length, across: 1 };
     case "list":
@@ -71,27 +77,30 @@ function shape(c: RowColumn): { w: number; count: number; across: number } {
   }
 }
 
-/** Where each column starts in the row, and its shape for the remote. */
-export function rowLayout(cols: readonly RowColumn[]): { x: number[]; w: number[]; nav: Column[]; width: number } {
+/** Where each column starts in the row, and its shape for the remote; `expanded` is the open media card, or -1. */
+export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: number[]; w: number[]; nav: Column[]; width: number } {
   const x: number[] = [];
   const w: number[] = [];
   const nav: Column[] = [];
   let at = 0;
-  for (const c of cols) {
-    const s = columnShape(c);
+  cols.forEach((c, k) => {
+    const s = columnShape(c, k === expanded);
     x.push(at);
     w.push(s.w);
-    nav.push({ count: s.count, across: s.across, launch: s.launch });
+    nav.push({ count: s.count, across: s.across });
     at += s.w + GAP;
-  }
+  });
   return { x, w, nav, width: Math.max(0, at - GAP) };
 }
+
+/** Whether a column expands on OK. */
+export const expands = (c: RowColumn | undefined): boolean => c?.kind === "media";
 
 /** How tall a column's card is, for the ring around it while it is picked. */
 export function columnHeight(c: RowColumn): number {
   switch (c.kind) {
-    case "grid":
-      return 2 * GRID.h + GRID.gap;
+    case "media":
+      return collapsedShape(c.style).h;
     case "list":
       return c.items.length * (LIST.h + 14) + (c.add ? ADD_H : -14);
     case "apps":
@@ -101,18 +110,15 @@ export function columnHeight(c: RowColumn): number {
   }
 }
 
-/** Where item `i` of a column sits inside it, for the glow behind a focused picture. */
-export function itemBox(c: RowColumn, i: number): { x: number; y: number; w: number; h: number } | null {
-  switch (c.kind) {
-    case "poster":
-      return { x: 0, y: 0, ...POSTER };
-    case "stack":
-      return { x: 0, y: i * (STACK.h + STACK_GAP), w: STACK.w, h: STACK.h };
-    case "grid":
-      return { x: (i % GRID.across) * (GRID.w + GRID.gap), y: Math.floor(i / GRID.across) * (GRID.h + GRID.gap), w: GRID.w, h: GRID.h };
-    default:
-      return null;
+/** Where item `i` of a column sits inside it, scroll included, for the glow behind a focused picture. */
+export function itemBox(c: RowColumn, i: number, expanded = false): { x: number; y: number; w: number; h: number } | null {
+  if (c.kind !== "media" || i < 0 || i >= c.items.length) return null;
+  if (expanded) {
+    const n = c.items.length + 1;
+    return { x: i * EXPANDED.stride - expandedScroll(i, n), y: 0, w: EXPANDED.w, h: EXPANDED.h };
   }
+  const b = collapsedShape(c.style).boxes[i];
+  return b ? { x: b.x, y: b.y, w: b.w, h: b.h } : null;
 }
 
 interface ColumnProps {
@@ -122,36 +128,103 @@ interface ColumnProps {
   page: [number, number];
   /** The remote is on this card as a whole (left and right move between cards). */
   picked: boolean;
-  /** Inside the card: the focused item, or -1 for its Launch button; null when the remote is elsewhere. */
+  /** Inside the card: the focused item; null when the remote is elsewhere. */
   focus: number | null;
+  /** Another card is open: this one steps back. */
+  dim?: boolean;
 }
 
-export function RowCard({ col, x, page, picked, focus: inside }: ColumnProps) {
+/** The badge a media item shows: resuming says so (short on small tiles), others their own label. */
+const badgeOf = (it: MediaItem, small: boolean) => (it.resume ? (small ? "▶" : "▶ Resume") : it.badge);
+
+/** A media card folded: the items its style shows, as today's posters, stills or grid. */
+function MediaSmall({ col, focus, out }: { col: Extract<RowColumn, { kind: "media" }>; focus: number; out: boolean }) {
+  const s = collapsedShape(col.style);
+  const small = s.boxes[0] ? s.boxes[0].w < 200 : false;
+  return (
+    <div class={`nest-media-small${out ? " is-out" : ""}`}>
+      {col.items.slice(0, s.count).map((it, i) => {
+        const b = s.boxes[i];
+        const still = b.art === "still";
+        return (
+          <MediaTile
+            key={i}
+            x={b.x}
+            y={b.y}
+            w={b.w}
+            h={b.h}
+            src={still ? (it.still ?? it.poster) : it.poster}
+            title={still ? it.title : undefined}
+            sub={still ? it.sub : undefined}
+            badge={badgeOf(it, small)}
+            progress={it.progress}
+            focused={focus === i}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** A media card opened: every title in one row, then the app's Open tile; they rise in one after another. */
+function MediaRow({ col, focus, page }: { col: Extract<RowColumn, { kind: "media" }>; focus: number; page: [number, number] }) {
+  const n = col.items.length + 1;
+  const at = Math.max(0, Math.min(focus, n - 1));
+  const scroll = expandedScroll(at, n);
+  // Everything in view, from the scroll (a row of 8 and Open is drawn whole), plus one each side.
+  const from = Math.max(0, Math.floor(scroll / EXPANDED.stride) - 1);
+  const to = Math.min(n, from + Math.ceil(EXPANDED_W / EXPANDED.stride) + 2);
+  const hit = col.items[at];
+  return (
+    <>
+      <Scroller x={0} y={0} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
+        {Array.from({ length: to - from }, (_, k) => {
+          const i = from + k;
+          const x = i * EXPANDED.stride;
+          const rise = { animationDelay: `${Math.min(i, 7) * 30}ms` };
+          if (i === col.items.length) {
+            return (
+              <div key="open" class="nest-rise" style={rise}>
+                <Glass x={x} y={0} w={EXPANDED.w} h={EXPANDED.h} page={[page[0] + x - scroll, page[1]]} focused={focus === i} class="nest-open">
+                  <b>{col.open.label}</b>
+                  <small>All {col.unit} in the app</small>
+                </Glass>
+              </div>
+            );
+          }
+          const it = col.items[i];
+          return (
+            <div key={i} class="nest-rise" style={rise}>
+              <MediaTile x={x} y={0} w={EXPANDED.w} h={EXPANDED.h} src={it.poster} badge={badgeOf(it, false)} progress={it.progress} focused={focus === i} />
+            </div>
+          );
+        })}
+      </Scroller>
+      {hit && (
+        <div class="nest-result-cap is-on" style={{ left: 0, top: 0, transform: `translate3d(${at * EXPANDED.stride - scroll}px,${EXPANDED.h + 14}px,0)` }}>
+          <b>{hit.title}</b>
+          {hit.sub && <small>{hit.sub}</small>}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProps) {
   const at = (dx: number, dy: number): [number, number] => [page[0] + dx, page[1] + dy];
   const focus = inside ?? -2;
+  const open = col.kind === "media" && inside !== null;
   const w = columnShape(col).w;
   return (
-    <div class="nest-col" style={{ left: `${x}px`, top: 0 }}>
-      {col.launch && inside !== null ? (
-        <span class={`nest-launch${focus === -1 ? " is-focus" : ""}`}>{col.launch.label}</span>
-      ) : (
-        <span class="nest-col-label">{col.label}</span>
-      )}
+    <div class={`nest-col${dim ? " is-dim" : ""}`} style={{ transform: `translate3d(${x}px,0,0)` }}>
+      <span class={`nest-col-label${open ? " is-answer" : ""}`}>
+        {open && col.kind === "media" ? `${col.name} · ${col.items.length} ${col.unit}` : col.label}
+      </span>
       <div class="nest-col-body">
         {/* The whole card picked: a ring faded in on its own layer, nothing moves. */}
         <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${columnHeight(col)}px` }} />
-      {col.kind === "poster" && (
-        <MediaTile x={0} y={0} w={POSTER.w} h={POSTER.h} {...col.tile} focused={focus === 0} />
-      )}
-      {col.kind === "stack" &&
-        col.tiles.map((t, i) => (
-          <MediaTile key={i} x={0} y={i * (STACK.h + STACK_GAP)} w={STACK.w} h={STACK.h} {...t} focused={focus === i} />
-        ))}
-      {col.kind === "grid" &&
-        col.tiles.map((t, i) => {
-          const b = itemBox(col, i)!;
-          return <MediaTile key={i} x={b.x} y={b.y} w={b.w} h={b.h} src={t.src} badge={t.badge} progress={t.progress} focused={focus === i} />;
-        })}
+        {col.kind === "media" && <MediaSmall col={col} focus={-2} out={open} />}
+        {col.kind === "media" && open && <MediaRow col={col} focus={focus} page={page} />}
       {col.kind === "home" && (
         <Glass x={0} y={0} w={HOME_W} h={CARD_H} page={page} class="nest-home-card">
           <i class="nest-home-bulb" />

@@ -9,6 +9,17 @@ export function sendKey(win: Window, k: Pick<RemoteKey, "key" | "keyCode">, repe
   win.dispatchEvent(new KeyboardEvent("keydown", { key: k.key, keyCode: k.keyCode, bubbles: true, repeat }));
 }
 
+function sendUp(win: Window, k: Pick<RemoteKey, "key" | "keyCode">): void {
+  win.dispatchEvent(new KeyboardEvent("keyup", { key: k.key, keyCode: k.keyCode, bubbles: true }));
+}
+
+/** A press: keydown, then keyup after `holdMs` (a quick tap without it), as a remote button sends them. */
+export function pressKey(win: Window, k: Pick<RemoteKey, "key" | "keyCode">, holdMs = 0): void {
+  sendKey(win, k);
+  if (holdMs) setTimeout(() => sendUp(win, k), holdMs);
+  else sendUp(win, k);
+}
+
 /** Install after tv-kit's installBackAdapter, before the app mounts. */
 export function installDesktopRemote(win: Window): void {
   win.addEventListener(
@@ -50,7 +61,7 @@ export function useKeyLog(): string[] {
 
 const BY_LABEL = new Map([...REMOTE_KEYS, ...PASS_KEYS].map((k) => [k.label, k]));
 
-function Btn({ label, text, cls }: { label: string; text?: string; cls?: string }) {
+function Btn({ label, text, cls, holdMs = 0 }: { label: string; text?: string; cls?: string; holdMs?: number }) {
   const k = BY_LABEL.get(label)!;
   const hint = k.key === " " ? "Space" : k.key.replace("Arrow", "");
   return (
@@ -58,7 +69,7 @@ function Btn({ label, text, cls }: { label: string; text?: string; cls?: string 
       class={`dz-rk${cls ? ` ${cls}` : ""}`}
       title={`${label} (${hint})`}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => sendKey(window, k)}
+      onClick={() => pressKey(window, k, holdMs)}
     >
       {text ?? label}
     </button>
@@ -79,6 +90,9 @@ export function RemotePad() {
         <span />
         <Btn label="Down" text="▼" />
         <span />
+      </div>
+      <div class="dz-rrow">
+        <Btn label="OK" text="Hold OK" holdMs={750} />
       </div>
       <div class="dz-rrow">
         <Btn label="Back" />

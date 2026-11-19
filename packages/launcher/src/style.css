@@ -67,6 +67,11 @@ html, body {
   isolation: isolate;
 }
 .nest-menu-item.is-focus { color: var(--sg-focus-ink); }
+/* The card style menu: the picked layout carries a dot, the hint sits under the lines. */
+.sg-glass > .nest-style-head, .sg-glass > .nest-style-hint { position: absolute; left: 32px; right: 32px; }
+.nest-style-head { top: 24px; }
+.nest-menu-item.is-picked::after { content: ""; width: 10px; height: 10px; margin-left: auto; border-radius: 50%; background: currentColor; }
+.nest-style-hint { font-size: 19px; }
 
 /* --- the assistant (home.tsx): on the wallpaper, no card; earlier prompts fade as they rise --- */
 .nest-ask { position: absolute; }
@@ -136,7 +141,31 @@ html, body {
 .nest-forecast-row.is-days > div { min-width: 150px; }
 
 /* --- the content row (cards.tsx): one column per app, a small label over each --- */
-.nest-col { position: absolute; }
+/* Cards are placed by transform, so when one opens the cards after it slide aside on the compositor; the others step
+   back by opacity (docs/launcher.md, "Opening a card"). */
+.nest-col {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: transform var(--sg-move) var(--sg-ease), opacity var(--sg-move) var(--sg-ease);
+  will-change: transform, opacity;
+}
+.nest-col.is-dim { opacity: 0.35; }
+/* A media card folded, and fading out under its row when it opens. */
+.nest-media-small {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
+}
+.nest-media-small.is-out { opacity: 0; }
+/* The opened row: each title rises in a beat after the one before it (the delay is set per tile). */
+.nest-rise { position: absolute; left: 0; top: 0; animation: nestRise 420ms var(--sg-ease) both; }
+.nest-col .nest-result-cap { position: absolute; }
+.nest-open { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; text-align: center; font-size: 24px; }
+.nest-open b { font-weight: 600; }
+.nest-open small { font-size: 18px; }
 .nest-col-label { position: absolute; left: 2px; top: 6px; font-size: 20px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
 .nest-col-label.is-answer { font-size: 22px; color: var(--sg-ink); }
 .nest-col-body { position: absolute; left: 0; top: 44px; }
@@ -280,34 +309,6 @@ html, body {
   will-change: opacity;
 }
 .nest-col-ring.is-on { opacity: 1; }
-.nest-launch {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 20px;
-  border-radius: 20px;
-  box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  font-size: 21px;
-  font-weight: 600;
-  white-space: nowrap;
-  isolation: isolate;
-}
-.nest-launch::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--sg-focus);
-  opacity: 0;
-  transition: opacity var(--sg-fade) var(--sg-ease);
-  will-change: opacity;
-}
-.nest-launch.is-focus { color: var(--sg-focus-ink); }
-.nest-launch.is-focus::before { opacity: 1; }
 /* The assistant's one button, under the orb. */
 .nest-ask-button { position: absolute; height: 48px; padding: 0 24px; border-radius: 24px; font-size: 21px; }
 

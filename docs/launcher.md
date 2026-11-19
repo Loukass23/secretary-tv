@@ -118,17 +118,32 @@ off the right edge (`src/cards.tsx`). `src/nest-nav.ts` moves focus between them
 | Watch together, Search, Lights, Bell | top right, no fill until focused | the party; search; the Lights panel (or the next scene); the first open reminder in its card (the badge counts them) |
 | Ask Assistant | left, under the orb | listens on the room microphone (or opens the TV keyboard). At rest the wave draws into a small orb; it opens into the ribbons while Nest listens, thinks or speaks |
 | Recent | first card, while there is an answer | goes back to that answer (the titles, the forecast, the lights, the reminder, or asks again) |
-| Continue · Cinema | a tall poster | inside: "▶ Open Cinema", then resumes the film; with nothing in progress it shows tonight's top film |
-| Next up · Shows | two stacked backdrops | inside: "▶ Open Shows", then resumes the episode; top series fill an empty slot |
-| Anime | a 3×2 grid of covers | inside: "▶ Open Anime", then resumes or opens the title; trending covers fill the grid |
+| Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
+| Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
+| Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
 | Ask Nest results | in place of the row | opens the title in its app; Back brings the row back |
 
-Left and Right move from card to card, a ring around the whole card. OK goes inside it: on an app card (Cinema, Shows,
-Anime) its Launch button comes first, in place of the label, then its titles; on the others their first item. Inside,
-the arrows stay in the card, Up from the top goes back to the card, and Back leaves it. Up from a card goes to the header. The row and the assistant scroll as one strip: once a card would pass the right edge, the row moves left and the
+Left and Right move from card to card, a ring around the whole card. OK goes inside it, on its first item. Inside,
+the arrows stay in the card, Up from the top goes back to the card, and Back leaves it.
+
+### Opening a media card
+
+Cinema, Shows and Anime hold up to 8 titles each: what is in progress first, then the catalog's picks. OK opens the card
+in place into one row of all of them, at the Ask results size, with the app's "Open Cinema" tile last (`src/cards.tsx`,
+`MediaRow`). The cards after it slide right by transform and every other card steps back to 35% opacity; the folded
+tiles fade out and the titles rise in a beat apart (opacity and transform only, on their own layers). Focus lands on the
+first title, its name and episode under it. Up or Back folds the card again.
+
+### Card styles (long OK)
+
+A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu
+beside it: Poster, Stills, Grid or Row, and a size (Small, Medium, Large). The card previews each line as the remote
+reaches it; OK keeps it, Back puts the old style back. Styles are saved on the TV (`localStorage["nest.cardStyles"]`,
+`src/card-style.ts`); the defaults are today's (a poster, two stills, a grid). A short OK on such a card acts on the
+keyup, so the hold can be told apart; OK everywhere else still acts on the keydown. Up from a card goes to the header. The row and the assistant scroll as one strip: once a card would pass the right edge, the row moves left and the
 assistant slides off and fades with it (transform and opacity, on the row's timing), so the cards get the whole width.
 Back at the first cards, or on Ask Assistant, it slides back in. All the cards are drawn (seven at most).
 Trending titles come from the catalogs straight from the TV once a day (`localStorage["nest.trending"]`).

@@ -4,9 +4,10 @@ import { DEFAULT_SETTINGS } from "@secretary/catalog-kit/src/lib/settings.ts";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
 import "@secretary/catalog-kit/src/style.css";
-import { useKeys, type Focus as GridFocus } from "@secretary/tv-kit";
+import { useKeys, useOkHold, type Focus as GridFocus } from "@secretary/tv-kit";
 import { GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
-import { rowLayout } from "@secretary/launcher/src/cards.tsx";
+import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@secretary/launcher/src/card-style.ts";
+import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { Home as NestHome } from "@secretary/launcher/src/home.tsx";
 import { enter, type Focus, HEADER_PROFILE, HEADER_SEARCH, HEADER_WEATHER, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
 import "@secretary/launcher/src/style.css";
@@ -28,7 +29,11 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
 }
 
 function Nest({ mode, theme, backdrop, art, answer }: PageProps & { art: Art; answer: boolean }) {
-  const columns = useMemo(() => nestColumns(art), [art]);
+  // The card styles live in this page only: the TV keeps its own (nest.cardStyles).
+  const [styles, setStyles] = useState<Record<string, CardStyle>>({});
+  const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
+  const shown = styleMenu ? { ...styles, [styleMenu.key]: styleMenu.style } : styles;
+  const columns = useMemo(() => nestColumns(art, shown), [art, JSON.stringify(shown)]);
   const results = useMemo(() => nestResults(art), [art]);
   const [focus, setFocus] = useState<Focus>(answer ? { area: "results", i: 0 } : { area: "row", col: 0, i: 0 });
   const [weatherOpen, setWeatherOpen] = useState(false);
@@ -36,15 +41,38 @@ function Nest({ mode, theme, backdrop, art, answer }: PageProps & { art: Art; an
   const [glow, setGlow] = useState<string | undefined>();
   useEffect(() => void glowImage(TINTS.orange).then(setGlow), []);
 
+  const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
+  // As in Nest (app.tsx): on a media card as a whole, a short OK opens it and a long one opens its style menu.
+  const pickedMedia = !styleMenu && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
   const layout: Layout = {
     weather: true,
     ask: 1,
-    cols: answer ? [] : rowLayout(columns).nav,
+    cols: answer ? [] : rowLayout(columns, openCol).nav,
     results: answer ? results.length : 0,
     menu: menuOpen ? MENU.length : 0,
   };
 
+  const hold = useOkHold(
+    pickedMedia,
+    () => setFocus(enter(focus, layout)),
+    () => {
+      const c = columns[focus.col ?? 0];
+      if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
+    },
+  );
+
   useKeys(true, (key) => {
+    if (styleMenu) {
+      if (key === "Enter" && hold.holding()) return true;
+      const r = stepStyleMenu(styleMenu, key);
+      if (r === "keep") {
+        setStyles({ ...styles, [styleMenu.key]: styleMenu.style });
+        setStyleMenu(null);
+      } else if (r === "undo") setStyleMenu(null);
+      else setStyleMenu(r);
+      return true;
+    }
+    if (key === "Enter" && (pickedMedia || hold.holding())) return true;
     if (key === "Back") {
       if (weatherOpen) setWeatherOpen(false);
       else if (menuOpen) {
@@ -78,6 +106,7 @@ function Nest({ mode, theme, backdrop, art, answer }: PageProps & { art: Art; an
         menu={menuOpen ? MENU : null}
         glow={glow}
         columns={columns}
+        styleMenu={styleMenu}
         open={2}
         status={focus.area === "header" && focus.i === HEADER_SEARCH ? "Search" : ""}
         me={{ name: "Robin", color: "#5b52e6" }}

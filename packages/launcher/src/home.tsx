@@ -6,7 +6,8 @@ import { useRef } from "preact/hooks";
 import { Avatar, Glass, Glow, Icon, IconButton, type IconName, MediaTile, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
 import type { Weather } from "./assistant.ts";
-import { CARD_H, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
+import { type CardStyle, LAYOUT_LABEL, LAYOUTS, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
+import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, HEADER_SEARCH, HEADER_WEATHER } from "./nest-nav.ts";
 
 const PAD = 80;
@@ -60,7 +61,37 @@ interface Props {
   status: string;
   /** The Nuvio profile on this TV; null without Nuvio. */
   me: { name: string; color?: string; img?: string } | null;
+  /** The card style menu (a long OK on a media card), while it is open. */
+  styleMenu?: StyleMenu | null;
 }
+
+const STYLE_W = 380;
+const STYLE_LINE = 58;
+
+/** The long-OK menu beside a media card: its layouts, then its size. The card shows each choice as it is picked. */
+function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; name: string }) {
+  const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`];
+  return (
+    <Glass x={x} y={y} w={STYLE_W} h={86 + lines.length * STYLE_LINE + 52} class="nest-menu nest-style">
+      <span class="nest-kicker nest-style-head">{name} · card style</span>
+      {lines.map((label, i) => (
+        <span
+          key={i}
+          class={`nest-menu-item${m.line === i ? " is-focus" : ""}${i < SIZE_LINE && LAYOUTS[i] === m.style.layout ? " is-picked" : ""}`}
+          style={{ top: `${64 + i * STYLE_LINE}px` }}
+        >
+          {label}
+        </span>
+      ))}
+      <small class="nest-style-hint" style={{ top: `${72 + lines.length * STYLE_LINE}px` }}>
+        OK keeps · Back undoes
+      </small>
+    </Glass>
+  );
+}
+
+/** The style a card shows: the menu's while it is open on that card. */
+export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
 const day = (iso: string, k: number) =>
   k === 0 ? "Today" : new Date(`${iso}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
@@ -106,12 +137,13 @@ function WeatherSheet({ w }: { w: Weather }) {
   );
 }
 
-export function Home({ focus, time, ask, results, weather, weatherOpen, menu, glow, columns, open, status, me }: Props) {
+export function Home({ focus, time, ask, results, weather, weatherOpen, menu, glow, columns, open, status, me, styleMenu }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
   const now = new Date();
 
-  // The row scrolls just enough to keep the focused column whole.
-  const layout = rowLayout(columns);
+  // A media card is open while the remote is inside it; the row scrolls just enough to keep the focused column whole.
+  const openCol = focus?.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
+  const layout = rowLayout(columns, openCol);
   // The row and the assistant scroll as one strip: a card past the right edge brings the row left, and the assistant
   // slides off and fades. The header keeps the scroll it was reached from; the assistant itself scrolls back to 0.
   const lastCol = useRef(0);
@@ -125,7 +157,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
   const [hFrom, hTo] = windowOf(hitAt, results?.items.length ?? 0, 3, 7);
   const hit = results?.items[hitAt];
   const inside = focus?.area === "row" && focus.inside;
-  const focusBox = inside && columns[colAt] && focus.i >= 0 ? itemBox(columns[colAt], focus.i) : null;
+  const focusBox = inside && columns[colAt] && focus.i >= 0 ? itemBox(columns[colAt], focus.i, colAt === openCol) : null;
   const glowAt = focusBox
     ? { x: ROW.x + layout.x[colAt] - rowScroll + focusBox.x, y: ROW.y + LABEL_H + focusBox.y, w: focusBox.w, h: focusBox.h }
     : focus?.area === "results"
@@ -240,6 +272,7 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
                 page={[ROW.x + layout.x[c] - rowScroll, ROW.y + LABEL_H]}
                 picked={focus?.area === "row" && !inside && colAt === c}
                 focus={inside && colAt === c ? focus!.i : null}
+                dim={(openCol >= 0 && openCol !== c) || (styleMenu != null && styleMenu.key !== col.key)}
               />
             );
           })}
@@ -247,6 +280,13 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
       )}
 
       {weatherOpen && weather && <WeatherSheet w={weather} />}
+      {styleMenu && (() => {
+        const c = columns.findIndex((k) => k.key === styleMenu.key);
+        if (c < 0) return null;
+        const cardX = ROW.x + layout.x[c] - rowScroll;
+        const right = cardX + columnShape(columns[c]).w + 28;
+        return <CardStyleMenu m={styleMenu} x={right + STYLE_W > 1920 - PAD ? cardX - STYLE_W - 28 : right} y={ROW.y + LABEL_H} name={(() => { const k = columns[c]; return k.kind === "media" ? k.name : k.label; })()} />;
+      })()}
       {menu && (
         <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={menu.length * MENU.item + 24} class="nest-menu">
           {menu.map((m, i) => (

@@ -1,4 +1,4 @@
-import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys } from "@secretary/tv-kit";
+import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, listProfiles, type Profile, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
@@ -46,9 +46,9 @@ import {
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { APP_IDS, GEMINI_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
-import type { RowColumn } from "./cards.tsx";
-import { rowLayout } from "./cards.tsx";
-import { Home } from "./home.tsx";
+import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
+import { expands, type MediaItem, type RowColumn, rowLayout } from "./cards.tsx";
+import { Home, shownStyle } from "./home.tsx";
 import {
   clamp,
   enter,
@@ -59,7 +59,6 @@ import {
   HEADER_PROFILE,
   HEADER_SEARCH,
   HEADER_WEATHER,
-  LAUNCH,
   type Layout,
   leave,
   step,
@@ -118,6 +117,15 @@ const SETTINGS_ID = PINS[PINS.length - 1];
 const TRENDING_KEY = "nest.trending";
 const TRENDING_TTL_MS = 24 * 60 * 60_000;
 type Trending = Record<CatalogKind, SearchResult[]>;
+
+/** The media cards, in row order: what fills each and how it is named (cards.tsx, card-style.ts). */
+const MEDIA = [
+  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", app: APP_IDS.movie, going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film" },
+  { key: "shows", kind: "series", name: "Shows", unit: "shows", app: APP_IDS.series, going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series" },
+  { key: "anime", kind: "anime", name: "Anime", unit: "titles", app: APP_IDS.anime, going: "Anime", picks: "Anime", pickBadge: undefined },
+] as const;
+/** Titles an opened media card holds at most. */
+const MEDIA_MAX = 8;
 const NO_TRENDING: Trending = { movie: [], series: [], anime: [] };
 
 /** A card in the Recent column: an answer from the assistant, or something the home reported. */
@@ -217,6 +225,9 @@ export function App() {
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
   const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  // Each media card's look (a long OK on it), and the menu while it is open: the card previews the menu's choice.
+  const [cardStyles, setCardStyles] = useState<Record<string, CardStyle>>(() => loadCardStyles(storage));
+  const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
   const [trending, setTrending] = useState<Trending>(() => {
     try {
       const c = JSON.parse(storage.getItem(TRENDING_KEY) ?? "null") as { at: number; v: Trending } | null;
@@ -759,75 +770,42 @@ export function App() {
       run: (i) => openRecent(shown[i]),
     });
   }
-  const film = byKind("movie")[0];
-  const pick = trending.movie[0];
-  if (film) {
-    push(
-      {
-        kind: "poster",
-        key: "cinema",
-        launch: { label: "▶  Open Cinema", run: () => launch(APP_IDS.movie, "Cinema") },
-        label: "Continue · Cinema",
-        // The poster carries its own title; a badge says what OK does.
-        tile: { src: posterUrl(film.title), badge: "▶ Resume", progress: progressOf(film) },
-        run: () => resume(film),
-      },
-      [{ src: posterUrl(film.title), type: "movie" }],
-    );
-  } else if (pick) {
-    push(
-      {
-        kind: "poster",
-        key: "cinema",
-        label: "Tonight · Cinema",
-        launch: { label: "▶  Open Cinema", run: () => launch(APP_IDS.movie, "Cinema") },
-        tile: { src: posterUrl(pick.title), badge: "Top film" },
-        run: () => openHit(pick),
-      },
-      [{ src: posterUrl(pick.title), type: "movie" }],
-    );
-  }
-  const shows = byKind("series").slice(0, 2);
-  const showPicks = trending.series.filter((r) => !shows.some((e) => e.title.id === r.title.id)).slice(0, 2 - shows.length);
-  if (shows.length || showPicks.length) {
-    const tiles = [
-      ...shows.map((e) => ({
-        src: backdropUrl(e),
+  // Cinema, Shows and Anime: what is in progress first, then tonight's picks. The card shows as many as its style
+  // holds; OK opens it into all of them and the app's Open tile (card-style.ts, cards.tsx).
+  for (const m of MEDIA) {
+    const going = byKind(m.kind).slice(0, MEDIA_MAX);
+    const picks = trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id)).slice(0, MEDIA_MAX - going.length);
+    if (!going.length && !picks.length) continue;
+    const items: MediaItem[] = [
+      ...going.map((e) => ({
+        poster: posterUrl(e.title),
+        still: backdropUrl(e),
         title: e.title.name,
-        sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "▶ Resume",
+        sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "Continue watching",
+        resume: true,
         progress: progressOf(e),
       })),
-      ...showPicks.map((r) => ({ src: r.title.background ?? posterUrl(r.title), title: r.title.name, sub: "Top series" })),
+      ...picks.map((r, k) => ({
+        poster: posterUrl(r.title),
+        still: r.title.background,
+        title: r.title.name,
+        sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
+        badge: k === 0 && !going.length ? m.pickBadge : undefined,
+      })),
     ];
     push(
       {
-        kind: "stack",
-        key: "shows",
-        launch: { label: "▶  Open Shows", run: () => launch(APP_IDS.series, "Shows") },
-        label: shows.length ? "Next up · Shows" : "Top · Shows",
-        tiles,
-        run: (i) => (i < shows.length ? resume(shows[i]) : openHit(showPicks[i - shows.length])),
+        kind: "media",
+        key: m.key,
+        name: m.name,
+        unit: m.unit,
+        label: going.length ? m.going : m.picks,
+        items,
+        style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
+        open: { label: `Open ${m.name}`, run: () => launch(m.app, m.name) },
+        run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
       },
-      [...shows.map((e) => ({ src: backdropUrl(e), type: "series" as const })), ...showPicks.map((r) => ({ src: posterUrl(r.title), type: "series" as const }))],
-    );
-  }
-  const anime = byKind("anime").slice(0, 6);
-  const animePicks = trending.anime.filter((r) => !anime.some((e) => e.title.id === r.title.id)).slice(0, 6 - anime.length);
-  if (anime.length || animePicks.length) {
-    const pics = [...anime.map((e) => posterUrl(e.title)), ...animePicks.map((r) => posterUrl(r.title))];
-    push(
-      {
-        kind: "grid",
-        key: "anime",
-        launch: { label: "▶  Open Anime", run: () => launch(APP_IDS.anime, "Anime") },
-        label: "Anime",
-        tiles: [
-          ...anime.map((e) => ({ src: posterUrl(e.title), badge: "▶", progress: progressOf(e) })),
-          ...animePicks.map((r) => ({ src: posterUrl(r.title) })),
-        ],
-        run: (i) => (i < anime.length ? resume(anime[i]) : openHit(animePicks[i - anime.length])),
-      },
-      pics.map((src) => ({ src, type: "anime" as const })),
+      items.map((it) => ({ src: it.poster, type: m.kind })),
     );
   }
   const lights = devices.filter((d) => d.kind === "light");
@@ -948,14 +926,16 @@ export function App() {
     THEME_LABEL[themePref],
     speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off",
   ];
-  const navKey = rowLayout(columns).nav.map((c) => `${c.count}/${c.across}`).join();
+  // A media card is open while the remote is inside it: its row of titles takes the width.
+  const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
+  const navKey = `${openCol}:${rowLayout(columns, openCol).nav.map((c) => `${c.count}/${c.across}`).join()}`;
   const layout: Layout = useMemo(
     () => ({
       weather: Boolean(weather),
       // One button: Ask Assistant.
       ask: 1,
       // While an answer is shown it takes the row's place.
-      cols: shownTurn ? [] : rowLayout(columns).nav,
+      cols: shownTurn ? [] : rowLayout(columns, openCol).nav,
       results: shownResults?.length ?? 0,
       menu: menuOpen ? menuItems.length : 0,
     }),
@@ -1075,15 +1055,41 @@ export function App() {
       return;
     }
     if (area === "row") {
-      // A card as a whole: OK goes inside it. Inside: its Launch button opens the app, an item does its own thing.
+      // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing;
+      // the last tile of an open media card opens the app.
       if (!focus.inside) return setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
-      if (i === LAUNCH) return col?.launch?.run();
+      if (col?.kind === "media" && i === col.items.length) return col.open.run();
       col?.run(i);
     }
   };
 
+  // On a media card as a whole, OK is split: a short press opens it, a long one opens its style menu (the remote sends
+  // no repeats for a held OK). Everywhere else OK acts on the keydown as before.
+  const pickedMedia = view === "home" && !styleMenu && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
+  const hold = useOkHold(
+    pickedMedia,
+    () => setFocus(enter(focus, layout)),
+    () => {
+      const c = columns[focus.col ?? 0];
+      if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
+    },
+  );
+
   useKeys(view === "home", (key) => {
+    // The card style menu takes every key while it is open. OK keeps the style, Back puts the old one back.
+    if (styleMenu) {
+      if (key === "Enter" && hold.holding()) return;
+      const r = stepStyleMenu(styleMenu, key);
+      if (r === "keep") {
+        const next = { ...cardStyles, [styleMenu.key]: styleMenu.style };
+        setCardStyles(next);
+        saveCardStyles(storage, next);
+        setStyleMenu(null);
+      } else if (r === "undo") setStyleMenu(null);
+      else setStyleMenu(r);
+      return;
+    }
     // Channel Down (CH-) or Search opens Spotlight Search from anywhere.
     if (key === "ChannelDown" || key === "Search") {
       openSearch();
@@ -1100,7 +1106,7 @@ export function App() {
       setFocus({ area: "header", i: HEADER_SEARCH });
       return;
     }
-    if (key === "Enter") return void activate();
+    if (key === "Enter") return pickedMedia || hold.holding() ? undefined : void activate();
     if (menuOpen && key === "Back") return closeMenu();
     if (menuOpen && (key === "Left" || key === "Right")) return;
     if (weatherOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Left" || key === "Right")) {
@@ -1277,6 +1283,7 @@ export function App() {
           open={reminders.filter((r) => !r.completed).length}
           status={status}
           me={me}
+          styleMenu={styleMenu}
         />
       )}
       {toast && (
