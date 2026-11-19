@@ -38,6 +38,8 @@ export interface SlimTitle {
   rating: string;
   poster?: string;
   background?: string;
+  /** A few lines about it (Cinemeta or Kitsu), for Nest's caption. */
+  description?: string;
 }
 
 /** One title in progress, as the apps and Nest show it. */
@@ -133,7 +135,8 @@ export const watchedTitleIds = (rows: readonly WatchedRow[]): string[] => [
 
 const CINEMETA = "https://v3-cinemeta.strem.io";
 const KITSU = "https://anime-kitsu.strem.fun";
-const META_CACHE = "sectv.nuvio.meta";
+// .2: titles now keep their description, so the cache from before is fetched again.
+const META_CACHE = "sectv.nuvio.meta.2";
 const META_MAX = 120;
 
 /**
@@ -162,6 +165,9 @@ export async function withMeta(items: readonly ResumeItem[], kv: KV, f: typeof f
               rating: String(meta.imdbRating ?? ""),
               poster: typeof meta.poster === "string" ? meta.poster : undefined,
               background: typeof meta.background === "string" ? meta.background : undefined,
+              ...(typeof meta.description === "string" && meta.description.trim()
+                ? { description: meta.description.replace(/\s+/g, " ").trim().slice(0, 320) }
+                : {}),
             };
             cache[id] = title;
             changed = true;

@@ -1,5 +1,5 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, type IconName, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, listProfiles, type Profile, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -114,7 +114,8 @@ function loadSpeakReplies(): boolean {
 const OWN_PLACES: readonly string[] = [APP_IDS.movie, APP_IDS.series, APP_IDS.anime, PINS[PINS.length - 1]];
 const SETTINGS_ID = PINS[PINS.length - 1];
 /** Trending titles for the empty Cinema, Shows and Anime cards, fetched from the TV once a day. */
-const TRENDING_KEY = "nest.trending";
+// .2: picks now carry their description (the caption under an opened card).
+const TRENDING_KEY = "nest.trending.2";
 const TRENDING_TTL_MS = 24 * 60 * 60_000;
 type Trending = Record<CatalogKind, SearchResult[]>;
 
@@ -784,6 +785,7 @@ export function App() {
         sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "Continue watching",
         resume: true,
         progress: progressOf(e),
+        about: e.title.description,
       })),
       ...picks.map((r, k) => ({
         poster: posterUrl(r.title),
@@ -791,6 +793,7 @@ export function App() {
         title: r.title.name,
         sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
         badge: k === 0 && !going.length ? m.pickBadge : undefined,
+        about: r.title.description,
       })),
     ];
     push(
@@ -1199,18 +1202,17 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [view, imeActive]);
 
-  const serverStatus = SERVER_URL ? (serverOnline ? "Server online" : "Server offline") : "";
-  const status =
-    error ??
-    (cloudEnabled
-      ? me
-        ? `Nuvio · OK to switch profile${serverStatus ? ` · ${serverStatus}` : ""}`
-        : "Not signed in · OK to sign in to Nuvio"
-      : SERVER_URL
-        ? serverOnline
-          ? "Server online · CH- to search"
-          : "Server offline · apps still work"
-        : "No server configured");
+  // Under the name, only what needs doing (an error, signing in); what the TV is connected to is a pair of icons,
+  // and the words for it open with the profile menu.
+  const status = error ?? (cloudEnabled && !me ? "OK to sign in to Nuvio" : "");
+  const links: { icon: IconName; off?: boolean }[] = [
+    ...(cloudEnabled && me ? [{ icon: "sync" as const }] : []),
+    ...(SERVER_URL ? [{ icon: "server" as const, off: !serverOnline }] : []),
+  ];
+  const menuInfo = [
+    cloudEnabled ? (me ? `Nuvio · synced as ${me.name}` : "Nuvio · not signed in") : "Nuvio sync off",
+    SERVER_URL ? (serverOnline ? "Server online · CH- to search" : "Server offline · apps still work") : "No server configured",
+  ];
   const searchStatus = !query.trim()
     ? "Hunt across Secretary Cinema, Shows and Anime"
     : searching
@@ -1278,6 +1280,8 @@ export function App() {
           weather={weather}
           weatherOpen={weatherOpen}
           menu={menuOpen ? menuItems : null}
+          menuInfo={menuInfo}
+          links={links}
           glow={glow}
           columns={columns}
           open={reminders.filter((r) => !r.completed).length}

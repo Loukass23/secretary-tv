@@ -408,3 +408,6 @@ style menu. Reference TV, real data (Nuvio profile, 8 films, server offline), th
 
 The few long frames in the second walk are most likely the opens decoding the titles' art the first time (not traced
 frame by frame); the medians match the home row's. The page is 1920x1080 at devicePixelRatio 1 on this TV.
+
+Same day, after the opened card's titles grew to 280x420 with a three-line synopsis under the focused one: the open/fold
+walk (24 keys, two runs) gave 17 ms median, 33 ms p95, 83 ms worst and 4-6 frames over 50 ms of ~490.

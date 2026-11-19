@@ -13,14 +13,15 @@ import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, H
 const PAD = 80;
 const HEAD_Y = 44;
 /** Party, Search, Lights and Bell, right to left from the edge. */
-const ICON = { w: 88, h: 78, gap: 16 };
+const ICON = { w: 88, h: 78, gap: 28 };
 const ICONS_X = 1920 - PAD - 4 * ICON.w - 3 * ICON.gap;
 /** The assistant's column, on the wallpaper. */
 const ASK = { x: PAD, y: 236, w: 500 };
 /** Starts at the text column's edge: at rest the ribbons draw into the orb there. */
 const WAVE = { x: PAD, y: 690, w: ASK.w, h: 72 };
 /** The content row starts right of the assistant; it scrolls across the whole screen, taking the assistant with it. */
-const ROW = { x: 640, y: 236, h: LABEL_H + CARD_H };
+/** The row clips sideways; it is tall enough for an opened card's caption and synopsis under its titles. */
+const ROW = { x: 640, y: 236, h: LABEL_H + CARD_H + 240 };
 /** The right edge a focused card is kept inside of. */
 const VIEW_RIGHT = 1920 - 60;
 const HIT_W = 240;
@@ -53,6 +54,10 @@ interface Props {
   weatherOpen: boolean;
   /** The profile menu's items while it is open. */
   menu: readonly string[] | null;
+  /** Lines over the menu's items: what the TV is connected to, in words. */
+  menuInfo?: readonly string[];
+  /** What the TV is connected to, as icons under the person's name; an alert dot on one that is off. */
+  links?: readonly { icon: IconName; off?: boolean }[];
   /** The glow image in the focused picture's artwork colour. */
   glow?: string;
   columns: readonly RowColumn[];
@@ -63,6 +68,24 @@ interface Props {
   me: { name: string; color?: string; img?: string } | null;
   /** The card style menu (a long OK on a media card), while it is open. */
   styleMenu?: StyleMenu | null;
+}
+
+const INFO_H = 36;
+/** Where the profile menu's items start: under its lines of connection details and a hairline. */
+const menuTop = (info: readonly string[]) => (info.length ? 22 + info.length * INFO_H + 20 : 12);
+
+/** What the TV is connected to, as quiet icons; one that is off carries the alert dot. */
+function Links({ links }: { links: readonly { icon: IconName; off?: boolean }[] }) {
+  return (
+    <span class="nest-links">
+      {links.map((l) => (
+        <span key={l.icon} class="nest-link">
+          <Icon name={l.icon} />
+          {l.off && <b class="nest-link-off" />}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 const STYLE_W = 460;
@@ -137,7 +160,7 @@ function WeatherSheet({ w }: { w: Weather }) {
   );
 }
 
-export function Home({ focus, time, ask, results, weather, weatherOpen, menu, glow, columns, open, status, me, styleMenu }: Props) {
+export function Home({ focus, time, ask, results, weather, weatherOpen, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
   const now = new Date();
 
@@ -166,10 +189,10 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
 
   return (
     <>
-      <Avatar x={PAD} y={HEAD_Y} name={me?.name ?? "Secretary Nest"} sub={status} color={me?.color} img={me?.img} focused={on("header", HEADER_PROFILE)} />
+      <Avatar x={PAD} y={HEAD_Y} name={me?.name ?? "Secretary Nest"} sub={status || <Links links={links} />} color={me?.color} img={me?.img} focused={on("header", HEADER_PROFILE)} />
 
       {/* Top right, quiet like the reference: the weather, the time over the date, then the buttons. */}
-      <div class="nest-head" style={{ right: `${1920 - ICONS_X + 36}px`, top: `${HEAD_Y}px` }}>
+      <div class="nest-head" style={{ right: `${1920 - ICONS_X + 48}px`, top: `${HEAD_Y}px` }}>
         {weather && (
           <div class={`nest-weather${on("header", HEADER_WEATHER) ? " is-focus" : ""}`}>
             <Glyph of={weather.glyph} size={56} />
@@ -288,9 +311,14 @@ export function Home({ focus, time, ask, results, weather, weatherOpen, menu, gl
         return <CardStyleMenu m={styleMenu} x={right + STYLE_W > 1920 - PAD ? cardX - STYLE_W - 28 : right} y={ROW.y + LABEL_H} name={(() => { const k = columns[c]; return k.kind === "media" ? k.name : k.label; })()} />;
       })()}
       {menu && (
-        <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={menu.length * MENU.item + 24} class="nest-menu">
+        <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={menuTop(menuInfo) + menu.length * MENU.item + 12} class="nest-menu">
+          {menuInfo.map((line, i) => (
+            <small key={line} class="nest-menu-info" style={{ top: `${22 + i * INFO_H}px` }}>
+              {line}
+            </small>
+          ))}
           {menu.map((m, i) => (
-            <span key={m} class={`nest-menu-item${on("menu", i) ? " is-focus" : ""}`} style={{ top: `${12 + i * MENU.item}px` }}>
+            <span key={m} class={`nest-menu-item${on("menu", i) ? " is-focus" : ""}`} style={{ top: `${menuTop(menuInfo) + i * MENU.item}px` }}>
               {m}
             </span>
           ))}

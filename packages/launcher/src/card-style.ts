@@ -48,60 +48,49 @@ export interface CardShape {
   boxes: ItemBox[];
 }
 
-/** Where each item of a collapsed media card sits, for a style. */
+/** Where each item of a collapsed media card sits, for a style. Every layout fills the same height at a size. */
 export function collapsedShape(style: CardStyle): CardShape {
   const k = SCALE[style.size];
-  const r = (v: number) => Math.round(v * k);
+  const H = Math.round(FULL_H * k);
+  const poster = (h: number) => Math.round((h * 2) / 3);
   switch (style.layout) {
     case "poster": {
-      const w = r(360);
-      const h = r(FULL_H);
-      return { w, h, count: 1, across: 1, boxes: [{ x: 0, y: 0, w, h, art: "poster" }] };
+      const w = poster(H);
+      return { w, h: H, count: 1, across: 1, boxes: [{ x: 0, y: 0, w, h: H, art: "poster" }] };
     }
     case "stills": {
-      const gap = r(22);
-      const w = r(436);
-      const h = Math.round((r(FULL_H) - gap) / 2);
-      return {
-        w,
-        h: 2 * h + gap,
-        count: 2,
-        across: 1,
-        boxes: [0, 1].map((i) => ({ x: 0, y: i * (h + gap), w, h, art: "still" as const })),
-      };
+      const h = Math.floor((H - Math.round(22 * k)) / 2);
+      const gap = H - 2 * h;
+      const w = Math.round(436 * k);
+      return { w, h: H, count: 2, across: 1, boxes: [0, 1].map((i) => ({ x: 0, y: i * (h + gap), w, h, art: "still" as const })) };
     }
     case "grid": {
-      const w = r(144);
-      const h = r(216);
-      const gap = r(16);
+      const h = Math.floor((H - Math.round(16 * k)) / 2);
+      const gap = H - 2 * h;
+      const w = poster(h);
       return {
         w: 3 * w + 2 * gap,
-        h: 2 * h + gap,
+        h: H,
         count: 6,
         across: 3,
         boxes: Array.from({ length: 6 }, (_, i) => ({ x: (i % 3) * (w + gap), y: Math.floor(i / 3) * (h + gap), w, h, art: "poster" as const })),
       };
     }
     case "row": {
-      const w = r(230);
-      const h = r(345);
-      const gap = r(18);
-      return {
-        w: 3 * w + 2 * gap,
-        h,
-        count: 3,
-        across: 3,
-        boxes: [0, 1, 2].map((i) => ({ x: i * (w + gap), y: 0, w, h, art: "poster" as const })),
-      };
+      const w = poster(H);
+      const gap = Math.round(18 * k);
+      return { w: 3 * w + 2 * gap, h: H, count: 3, across: 3, boxes: [0, 1, 2].map((i) => ({ x: i * (w + gap), y: 0, w, h: H, art: "poster" as const })) };
     }
   }
 }
 
 // --- the expanded card: every item in one row, as the Ask answer row shows titles, then the app's Open tile ---
 
-export const EXPANDED = { w: 240, h: 360, stride: 264 } as const;
+export const EXPANDED = { w: 280, h: 420, stride: 308 } as const;
 /** The expanded card spans the screen between the 80px insets. */
 export const EXPANDED_W = 1920 - 2 * 80;
+/** The focused title's caption under the opened row (name, line, a few lines of synopsis), fixed at its left edge. */
+export const CAPTION_W = 900;
 
 /** How far the expanded row scrolls so item `i` of `n` (n includes the Open tile) stays in view. */
 export function expandedScroll(i: number, n: number): number {

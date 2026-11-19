@@ -30,10 +30,10 @@ test("the default styles keep today's cards", () => {
   assert.equal(stills.w, 436);
   assert.deepEqual(stills.boxes.map((b) => [b.y, b.h, b.art]), [[0, 259, "still"], [281, 259, "still"]]);
   const grid = collapsedShape(DEFAULT_STYLES.anime);
-  assert.equal(grid.w, 464);
+  assert.equal(grid.h, 540);
   assert.equal(grid.count, 6);
   assert.equal(grid.across, 3);
-  assert.deepEqual(grid.boxes[4], { x: 160, y: 232, w: 144, h: 216, art: "poster" });
+  assert.deepEqual(grid.boxes[4], { x: 191, y: 278, w: 175, h: 262, art: "poster" });
 });
 
 test("smaller sizes shrink every layout, and every layout fits the card height", () => {
@@ -42,19 +42,26 @@ test("smaller sizes shrink every layout, and every layout fits the card height",
     const m = collapsedShape({ layout, size: "m" });
     const s = collapsedShape({ layout, size: "s" });
     assert.ok(s.w < m.w && m.w < l.w, layout);
-    assert.ok(l.h <= 540, layout);
+    assert.equal(l.h, 540, layout);
     assert.equal(s.boxes.length, s.count, layout);
+    // Every item stays inside the card.
+    for (const b of l.boxes) assert.ok(b.y + b.h <= l.h && b.x + b.w <= l.w, layout);
+  }
+  // At a size, every layout is the same height.
+  for (const size of ["s", "m", "l"] as const) {
+    const hs = new Set(["poster", "stills", "grid", "row"].map((layout) => collapsedShape({ layout: layout as "poster", size }).h));
+    assert.equal(hs.size, 1, size);
   }
   assert.equal(styleFor({}, "unknown").layout, "poster");
   assert.deepEqual(styleFor({ cinema: { layout: "row", size: "s" } }, "cinema"), { layout: "row", size: "s" });
 });
 
 test("the opened row scrolls only once focus passes the fourth title, and stops at the Open tile", () => {
-  // 8 titles and the Open tile: 2352px, so the row moves 592px at most.
+  // 8 titles and the Open tile: 2744px, so the row moves 984px at most.
   assert.equal(expandedScroll(0, 9), 0);
   assert.equal(expandedScroll(3, 9), 0);
   assert.equal(expandedScroll(8, 9), 8 * EXPANDED.stride + EXPANDED.w - EXPANDED_W);
-  assert.equal(expandedScroll(8, 9), 592);
+  assert.equal(expandedScroll(8, 9), 984);
   // A longer row scrolls one stride per title past the fourth.
   assert.equal(expandedScroll(4, 13), EXPANDED.stride);
   assert.equal(expandedScroll(2, 3), 0);

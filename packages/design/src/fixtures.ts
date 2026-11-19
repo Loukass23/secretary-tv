@@ -67,6 +67,7 @@ function media(art: Art, from: number, n: number, going: number, sub: (i: number
       still: art.stills[i],
       title: TITLES[i],
       sub: sub(k),
+      about: "A placeholder synopsis drawn by the design workbench, long enough to show how three lines of a title's description sit under its name on the opened card.",
       ...(k < going ? { resume: true, progress: 0.25 + 0.15 * k } : k === going ? { badge: "Top pick" } : {}),
     };
   });

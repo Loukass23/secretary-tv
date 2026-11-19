@@ -12,7 +12,7 @@ html, body {
 }
 
 /* --- header (home.tsx): the person top left; the weather, the time and quiet buttons top right --- */
-.nest-head { position: absolute; display: flex; align-items: center; gap: 44px; height: 78px; }
+.nest-head { position: absolute; display: flex; align-items: center; gap: 56px; height: 78px; }
 .nest-weather { position: relative; display: flex; align-items: center; gap: 16px; padding: 0 18px; height: 78px; border-radius: 22px; isolation: isolate; }
 .nest-weather::before,
 .nest-menu-item::before,
@@ -67,6 +67,12 @@ html, body {
   isolation: isolate;
 }
 .nest-menu-item.is-focus { color: var(--sg-focus-ink); }
+/* Connection details over the profile menu's items, quiet and not focusable; a hairline under them. */
+.sg-glass > .nest-menu-info { position: absolute; left: 34px; right: 34px; font-size: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Under the person's name: what the TV is connected to, as icons; an alert dot on one that is off. */
+.nest-links { display: flex; gap: 18px; margin-top: 6px; font-size: 28px; }
+.nest-link { position: relative; display: block; }
+.nest-link-off { position: absolute; right: -5px; top: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--sg-alert, #e0484f); }
 /* The card style menu: the picked layout carries a dot, the hint sits under the lines. */
 .sg-glass > .nest-style-head, .sg-glass > .nest-style-hint { position: absolute; left: 32px; right: 32px; }
 .nest-style-head { top: 28px; }
@@ -163,6 +169,18 @@ html, body {
 /* The opened row: each title rises in a beat after the one before it (the delay is set per tile). */
 .nest-rise { position: absolute; left: 0; top: 0; animation: nestRise 420ms var(--sg-ease) both; }
 .nest-col .nest-result-cap { position: absolute; }
+/* The opened card's caption: wider, with three lines of the title's synopsis under its name. */
+.nest-result-cap.nest-media-cap { transition: none; }
+.nest-media-cap p {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.38;
+  color: var(--sg-ink-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .nest-open { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 22px; text-align: center; font-size: 30px; }
 .nest-open b { font-weight: 600; }
 .nest-open small { font-size: 22px; }

@@ -108,7 +108,9 @@ function Nest({ mode, theme, backdrop, art, answer }: PageProps & { art: Art; an
         columns={columns}
         styleMenu={styleMenu}
         open={2}
-        status={focus.area === "header" && focus.i === HEADER_SEARCH ? "Search" : ""}
+        status=""
+        links={[{ icon: "sync" }, { icon: "server", off: true }]}
+        menuInfo={["Nuvio · synced as Robin", "Server offline · apps still work"]}
         me={{ name: "Robin", color: "#5b52e6" }}
       />
     </GlassRoot>

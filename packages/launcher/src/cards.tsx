@@ -5,7 +5,7 @@
 // A media card (Cinema, Shows, Anime) has a style the viewer picks with a long OK (card-style.ts). OK expands it in
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
 import { AppChip, Glass, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
-import { type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
+import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
 import type { Column } from "./nest-nav.ts";
 
 /** A title on a media card. */
@@ -22,6 +22,8 @@ export interface MediaItem {
   badge?: string;
   /** Watched fraction, 0..1. */
   progress?: number;
+  /** A few lines about it, shown under the title while it is focused in the opened card. */
+  about?: string;
 }
 
 export interface ListItem {
@@ -201,9 +203,11 @@ function MediaRow({ col, focus, page }: { col: Extract<RowColumn, { kind: "media
         })}
       </Scroller>
       {hit && (
-        <div class="nest-result-cap is-on" style={{ left: 0, top: 0, transform: `translate3d(${at * EXPANDED.stride - scroll}px,${EXPANDED.h + 30}px,0)` }}>
+        // A fixed panel at the row's left edge, so the eye does not chase the focus across the screen.
+        <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${EXPANDED.h + 34}px`, width: `${CAPTION_W}px` }}>
           <b>{hit.title}</b>
           {hit.sub && <small>{hit.sub}</small>}
+          {hit.about && <p>{hit.about}</p>}
         </div>
       )}
     </>

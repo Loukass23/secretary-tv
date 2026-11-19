@@ -129,7 +129,8 @@ export function Avatar({
   img,
 }: {
   name: string;
-  sub?: string;
+  /** A line under the name: words, or a few icons. */
+  sub?: ComponentChildren;
   x: number;
   y: number;
   focused?: boolean;
