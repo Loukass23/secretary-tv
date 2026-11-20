@@ -166,7 +166,7 @@ export async function withMeta(items: readonly ResumeItem[], kv: KV, f: typeof f
               poster: typeof meta.poster === "string" ? meta.poster : undefined,
               background: typeof meta.background === "string" ? meta.background : undefined,
               ...(typeof meta.description === "string" && meta.description.trim()
-                ? { description: meta.description.replace(/\s+/g, " ").trim().slice(0, 320) }
+                ? { description: clipAt(meta.description, 320) }
                 : {}),
             };
             cache[id] = title;
@@ -187,4 +187,11 @@ export async function withMeta(items: readonly ResumeItem[], kv: KV, f: typeof f
     kv.set(META_CACHE, cache);
   }
   return out;
+}
+
+function clipAt(text: string, max: number): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max >> 1)).replace(/[\s,;:.-]+$/, "")}…`;
 }

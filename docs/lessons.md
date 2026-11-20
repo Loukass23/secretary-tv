@@ -151,6 +151,22 @@ Each item cost a debugging session. If one turns out wrong, fix it here in the s
   episode match and folder, judging movie, OVA and extras folders *below* the root folder, whose own name often lists
   "OVA+Movies". A bigger "Movie 03" must never beat the season folder's episode 03 (it did once, before scoring).
 
+- A pack with no file for the requested episode plays nothing (the next source is tried) instead of its largest file, which
+  was another episode or another show's release. A single-file torrent and an upstream `fileIdx` that lands on a video stay.
+
+## Two shows of one name
+
+Providers get only ids, and the catalog ids come from third-party mappings (Kitsu's `imdb_id`, ARM's `themoviedb`), so a
+show that shares a name with an anime can be played in its place. Defences, in the order a title meets them:
+
+- ARM's TMDB number is checked against the title's year (`plugins/src/ids.ts`, `FileHint.year`).
+- Sources with a release year from before the title began go last (`catalog-kit/src/lib/titlematch.ts`, `rankSources`).
+- The provider scope (anime or general scrapers) follows the opened title, not the app it was opened in.
+- Shows and Cinema leave out animation the Anime app's own catalogs list (`lib/animeguard.ts`). Nuvio collection rows and
+  the Hub search are not filtered.
+- Not yet verified on a TV: whether the failing case comes from ARM, from the Kitsu `imdb_id`, or from a provider that
+  looks the show up by name. Trace one on the TV (`cdp.mjs logs`) before adding more.
+
 ## Ranking
 
 - Order: cached first, then resolution, then what the TV decodes well (HEVC, DD+ and AAC up; AV1, DTS, TrueHD and Dolby Vision

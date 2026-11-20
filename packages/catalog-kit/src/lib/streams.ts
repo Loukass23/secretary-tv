@@ -220,7 +220,7 @@ export function createPluginStreamClient(
   type Entry = { at: number; p: Promise<Stream[]>; partial: Stream[]; done: boolean; watchers: Set<StreamWatcher> };
   const cache = new Map<string, Entry>();
   const keyOf = (type: string, id: string, hint?: FileHint) =>
-    `${type}:${id}|${hint?.season ?? ""}|${hint?.episode ?? ""}|${hint?.absolute ?? ""}`;
+    `${type}:${id}|${hint?.season ?? ""}|${hint?.episode ?? ""}|${hint?.absolute ?? ""}|${hint?.year ?? ""}|${hint?.anime ?? ""}`;
   // Plugin torrents carry the episode numbers, for the file choice when they are resolved.
   const withHints = (streams: Stream[], hint?: FileHint) =>
     hint ? streams.map((s) => (s.url.startsWith("debrid:") ? { ...s, url: withHint(s.url, hint) } : s)) : streams;

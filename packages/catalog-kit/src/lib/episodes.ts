@@ -51,6 +51,10 @@ export interface FileHint {
   season?: number;
   episode?: number;
   absolute?: number;
+  /** The title's year, for the id mapper to tell two shows of one name apart. Never sent in a resolve URL. */
+  year?: number;
+  /** Whether the opened title is anime, which picks the provider scope. Never sent in a resolve URL. */
+  anime?: boolean;
 }
 
 /** Kitsu ids need season/episode/absolute; IMDb-style anime ids ("tt…:1:2") only need the running episode number added. */

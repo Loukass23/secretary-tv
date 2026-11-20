@@ -509,7 +509,7 @@ async function fetchCinemetaMeta(type: CatalogType, id: string, f: typeof fetch)
   return meta ? toTitle({ ...meta, id: meta.id ?? id, imdb_id: isKitsu ? undefined : (meta.imdb_id ?? id) }) : null;
 }
 
-export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch = fetch): Promise<Title | null> {
+async function fetchMetaFirst(type: CatalogType, id: string, f: typeof fetch): Promise<Title | null> {
   const fromAddon = await addonMeta?.(type, id).catch(() => null);
   const title = fromAddon ? toTitle({ ...fromAddon, id: fromAddon.id ?? id }) : null;
   if (title) return title;
@@ -588,4 +588,41 @@ export async function searchCatalogsClient(
       return bScore - aScore;
     })
     .slice(0, 24);
+}
+
+const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+/** Layers `over` onto `base`, skipping fields `over` leaves empty so a known synopsis, year or genre is never erased. */
+export function mergeMeta<T extends object>(base: T, over: Partial<T> | null | undefined): T {
+  const out = { ...base } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(over ?? {})) if (!empty(v)) out[k] = v;
+  return out as T;
+}
+
+const metaCache = new Map<string, Title>();
+const META_TIMEOUT_MS = 12000;
+
+const withTimeout = <T>(p: Promise<T>): Promise<T | null> =>
+  Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), META_TIMEOUT_MS))]);
+
+/** Metadata for a title. The first provider wins, but any missing synopsis, runtime or genre is filled from Cinemeta. */
+export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch = fetch): Promise<Title | null> {
+  const key = `${type}:${id}`;
+  const hit = f === fetch ? metaCache.get(key) : undefined;
+  if (hit) return hit;
+  let title = await withTimeout(fetchMetaFirst(type, id, f));
+  if (title && (empty(title.description) || empty(title.runtime) || empty(title.genre))) {
+    const extra = await withTimeout(fetchCinemetaMeta(type, id, f).catch(() => null));
+    if (extra) {
+      title = {
+        ...title,
+        description: empty(title.description) ? extra.description : title.description,
+        runtime: empty(title.runtime) ? extra.runtime : title.runtime,
+        genre: empty(title.genre) ? extra.genre : title.genre,
+        year: empty(title.year) ? extra.year : title.year,
+      };
+    }
+  }
+  if (title && f === fetch) metaCache.set(key, title);
+  return title;
 }

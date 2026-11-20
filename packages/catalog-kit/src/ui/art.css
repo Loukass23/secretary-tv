@@ -19,7 +19,7 @@
 /* Shared by the catalog screens: the accent kicker and the dim meta line. */
 .cat-kicker {
   display: block;
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;

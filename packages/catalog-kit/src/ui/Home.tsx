@@ -11,7 +11,7 @@ import {
   Segmented,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { backgroundUrl, posterUrl } from "../lib/cinemeta.ts";
+import { backgroundUrl, fetchMeta, posterUrl } from "../lib/cinemeta.ts";
 import {
   CARD_SHAPE_LABELS,
   CARD_SHAPES,
@@ -269,15 +269,34 @@ export function Home({
   const rowScroll = focus.row * ROW_H;
   const sectionIdx = Math.max(1, SECTION_TYPES.indexOf(type));
 
+  // Entries saved without a synopsis (older Continue rows, My List) get one once focus rests on them.
+  const [extra, setExtra] = useState<Record<string, string>>({});
+  const needsText = current && !current.folder && !current.description ? current : null;
+  useEffect(() => {
+    if (!needsText || extra[needsText.id] !== undefined) return;
+    let live = true;
+    const t = setTimeout(() => {
+      fetchMeta(needsText.catalogType ?? type, needsText.id).then(
+        (m) => live && setExtra((e) => ({ ...e, [needsText.id]: m?.description ?? "" })),
+        () => {},
+      );
+    }, DWELL_MS);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [needsText?.id]);
+  const extraText = needsText ? extra[needsText.id] : "";
+
   const kicker = !current
     ? heading
     : isContinue
-      ? "Continue watching · Debrid cached"
+      ? `Continue watching${current?.progressPct ? ` · ${current.progressPct}% watched` : ""}`
       : current.folder
         ? `${activeRow?.title} · Nuvio collection`
         : `${activeRow?.title ?? heading} · ${activeRow ? rowOriginLabel(activeRow, type) : ""}`;
   const meta = current
-    ? [current.badge, current.year, current.rating && `IMDb ${current.rating}`, current.runtime, current.genre?.slice(0, 2).join(" · ")]
+    ? [current.badge, current.badge?.includes(current.year) ? "" : current.year, current.rating && `IMDb ${current.rating}`, current.runtime, current.genre?.slice(0, 2).join(" · ")]
         .filter(Boolean)
         .join("  ·  ")
     : "";
@@ -312,7 +331,7 @@ export function Home({
         <span class="cat-kicker">{kicker}</span>
         <h1>{current?.name ?? status ?? heading}</h1>
         {meta && <div class="cat-meta">{meta}</div>}
-        {current?.description && <p>{current.description}</p>}
+        {(current?.description || extraText) && <p>{current?.description || extraText}</p>}
         {current && (
           <div class="cat-hint">
             <span class="cat-ok">{isContinue ? "▶ OK to resume" : current.folder ? "OK to open the folder · hold OK for the card style" : "OK for details"}</span>

@@ -451,3 +451,12 @@ Default walk, over-50 ms frames per run (3-4 runs, first includes art loading):
 | Second pass, poster colour and shimmer on | 20 / 9 / 7 / 3 |
 
 Shimmer still costs a few long frames at the start of a walk; it is a switch in the Lights panel.
+
+## Continue watching and Detail (2026-11-20)
+
+Cinema on the Samsung TV after the synopsis fallback, Continue text and Back-to-Home changes. Warm walks gave 17 ms
+median, 33 ms p95 and 5-7 frames over 50 ms of ~400, the same as the earlier catalog walks. A walk right after a
+cold start was slower (p95 67 ms, 19 over 50 ms, with first cards at 5.5 s), so measure the second walk. A resumed
+Heat showed its synopsis, runtime, genres and resume bar inside the Detail panel. On Home the info panel cuts the
+synopsis at two lines with an explicit `max-height`: the TV's engine draws a sliver of a third line when `-webkit-line-clamp`
+sits in a flex item that is taller than the clamp.
