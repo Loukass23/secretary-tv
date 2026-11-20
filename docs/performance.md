@@ -420,3 +420,34 @@ requestAnimationFrame on the reference TV over Down and Back, three cycles: 2-3 
 83-106 ms worst (the very first switch after launch showed 561 ms, the blur's first raster). Opacity alone had no
 frame over 50 ms; blur radii of 3 and 6 px cost as many slow frames as 14 px, so the radius is not the lever. If the
 switch ever reads as a stutter, drop the `filter` line in `.nest-stage.is-away` and keep the dim.
+
+## Metallic sheen (Nest, `cdp.mjs walk`, 2026-11-20)
+
+Three transform-only bands sliding under the glass (`sheen.tsx`), plus the brushed-metal bitmap and the poster-colour crossfade (2.6 s).
+Default Nest walk, two runs each (the first run after a launch also loads art):
+
+| Shimmer | frames | median | p95 | max | over 50 ms |
+| --- | --- | --- | --- | --- | --- |
+| on | 380 / 420 | 17 / 17 | 33 / 17 | 117 / 50 | 7 / 2 |
+| off | 399 / 406 | 17 / 17 | 33 / 17 | 100 / 50 | 1 / 0 |
+
+Within the +2 long frames per walk allowed in the plan; the bands pause while keys are pressed. Not yet measured: a long idle soak with the bands running.
+
+### Poster colour, second pass (Nest, 2026-11-20)
+
+First version redrew the wallpaper and its frost for every poster colour and set the focus colour on the page root. Both were slow:
+the wallpaper redraw re-rasterizes every glass layer (flicker), and **a custom property changed on the root restyled all ~310
+elements, about 55 ms on the TV, against about 8 ms for one element**. Now the wallpaper is drawn once per theme, the poster's colour is a
+small picture of corner lights crossfaded over it (`tint.tsx`, opacity only), the focus colour is set on the focused elements only
+(`ring.ts`), and the sheen bands are pre-leaned sprites that slide by translate alone and never restart.
+
+Default walk, over-50 ms frames per run (3-4 runs, first includes art loading):
+
+| Build | over 50 ms |
+| --- | --- |
+| Poster colour off, shimmer off | 3 / 1 / 0 |
+| First version, poster colour on | 14 / 6 / 5 |
+| Second pass, poster colour on | 8 / 1 / 3 |
+| Second pass, poster colour and shimmer on | 20 / 9 / 7 / 3 |
+
+Shimmer still costs a few long frames at the start of a walk; it is a switch in the Lights panel.

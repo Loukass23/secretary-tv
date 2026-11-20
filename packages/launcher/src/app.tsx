@@ -1,5 +1,5 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, artPalette, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, type IconName, type Palette, paletteKey, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -127,7 +127,7 @@ const RIPPLE_AWAY_MS = 20_000;
 /** How long the wave keeps "speaking" after an answer arrives. */
 const SPEAK_MS = 3000;
 /** The glow when an artwork's colour cannot be read: the app's own tint. */
-const KIND_TINT: Record<CatalogKind, string> = { movie: TINTS.orange, series: TINTS.blue, anime: TINTS.rose };
+const KIND_TINT: Record<CatalogKind, string> = { movie: TINTS.orange, series: TINTS.gold, anime: TINTS.clay };
 const THEME_LABEL: Record<ThemePref, string> = { auto: "Theme: automatic (Daylight 7–19h)", day: "Theme: Daylight", night: "Theme: Night" };
 
 function loadThemePref(): ThemePref {
@@ -275,9 +275,6 @@ function clearRecent(): string[] {
   }
   return [];
 }
-
-/** Backdrops already drawn, by theme and mood: going back to a colour costs nothing. */
-const backdrops = new Map<string, Backdrop>();
 
 export function App() {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
@@ -810,36 +807,27 @@ export function App() {
     };
   }, []);
 
-  // The backdrop and its frost are drawn again when Daylight turns on or off.
+  // The wallpaper and its frost are drawn once per theme; a poster's colour is a crossfaded layer over them (MoodTint), never a redraw.
   useEffect(() => onLightFx(setFx), []);
   const moodOn = effective(fx).mood;
   const shownMood = moodOn ? mood : null;
-  const moodKey = paletteKey(shownMood);
+  useFocusRing(theme === "day" ? null : shownMood);
   useEffect(() => {
     let live = true;
-    // The mood settles first (the poster has to stay in focus), so a walk along a row draws nothing.
     const t = setTimeout(
       () => {
-        const key = `${theme}:${moodKey}`;
-        const hit = backdrops.get(key);
-        if (hit) return void setBackdrop(hit);
-        void drawBackdrop(TINTS.orange, theme, shownMood).then(
-          (b) => {
-            // A few kept, so going back to a poster's colour costs nothing; the oldest goes first.
-            backdrops.set(key, b);
-            if (backdrops.size > 6) backdrops.delete(backdrops.keys().next().value as string);
-            if (live) setBackdrop(b);
-          },
+        void backdropFor(TINTS.orange, theme, null, "none").then(
+          (b) => live && setBackdrop(b),
           (e) => console.warn("[nest] backdrop failed", e),
         );
       },
-      backdrop ? 350 : 0,
+      backdrop ? 250 : 0,
     );
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [theme, moodKey]);
+  }, [theme]);
 
   // What the assistant is doing, while the home screen is up: prompts from the phone show here too.
   useEffect(() => {
@@ -1246,36 +1234,50 @@ export function App() {
     });
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
-  const rowArt = colAt >= 0 && focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : undefined;
+  // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
+  const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
     rowArt
       ? rowArt
       : null;
+  // A card without a poster (Assistant, Weather, Calendar...) has its own warm colour, stable for its key.
+  const cardKey = colAt >= 0 ? columns[colAt]?.key : undefined;
   useEffect(() => {
-    if (!focusedArt) {
-      // Focus left the posters: the side lights go back, but not for a passing visit to the header.
+    if (!focusedArt && !cardKey) {
+      // Focus left the cards: the side lights go back, but not for a passing visit to the header.
       const t = setTimeout(() => syncMood(null), 3000);
       return () => clearTimeout(t);
     }
     let live = true;
-    const url = SERVER_URL ? artProxy(SERVER_URL, focusedArt.src) : focusedArt.src;
     const t = setTimeout(() => {
-      void artColour(url)
+      const fxNow = effective(fx);
+      const apply = (p: Palette | null) => {
+        if (!live) return;
+        // A grey poster, or art that cannot be read, falls back to the card's own colour.
+        const shown = p ?? (cardKey ? homeMood(cardKey) : null);
+        if (fxNow.mood) setMood(shown);
+        if (fxNow.sync) syncMood(shown ? shown.accent : null);
+        if (!focusedArt && shown) void glowImage(shown.accent.join(",")).then((src) => live && setGlow(src));
+      };
+      if (!focusedArt) return apply(null);
+      // The art is read straight from its host first (it allows it); the home server's /art is the way when a host does not.
+      const direct = focusedArt.src;
+      const via = SERVER_URL ? artProxy(SERVER_URL, direct) : null;
+      void artColour(direct)
+        .then((rgb) => rgb ?? (via ? artColour(via) : null))
         .then((rgb) => glowImage(rgb ?? KIND_TINT[focusedArt.type]))
         .then((src) => live && setGlow(src));
-      if (effective(fx).mood || effective(fx).sync) {
-        void artPalette(url).then((p) => {
-          if (!live) return;
-          if (effective(fx).mood) setMood(p);
-          if (effective(fx).sync) syncMood(p ? p.accent : null);
-        });
+      if (fxNow.mood || fxNow.sync) {
+        void artPalette(direct)
+          .then((p) => p ?? (via ? artPalette(via) : null))
+          .then(apply);
       }
-    }, 120);
+    }, 250);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [focusedArt?.src, fx]);
+  }, [focusedArt?.src, cardKey, fx]);
   // The side lights go back the moment the sync (or every effect) is switched off.
   useEffect(() => {
     if (!effective(fx).sync) syncMood(null);
@@ -1749,7 +1751,14 @@ export function App() {
   };
 
   return (
-    <GlassRoot mode="fake" wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} class={theme === "day" ? "nest sg-day" : "nest"}>
+    <GlassRoot
+      mode="fake"
+      wallpaper={backdrop?.wallpaper}
+      frost={backdrop?.frost}
+      mood={moodOn ? { palette: shownMood, day: theme === "day" } : undefined}
+      sheen={effective(fx).shimmer && { palette: shownMood }}
+      class={theme === "day" ? "nest sg-day" : "nest"}
+    >
       {view === "signin" ? (
         <SignIn
           onDone={() => {

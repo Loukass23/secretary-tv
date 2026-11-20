@@ -2,14 +2,14 @@
 // frost the glass takes from it. Rules from the TV (docs/performance.md, glass catalog):
 //   - the art is its own layer, decoded before it is shown, and a faded-out copy is removed
 //   - the frost swap re-rasterizes every glass layer, so it waits until focus rests
-import { artPalette, type Backdrop, drawBackdrop, type Palette, paletteKey, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artPalette, type Backdrop, backdropFor, type Palette, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { frostFor, preload, shadeImage } from "../lib/hero.ts";
 import { loadSettings } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import "./art.css";
 
-export const TINT: Record<CatalogType, string> = { movie: TINTS.orange, series: TINTS.blue, anime: TINTS.rose };
+export const TINT: Record<CatalogType, string> = { movie: TINTS.orange, series: TINTS.gold, anime: TINTS.clay };
 
 /** How long focus must rest on an item before its art becomes the backdrop. */
 export const DWELL_MS = 600;
@@ -22,7 +22,7 @@ const FADE_MS = 450;
  * The app's tinted wallpaper (under everything) and the shade image (over the art). With `moodSrc` (the focused item's art)
  * and the "Poster colour" setting on, the wallpaper takes that poster's colour once focus has rested on it.
  */
-export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdrop | null; shade: string | null } {
+export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdrop | null; shade: string | null; sheen: { palette: Palette | null } | false; mood: { palette: Palette | null } | undefined } {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
   const [shade, setShade] = useState<string | null>(null);
   const [mood, setMood] = useState<Palette | null>(null);
@@ -36,14 +36,16 @@ export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdr
     };
   }, [moodSrc]);
   const shownMood = loadSettings().domotics.moodBackground ? mood : null;
-  const moodKey = paletteKey(shownMood);
+  // The wallpaper is drawn once per app; the poster's colour is a crossfaded layer over it (MoodTint), never a redraw.
   useEffect(() => {
-    void drawBackdrop(TINT[type], "night", shownMood).then(setBackdrop, (e) => console.warn("[art] backdrop failed", e));
-  }, [type, moodKey]);
+    void backdropFor(TINT[type], "night", null, "none").then(setBackdrop, (e) => console.warn("[art] backdrop failed", e));
+  }, [type]);
   useEffect(() => {
     void shadeImage().then(setShade, () => {});
   }, []);
-  return { backdrop, shade };
+  // The metallic sheen goes with the "Poster colour" setting, in the poster's colour.
+  const on = loadSettings().domotics.moodBackground;
+  return { backdrop, shade, sheen: on && { palette: shownMood }, mood: on ? { palette: shownMood } : undefined };
 }
 
 interface Slot {

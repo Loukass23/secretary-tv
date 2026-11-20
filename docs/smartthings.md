@@ -130,3 +130,10 @@ None of this is in SmartThings' docs. It took these fixes before the reference a
   wanted without Nest.
 - **Levels in the Lights panel:** set them by voice for now.
 - **Pausing a film** doesn't change the lights.
+
+**Shimmer and easing.** The Lights panel's "Shimmer" switch (Nest) slides three soft metallic bands over the
+background (`tv-kit/src/glass/sheen.tsx`: transform-only layers, paused while keys are pressed), tinted with the
+poster's accent pulled toward savanna gold. "Poster colour" (and, in the catalog apps, the setting of the same name) gates it
+there. The background crossfades over 2.6 s, and the side lights reach a very different poster colour by way of the
+halfway colour (`moodMidpoint`, 0.9 s) instead of snapping; the least gap between colour changes is 2.5 s. The cost of
+the sliding bands on the TV is not measured yet: run `cdp.mjs walk` with Shimmer on and off and record it in `docs/performance.md`.

@@ -11,6 +11,7 @@ import {
   fadeShow,
   INDEPENDENT_DEFAULT,
   lightCommands,
+  moodMidpoint,
   moodShow,
   MUSIC_DEFAULT,
   type MusicConfig,
@@ -361,12 +362,12 @@ async function dance(run: number, devices: readonly StDevice[]): Promise<void> {
 // --- the side lights following the poster in focus ---
 
 /** The least time between two colour changes: each is a cloud call, and a walk along a row would queue dozens. */
-export const MOOD_GAP_MS = 4_000;
+export const MOOD_GAP_MS = 2_500;
 /** The least change of hue (0-100) that is worth a call. */
 const MOOD_MIN_STEP = 5;
 
 let moodLights: readonly StDevice[] | null = null;
-let moodSent: { hue: number } | null = null;
+let moodSent: { hue: number; rgb: readonly [number, number, number] } | null = null;
 let moodAt = 0;
 let moodTimer: ReturnType<typeof setTimeout> | undefined;
 let moodWanted: readonly [number, number, number] | null = null;
@@ -402,12 +403,26 @@ async function applyMood(rgb: readonly [number, number, number] | null): Promise
   if (moodSent && Math.abs(moodSent.hue - hue) < MOOD_MIN_STEP) return;
   // The lights as they were before the first colour, so the way back restores them, not a colour of ours.
   moodLights ??= await freshStatus();
+  // A big jump goes by way of the colour halfway, so the room slides to the new colour instead of snapping.
+  const mid = moodSent ? moodMidpoint(moodSent.rgb, rgb) : null;
+  if (mid) {
+    const first = moodShow(moodLights, mid, rippleConfig(), independentLights());
+    if (first) {
+      await startShow(first.steps, ++current, first.undo).started;
+      await new Promise((r) => setTimeout(r, MOOD_STEP_MS));
+      // Something else took the lights (a ripple, playback) or the setting went off meanwhile.
+      if (baseline || !moodLights || moodWanted !== rgb) return;
+    }
+  }
   const show = moodShow(moodLights, rgb, rippleConfig(), independentLights());
   if (!show) return;
-  moodSent = { hue };
+  moodSent = { hue, rgb };
   moodAt = Date.now();
   await startShow(show.steps, ++current, show.undo).started;
 }
+
+/** The pause between the halfway colour and the new one. */
+const MOOD_STEP_MS = 900;
 
 /** A ripple on request ("ripple test" to Ask Nest): plays whether or not the ripples are switched off, from a fresh status. */
 export async function playRippleTest(style: RippleStyle): Promise<void> {

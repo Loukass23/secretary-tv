@@ -8,6 +8,7 @@ import {
   homeAction,
   homeAlerts,
   isIndependent,
+  moodMidpoint,
   moodShow,
   musicShow,
   nextPictureMode,
@@ -484,6 +485,13 @@ test("the splash ripple swells warm, slowly, then fades in stages to a dim orang
   assert.ok(!cmds(r.steps).some((s) => s.includes(" off]")), "nothing is put back off");
   assert.equal(r.steps[6].after, 0);
   assert.ok(r.steps.reduce((ms, st) => ms + st.after, 0) >= 4000, "a long, unhurried splash");
+});
+
+test("moodMidpoint eases big hue jumps and leaves small ones alone", () => {
+  assert.deepEqual(moodMidpoint([255, 0, 0], [0, 0, 255]), [128, 0, 128]);
+  assert.equal(moodMidpoint([255, 0, 0], [255, 40, 0]), null);
+  // Red and magenta are close on the colour wheel even though the hue numbers wrap.
+  assert.equal(moodMidpoint([255, 0, 10], [250, 0, 60]), null);
 });
 
 test("stColour turns sRGB into SmartThings hue and saturation (0-100)", () => {

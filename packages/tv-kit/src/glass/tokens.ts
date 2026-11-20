@@ -70,8 +70,8 @@ export const TYPE = {
 export const TINTS = {
   orange: "255,90,38",
   // Shows and Anime keep their own tint, in the same warm family: savanna gold and clay red.
-  blue: "255,186,60",
-  rose: "226,72,72",
+  gold: "255,186,60",
+  clay: "226,72,72",
 } as const;
 
 export type TintName = keyof typeof TINTS;

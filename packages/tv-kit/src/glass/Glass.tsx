@@ -1,6 +1,9 @@
 import { type ComponentChildren, createContext } from "preact";
 import { useContext, useRef } from "preact/hooks";
 import { FROST_SCALE, PAGE_H, PAGE_W } from "./backdrop.ts";
+import type { Palette } from "./palette.ts";
+import { MetalSheen } from "./sheen.tsx";
+import { MoodTint } from "./tint.tsx";
 import "./glass.css";
 
 /**
@@ -18,11 +21,15 @@ interface RootProps {
   /** blurBackdrop() of the same backdrop; without it "fake" renders flat. */
   frost?: string | null;
   class?: string;
+  /** Slow metallic light sliding over the wallpaper; `palette` (the poster's) tints it, null keeps it savanna gold. */
+  sheen?: { palette: Palette | null } | false;
+  /** The poster's mood as coloured corner lights over the wallpaper, crossfaded (tint.tsx); undefined keeps the wallpaper as drawn. */
+  mood?: { palette: Palette | null; day?: boolean };
   children?: ComponentChildren;
 }
 
 /** The page a glass screen lives on: 1920x1080, with the backdrop and the frost for its surfaces. */
-export function GlassRoot({ mode, wallpaper, frost, class: cls, children }: RootProps) {
+export function GlassRoot({ mode, wallpaper, frost, class: cls, sheen, mood, children }: RootProps) {
   // A new wallpaper fades in over the old one: the old one stays on its own layer and fades out (opacity only).
   const shown = useRef<{ now?: string; before?: string }>({});
   if (shown.current.now !== wallpaper) {
@@ -32,6 +39,8 @@ export function GlassRoot({ mode, wallpaper, frost, class: cls, children }: Root
   return (
     <div class={`sg-root sg-${mode}${cls ? ` ${cls}` : ""}`} style={wallpaper ? { backgroundImage: `url(${wallpaper})` } : undefined}>
       {before && <i key={before} class="sg-wall-out" style={{ backgroundImage: `url(${before})` }} />}
+      {mood && wallpaper && <MoodTint palette={mood.palette} day={!!mood.day} />}
+      {sheen && wallpaper && <MetalSheen palette={sheen.palette} />}
       <FrostContext.Provider value={mode === "fake" ? (frost ?? null) : null}>{children}</FrostContext.Provider>
     </div>
   );

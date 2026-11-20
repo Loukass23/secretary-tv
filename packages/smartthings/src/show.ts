@@ -216,6 +216,22 @@ export function stColour([r, g, b]: readonly [number, number, number]): { hue: n
   return { hue: Math.round((h / 360) * 100), saturation: mx === 0 ? 0 : Math.round((c / mx) * 100) };
 }
 
+/** A hue move of at least this much (0-100) goes by way of a halfway colour. */
+const MOOD_EASE_FROM = 20;
+
+/**
+ * The colour halfway between two (in RGB, so the light passes through what lies between them), or null when the hue
+ * moves less than MOOD_EASE_FROM: the side lights slide to a very different poster colour instead of snapping to it.
+ */
+export function moodMidpoint(
+  from: readonly [number, number, number],
+  to: readonly [number, number, number],
+): [number, number, number] | null {
+  const d = Math.abs(stColour(from).hue - stColour(to).hue);
+  if (Math.min(d, 100 - d) < MOOD_EASE_FROM) return null;
+  return [Math.round((from[0] + to[0]) / 2), Math.round((from[1] + to[1]) / 2), Math.round((from[2] + to[2]) / 2)];
+}
+
 /** The least saturation a mood colour is sent with: under it a light would just look white. */
 const MOOD_MIN_SATURATION = 45;
 
