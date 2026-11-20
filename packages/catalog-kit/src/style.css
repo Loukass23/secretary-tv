@@ -2,7 +2,7 @@
    are set from Settings > Accent Color (lib/settings.ts). Flat fills only: gradients are the slowest raster on
    the TV (docs/lessons.md). */
 :root {
-  --bg: #07080b;
+  --bg: #0b0807;
   --text: #f4f4f6;
   --accent: #ff5a26;
   --tinta: #ffffff;

@@ -23,7 +23,7 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: #07080b center / 1920px 1080px no-repeat;
+  background: #0b0807 center / 1920px 1080px no-repeat;
   color: var(--sg-ink);
   font-family: system-ui, -apple-system, sans-serif;
 }
@@ -361,13 +361,13 @@
 .sg-root.sg-day {
   --sg-fill: rgba(255, 255, 255, 0.42);
   --sg-line: rgba(255, 255, 255, 0.8);
-  --sg-raised: rgba(44, 38, 110, 0.09);
-  --sg-ink: #1d1c2b;
-  --sg-ink-dim: rgba(29, 28, 43, 0.7);
-  --sg-focus: #5b52e6;
+  --sg-raised: rgba(120, 50, 10, 0.09);
+  --sg-ink: #2a1810;
+  --sg-ink-dim: rgba(42, 24, 16, 0.7);
+  --sg-focus: #c2410c;
   --sg-focus-ink: #ffffff;
   --sg-focus-ink-dim: rgba(255, 255, 255, 0.88);
-  background-color: #eee9f3;
+  background-color: #f4e9dc;
 }
 
 /* --- count bubble on an icon button --- */

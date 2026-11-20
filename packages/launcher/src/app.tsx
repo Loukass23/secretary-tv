@@ -195,8 +195,8 @@ type RecentCard =
   | { kind: "alert"; key: string; at: number; text: string };
 
 const SOURCE_LABEL: Record<Reminder["source"], [string, string]> = {
-  companion: ["From Secretary Desk", "#5b7cff"],
-  gemini: ["From the assistant", "#7d6bff"],
+  companion: ["From Secretary Desk", "#e0792a"],
+  gemini: ["From the assistant", "#ffb52e"],
   local: ["Added on the TV", "#3ccf6e"],
 };
 const SCENES: readonly [Scene, string][] = [

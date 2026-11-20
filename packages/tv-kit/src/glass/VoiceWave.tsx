@@ -32,11 +32,11 @@ function ribbon(cycles: number, phase: number, amp: number, thick: number, from:
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-/** One colour per speaker, so it is clear who is talking: blue ribbons while the room does, amber while Nest does. */
+/** One colour per speaker, so it is clear who is talking: clay-red ribbons while the room does, gold while Nest does. */
 const ROOM = [
-  ribbon(1.5, 0, 34, 7, "#1d9bf0", "#5cc8ff"),
-  ribbon(2, 1.6, 26, 5, "#4db8ff", "#1d9bf0"),
-  ribbon(1, 3.1, 20, 9, "#8fd9ff", "#4db8ff"),
+  ribbon(1.5, 0, 34, 7, "#c2410c", "#ff7a3d"),
+  ribbon(2, 1.6, 26, 5, "#e0592a", "#c2410c"),
+  ribbon(1, 3.1, 20, 9, "#ff9a6b", "#e0592a"),
 ];
 const NEST = [
   ribbon(1.5, 0, 34, 7, "#ff9f1c", "#ffc857"),
@@ -44,12 +44,12 @@ const NEST = [
   ribbon(1, 3.1, 20, 9, "#ffd98a", "#ffb84d"),
 ];
 
-/** The orb the ribbons retract into: a soft violet sphere with a highlight, drawn once. */
+/** The orb the ribbons retract into: a small sun, cream at the heart and amber to terracotta at the edge, drawn once. */
 const ORB = (() => {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
-    `<defs><radialGradient id="b" cx=".38" cy=".34" r=".7"><stop offset="0" stop-color="#e8e2ff"/>` +
-    `<stop offset=".35" stop-color="#9b8cff"/><stop offset=".75" stop-color="#5b6cff"/><stop offset="1" stop-color="#4fc3ff"/>` +
+    `<defs><radialGradient id="b" cx=".38" cy=".34" r=".7"><stop offset="0" stop-color="#fff0c4"/>` +
+    `<stop offset=".35" stop-color="#ffb52e"/><stop offset=".75" stop-color="#ff7a1a"/><stop offset="1" stop-color="#c2410c"/>` +
     `</radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#b)"/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 })();
