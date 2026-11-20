@@ -148,5 +148,28 @@ export function extractPalette(px: ArrayLike<number>, w: number, h: number): Pal
   return { accent, base, lights, hue: ((hue * 180) / Math.PI + 360) % 360 };
 }
 
+/** The warm, sunny hues (OKLCh degrees) the home cards take between them: amber, terracotta, gold, saffron, copper, sand. */
+const WARM_HUES = [62, 40, 84, 72, 50, 95] as const;
+
+/** A palette in one warm hue (OKLCh degrees), built like a poster's: lively accent, near-black base, four soft lights. */
+export function warmPalette(hueDeg: number): Palette {
+  const h = (hueDeg * Math.PI) / 180;
+  // The lights lean a little either side of the hue, so the corners are not one flat colour.
+  const lean = (d: number, L: number, C: number) => fromOklch(L, C, h + (d * Math.PI) / 180);
+  return {
+    accent: fromOklch(0.74, 0.16, h),
+    base: fromOklch(0.17, 0.035, h),
+    lights: [lean(-10, 0.44, 0.115), lean(8, 0.46, 0.12), lean(14, 0.42, 0.105), lean(-6, 0.4, 0.1)],
+    hue: hueDeg,
+  };
+}
+
+/** The palette of a home card that has no poster, stable for its key so a card keeps its colour when the row is reordered. */
+export function homeMood(key: string): Palette {
+  let n = 0;
+  for (let i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) >>> 0;
+  return warmPalette(WARM_HUES[n % WARM_HUES.length]);
+}
+
 /** A stable key for caching what is drawn from a palette (accent rounded to 8 levels a channel). */
 export const paletteKey = (p: Palette | null): string => (p ? p.accent.map((v) => v >> 3).join(".") : "none");

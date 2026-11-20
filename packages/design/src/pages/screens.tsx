@@ -119,7 +119,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   });
 
   return (
-    <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} class={theme === "day" ? "nest sg-day" : "nest"}>
+    <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
       <NestHome
         focus={focus}
         time="16:20"

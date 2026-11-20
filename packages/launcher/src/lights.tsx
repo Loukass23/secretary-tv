@@ -15,6 +15,7 @@ const EFFECTS: readonly { key: keyof LightFx; label: string }[] = [
   { key: "mood", label: "Poster colour" },
   { key: "sync", label: "Match lights" },
   { key: "dance", label: "Music dance" },
+  { key: "shimmer", label: "Shimmer" },
 ];
 
 const PANEL = { x: 260, y: 90, w: 1400, h: 900 };

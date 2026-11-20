@@ -37,9 +37,57 @@
   background-size: 100% 100%;
   pointer-events: none;
   will-change: opacity;
-  animation: sgWallOut 800ms ease-out forwards;
+  animation: sgWallOut 1400ms ease-in-out forwards;
 }
 @keyframes sgWallOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* The poster's mood: a small picture of coloured corner lights, scaled up, crossfaded by opacity (tint.tsx). */
+.sg-root > .sg-tint {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  pointer-events: none;
+  will-change: opacity;
+}
+.sg-tint.is-new { animation: sgTintIn 2600ms ease-in-out both; }
+@keyframes sgTintIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* The metallic sheen: two soft bands sliding on their own layers (transform only), under the glass. They never
+   restart; a new colour fades in on a second picture inside each band (sheen.tsx). */
+.sg-root > .sg-sheen {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sg-sheen > i {
+  position: absolute;
+  left: -1000px;
+  top: 0;
+  width: 900px;
+  height: 1080px;
+  opacity: 0.08;
+  will-change: transform;
+  animation: sgSheenSlide 70s linear infinite;
+}
+.sg-sheen > i:nth-child(2) { opacity: 0.06; width: 1200px; animation-duration: 94s; animation-delay: -41s; }
+.sg-sheen > i > b {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+}
+.sg-sheen > i > b.is-new { animation: sgSheenIn 2400ms ease-in-out both; }
+.sg-sheen.is-paused > i { animation-play-state: paused; }
+.sg-day .sg-sheen > i { opacity: 0.14; }
+@keyframes sgSheenSlide {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(3100px, 0, 0); }
+}
+@keyframes sgSheenIn { from { opacity: 0; } to { opacity: 1; } }
 .sg-root small { display: block; color: var(--sg-ink-dim); }
 
 /* --- surface --- */

@@ -572,7 +572,7 @@ export function HubOverlay({
 
   return (
     <div class="hub-glass" style={active ? undefined : "display:none"}>
-      <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={base.backdrop?.frost} class="hub">
+      <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={base.backdrop?.frost} sheen={base.sheen} mood={base.mood} class="hub">
         <Glass x={PAD} y={TOP_Y} w={760} h={68} focused={focus.row === 0 && focus.col === 0} class="hub-search">
           <Icon name="search" class="hub-search-icon" />
           {query ? (

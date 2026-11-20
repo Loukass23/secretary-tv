@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractPalette, fromOklch, paletteKey } from "../src/glass/palette.ts";
+import { extractPalette, fromOklch, paletteKey, homeMood, warmPalette } from "../src/glass/palette.ts";
 
 const W = 32;
 const H = 18;
@@ -72,4 +72,17 @@ test("paletteKey is stable for near colours and distinct for far ones", () => {
   assert.equal(paletteKey(a), paletteKey(b));
   assert.notEqual(paletteKey(a), paletteKey(c));
   assert.equal(paletteKey(null), "none");
+});
+
+test("home cards get a warm palette of their own, stable for the key", () => {
+  const a = homeMood("weather");
+  assert.deepEqual(homeMood("weather"), a);
+  for (const key of ["assistant", "weather", "calendar", "apps", "reminders", "home"]) {
+    const p = homeMood(key);
+    // Warm: hue between red-orange and yellow, and the accent is red-heavy.
+    assert.ok(p.hue >= 30 && p.hue <= 100, `${key} hue ${p.hue}`);
+    assert.ok(p.accent[0] > p.accent[2], `${key} accent is warm`);
+    assert.ok(p.base[0] < 60, `${key} base stays dark`);
+  }
+  assert.notEqual(paletteKey(warmPalette(40)), paletteKey(warmPalette(84)));
 });
