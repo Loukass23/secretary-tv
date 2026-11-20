@@ -55,7 +55,7 @@ export const askNest = async (
 
 /** Why a clip gave no words: the server has no Gemini key, nobody spoke, or it failed. */
 export class VoiceError extends Error {
-  readonly reason: "unavailable" | "no-speech" | "failed";
+  readonly reason: "unavailable" | "no-assistant" | "no-speech" | "failed";
   constructor(reason: VoiceError["reason"]) {
     super(reason);
     this.reason = reason;
@@ -75,6 +75,7 @@ export const transcribeClip = async (serverUrl: string, wav: Uint8Array<ArrayBuf
     throw new VoiceError("failed");
   }
   if (res.status === 503) throw new VoiceError("unavailable");
+  if (res.status === 502) throw new VoiceError("no-assistant");
   if (res.status === 422) throw new VoiceError("no-speech");
   if (!res.ok) throw new VoiceError("failed");
   return ((await res.json()) as { transcript: string }).transcript;
@@ -125,6 +126,26 @@ export const WAVE_STATUS: Record<WaveState, string> = {
   thinking: "Thinking…",
   speaking: "",
 };
+
+/** What the assistant says beside its orb while it is not focused: a greeting, then the open reminders. */
+export interface Briefing {
+  greeting: string;
+  /** "2 reminders", then the first three with their time when they have one. */
+  lines: string[];
+}
+
+export function briefing(now: Date, name: string | undefined, open: readonly { text: string; due?: string }[]): Briefing {
+  const h = now.getHours();
+  const part = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+  const who = name?.trim();
+  return {
+    greeting: `Good ${part}${who ? `, ${who}` : ""}`,
+    lines: [
+      open.length === 0 ? "No reminders" : `${open.length} reminder${open.length === 1 ? "" : "s"}`,
+      ...open.slice(0, 3).map((r) => (r.due ? `${r.text} · ${r.due}` : r.text)),
+    ],
+  };
+}
 
 export type ThemePref = "auto" | "day" | "night";
 export const THEME_PREFS: readonly ThemePref[] = ["auto", "day", "night"];

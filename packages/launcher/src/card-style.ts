@@ -128,8 +128,9 @@ export function saveCardStyles(store: { setItem(k: string, v: string): void }, s
 
 // --- the long-OK menu ---
 
-/** The size line comes after the four layouts. */
+/** The size line comes after the four layouts, then "Remove from home". */
 export const SIZE_LINE = LAYOUTS.length;
+export const REMOVE_LINE = SIZE_LINE + 1;
 
 export interface StyleMenu {
   /** The card it styles. */
@@ -145,16 +146,17 @@ export function openStyleMenu(key: string, style: CardStyle): StyleMenu {
 }
 
 /**
- * One key in the menu. Up and Down walk the layouts (each one shows on the card at once) and the size line;
- * Left and Right change the size there. "keep" and "undo" close it: OK keeps `style`, Back puts `orig` back.
+ * One key in the menu. Up and Down walk the layouts (each one shows on the card at once), the size line and "Remove
+ * from home"; Left and Right change the size on its line. "keep", "undo" and "remove" close it: OK keeps `style`
+ * (or removes the card on the last line), Back puts `orig` back.
  */
-export function stepStyleMenu(m: StyleMenu, key: string): StyleMenu | "keep" | "undo" {
-  if (key === "Enter") return "keep";
+export function stepStyleMenu(m: StyleMenu, key: string): StyleMenu | "keep" | "undo" | "remove" {
+  if (key === "Enter") return m.line === REMOVE_LINE ? "remove" : "keep";
   if (key === "Back") return "undo";
   if (key === "Up" || key === "Down") {
-    const line = Math.max(0, Math.min(SIZE_LINE, m.line + (key === "Up" ? -1 : 1)));
+    const line = Math.max(0, Math.min(REMOVE_LINE, m.line + (key === "Up" ? -1 : 1)));
     if (line === m.line) return m;
-    return line === SIZE_LINE ? { ...m, line } : { ...m, line, style: { ...m.style, layout: LAYOUTS[line] } };
+    return line >= SIZE_LINE ? { ...m, line } : { ...m, line, style: { ...m.style, layout: LAYOUTS[line] } };
   }
   if ((key === "Left" || key === "Right") && m.line === SIZE_LINE) {
     const i = SIZES.indexOf(m.style.size) + (key === "Left" ? -1 : 1);

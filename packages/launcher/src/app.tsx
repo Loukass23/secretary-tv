@@ -40,13 +40,15 @@ import {
   transcribeClip,
   VoiceError,
   WAVE_STATUS,
+  briefing,
   waveState,
   type Weather,
 } from "./assistant.ts";
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
-import { APP_IDS, GEMINI_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
+import { APP_IDS, GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
 import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
+import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expands, type MediaItem, type RowColumn, rowLayout } from "./cards.tsx";
 import { Home, shownStyle } from "./home.tsx";
 import {
@@ -58,7 +60,6 @@ import {
   HEADER_PARTY,
   HEADER_PROFILE,
   HEADER_SEARCH,
-  HEADER_WEATHER,
   type Layout,
   leave,
   step,
@@ -70,7 +71,7 @@ import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
-import { discoverCatalog, searchCatalogs, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, searchCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -119,6 +120,28 @@ const TRENDING_KEY = "nest.trending.2";
 const TRENDING_TTL_MS = 24 * 60 * 60_000;
 type Trending = Record<CatalogKind, SearchResult[]>;
 
+/** The results whose poster really loads: a blank slot among the suggestions only confuses. */
+function loadablePosters(items: SearchResult[]): Promise<SearchResult[]> {
+  return Promise.all(
+    items.map(
+      (r) =>
+        new Promise<boolean>((resolve) => {
+          const img = new Image();
+          const t = setTimeout(() => resolve(false), 6000);
+          img.onload = () => {
+            clearTimeout(t);
+            resolve(true);
+          };
+          img.onerror = () => {
+            clearTimeout(t);
+            resolve(false);
+          };
+          img.src = posterUrl(r.title);
+        }),
+    ),
+  ).then((ok) => items.filter((_, i) => ok[i]));
+}
+
 /** The media cards, in row order: what fills each and how it is named (cards.tsx, card-style.ts). */
 const MEDIA = [
   { key: "cinema", kind: "movie", name: "Cinema", unit: "films", app: APP_IDS.movie, going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film" },
@@ -134,14 +157,6 @@ type RecentCard =
   | { kind: "answer"; key: string; at: number; action: string; prompt: string; reply: string }
   | { kind: "alert"; key: string; at: number; text: string };
 
-const RECENT_COLOR: Record<string, string> = {
-  watch: "#ff8a3d",
-  reminder_added: "#3ccf6e",
-  domotics_updated: "#ffc94d",
-  weather: "#4fc3ff",
-  briefing: "#b78bff",
-  alert: "#ff7ad9",
-};
 const SOURCE_LABEL: Record<Reminder["source"], [string, string]> = {
   companion: ["From Secretary Desk", "#5b7cff"],
   gemini: ["From the assistant", "#7d6bff"],
@@ -225,10 +240,17 @@ export function App() {
   );
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
   const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
+  /** The latest focus, for callbacks that outlive a render. */
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
   const [menuOpen, setMenuOpen] = useState(false);
   // Each media card's look (a long OK on it), and the menu while it is open: the card previews the menu's choice.
   const [cardStyles, setCardStyles] = useState<Record<string, CardStyle>>(() => loadCardStyles(storage));
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
+  /** The cards taken off the home row (a long OK, "Remove from home"); the last card puts them back. */
+  const [hidden, setHidden] = useState<string[]>(() => loadHidden(storage));
+  /** The remove menu on a card without a style menu: that card's key. */
+  const [removeMenu, setRemoveMenu] = useState<string | null>(null);
   const [trending, setTrending] = useState<Trending>(() => {
     try {
       const c = JSON.parse(storage.getItem(TRENDING_KEY) ?? "null") as { at: number; v: Trending } | null;
@@ -249,15 +271,21 @@ export function App() {
   const [asking, setAsking] = useState(false);
   const [listening, setListening] = useState(false);
   const [answered, setAnswered] = useState(false);
-  const [shownTurn, setShownTurn] = useState<AssistantTurn | null>(null);
+  /** What the assistant just recommended: it replaces that kind's card items, and the card opens onto them. */
+  const [found, setFound] = useState<{ kind: CatalogKind; query: string; prompt: string; reply: string; items: SearchResult[] } | null>(null);
+  /** The card to put focus on once the row has been rebuilt (a card's index is only known then). */
+  const [goto, setGoto] = useState<{ key: string; inside: boolean } | null>(null);
   const [weather, setWeather] = useState<Weather | null>(() => cachedWeather(storage));
-  const [weatherOpen, setWeatherOpen] = useState(false);
   /** What the home reported lately (the phone came home, the vacuum finished), for the Recent row. */
   const [alerts, setAlerts] = useState<{ text: string; at: number }[]>([]);
   const [themePref, setThemePref] = useState<ThemePref>(loadThemePref);
   const [speakReplies, setSpeakReplies] = useState(loadSpeakReplies);
   /** The clip being recorded from the room microphone. */
   const recording = useRef<Recording | null>(null);
+  /** The latest answer when the assistant was entered: earlier exchanges stay out of its view. */
+  const [since, setSince] = useState(0);
+  /** The microphone is being opened: a second press waits for it. */
+  const opening = useRef(false);
   /** No room microphone (or no transcription): the mic key opens the TV keyboard, as before. */
   const keyboardOnly = useRef(false);
   const [glow, setGlow] = useState<string | undefined>();
@@ -361,15 +389,29 @@ export function App() {
     setAnswered(true);
     clearTimeout(speakTimer.current);
     speakTimer.current = setTimeout(() => setAnswered(false), SPEAK_MS);
-    if (turn.action === "watch") {
-      setShownTurn(turn);
-      if (turn.results?.length) setFocus({ area: "results", i: 0 });
-    }
+    // What was asked moves the view to the card concerned, unless the chat has the whole screen or the phone asked.
+    showTurn(turn, turn.source !== "companion" && focusRef.current.area !== "chat");
     if (turn.action === "reminder_added") {
       setLocalItems(localRem.list());
       if (SERVER_URL) fetchReminders(SERVER_URL).then(applyReminders, () => {});
     }
   };
+
+  /** What an answer is about: films it recommends open the Cinema card (or Shows, Anime), the weather opens its card, and so on. */
+  function showTurn(turn: AssistantTurn, here: boolean) {
+    if (turn.action === "watch" && turn.results?.length) {
+      const kind = turn.results[0].type;
+      const m = MEDIA.find((k) => k.kind === kind);
+      const items = turn.results.filter((r) => r.type === kind);
+      setFound({ kind, query: turn.query ?? turn.prompt, prompt: turn.prompt, reply: turn.reply, items });
+      void loadablePosters(items).then((good) => {
+        if (good.length && good.length < items.length) setFound((f) => (f && f.prompt === turn.prompt && f.reply === turn.reply ? { ...f, items: good } : f));
+      });
+      if (m && here) setGoto({ key: m.key, inside: true });
+    } else if (here && turn.action === "weather") setGoto({ key: "weather", inside: true });
+    else if (here && turn.action === "domotics_updated") setGoto({ key: "home", inside: false });
+    else if (here && turn.action === "reminder_added") setGoto({ key: "reminders", inside: true });
+  }
 
   /** An answer from the TV's own assistant. */
   const showLocal = (turn: AssistantTurn) => {
@@ -442,35 +484,42 @@ export function App() {
    * The mic key: a clip from the room microphone (docs/launcher.md, "Room microphone"), the key again to stop early.
    * Falls back to the TV keyboard's dictation when the TV gives the app no microphone or the server cannot transcribe.
    */
-  const listen = async () => {
-    if (!SERVER_URL && !GEMINI_KEY) return openAsk();
+  const listen = async (auto = false) => {
+    if (!SERVER_URL && !GEMINI_KEY && !GROQ_KEY) return auto ? undefined : openAsk();
     if (recording.current) return recording.current.stop();
-    if (keyboardOnly.current) return openAsk();
+    if (opening.current) return;
+    if (keyboardOnly.current) return auto ? undefined : openAsk();
     let rec: Recording;
+    opening.current = true;
     try {
       rec = await record(setWaveLevel);
     } catch {
+      opening.current = false;
       keyboardOnly.current = true;
-      return openAsk();
+      return auto ? undefined : openAsk();
     }
+    opening.current = false;
+    // Focus left the assistant while the microphone was opening: nothing to listen for.
+    if (auto && focusRef.current.area !== "ask" && focusRef.current.area !== "chat") return rec.cancel();
     recording.current = rec;
     setListening(true);
-    flash(`🎤 Listening on ${rec.name}`);
     const clip = await rec.done;
     recording.current = null;
     setListening(false);
-    if (!clip) return flash("Didn't hear anything");
+    if (!clip) return rec.cancelled ? undefined : flash(`Couldn't hear anything on ${rec.name.match(/\(([^)]+)\)$/)?.[1] ?? "the microphone"}`);
     setAsking(true);
     let words = "";
     try {
-      words = GEMINI_KEY ? await transcribeOnTv(clip) : await transcribeClip(SERVER_URL, clip);
+      words = GEMINI_KEY || GROQ_KEY ? await transcribeOnTv(clip) : await transcribeClip(SERVER_URL, clip);
     } catch (e) {
       const reason = e instanceof VoiceError ? e.reason : "failed";
       if (reason === "unavailable") {
         keyboardOnly.current = true;
         flash("Voice needs a Gemini key on the server or in this build");
+      } else if (reason === "no-assistant") {
+        flash("No assistant connected: check the API key");
       } else {
-        flash(reason === "no-speech" ? "Didn't catch that" : "Couldn't reach the assistant");
+        flash(reason === "no-speech" ? "Couldn't hear anything" : "Couldn't reach the assistant");
       }
     } finally {
       setAsking(false);
@@ -478,14 +527,27 @@ export function App() {
     if (words) await send(words, true);
   };
 
-  /** The words in a clip, from Gemini straight from the TV. */
-  const transcribeOnTv = async (clip: Uint8Array) => {
-    let words: string;
-    try {
-      words = await transcribeGemini(clip, "audio/wav", GEMINI_KEY);
-    } catch {
-      throw new VoiceError("failed");
+  /** The words in a clip, straight from the TV: Groq's Whisper first when there is a key, Gemini after it. */
+  const transcribeOnTv = async (clip: Uint8Array<ArrayBuffer>) => {
+    let words: string | null = null;
+    let refused = false;
+    if (GROQ_KEY) {
+      try {
+        words = await transcribeGroq(clip, GROQ_KEY);
+      } catch (e) {
+        if (!(e instanceof AssistantUnavailable)) throw new VoiceError("failed");
+        refused = true;
+      }
     }
+    if (words === null && GEMINI_KEY) {
+      try {
+        words = await transcribeGemini(clip, "audio/wav", GEMINI_KEY, fetch, true);
+        refused = false;
+      } catch (e) {
+        throw new VoiceError(e instanceof AssistantUnavailable ? "no-assistant" : "failed");
+      }
+    }
+    if (words === null) throw new VoiceError(refused ? "no-assistant" : "failed");
     if (!words) throw new VoiceError("no-speech");
     return words;
   };
@@ -694,7 +756,6 @@ export function App() {
   }, [view]);
 
   // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
-  const shownResults = shownTurn?.results ?? null;
   const talk = mergeTurns(assistant, localState);
   // Recent: the assistant's latest answers and the home's latest news, newest first, then Continue Watching.
   // The same prompt asked again shows once, as its newest answer.
@@ -754,9 +815,28 @@ export function App() {
   /** The artwork behind each column's items, for the glow. */
   const art: ({ src: string; type: CatalogKind } | undefined)[][] = [];
   const push = (col: RowColumn, pics: ({ src: string; type: CatalogKind } | undefined)[] = []) => {
+    if (hidden.includes(col.key)) return;
     columns.push(col);
     art.push(pics);
   };
+  // The assistant's own card leads the row: OK opens the full chat. The weather and the calendar follow it.
+  const brief = briefing(new Date(), me?.name, reminders.filter((r) => !r.completed));
+  push({
+    kind: "assistant",
+    key: "assistant",
+    label: "Assistant",
+    greeting: brief.greeting,
+    lines: brief.lines,
+    run: () => setFocus({ area: "chat", i: 0 }),
+  });
+  push({
+    kind: "weather",
+    key: "weather",
+    label: "Weather",
+    weather,
+    run: () => flash(weather ? `${weather.tempC}° ${weather.label}${weather.place ? ` in ${weather.place}` : ""}` : "No weather yet"),
+  });
+  push({ kind: "calendar", key: "calendar", label: "Calendar", date: new Date(), run: () => focusReminders(0) });
   if (recent.length) {
     const shown = recent.slice(0, 3);
     push({
@@ -765,8 +845,8 @@ export function App() {
       label: "Recent",
       items: shown.map((c) =>
         c.kind === "alert"
-          ? { title: c.text, sub: "Home", color: RECENT_COLOR.alert }
-          : { title: `“${c.prompt}”`, sub: c.reply, color: RECENT_COLOR[c.action] ?? "#b78bff" },
+          ? { title: c.text, sub: "Home" }
+          : { title: `“${c.prompt}”`, sub: c.reply },
       ),
       run: (i) => openRecent(shown[i]),
     });
@@ -774,8 +854,13 @@ export function App() {
   // Cinema, Shows and Anime: what is in progress first, then tonight's picks. The card shows as many as its style
   // holds; OK opens it into all of them and the app's Open tile (card-style.ts, cards.tsx).
   for (const m of MEDIA) {
-    const going = byKind(m.kind).slice(0, MEDIA_MAX);
-    const picks = trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id)).slice(0, MEDIA_MAX - going.length);
+    // What the assistant just recommended takes the card's place until it is left.
+    const mine = found?.kind === m.kind ? found : null;
+    const going = mine ? [] : byKind(m.kind).slice(0, MEDIA_MAX);
+    // Titles without a poster would be blank slots, so a recommendation keeps only those that have one.
+    const picks = mine
+      ? (mine.items.some((r) => r.title.poster) ? mine.items.filter((r) => r.title.poster) : mine.items).slice(0, MEDIA_MAX)
+      : trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id)).slice(0, MEDIA_MAX - going.length);
     if (!going.length && !picks.length) continue;
     const items: MediaItem[] = [
       ...going.map((e) => ({
@@ -792,7 +877,7 @@ export function App() {
         still: r.title.background,
         title: r.title.name,
         sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
-        badge: k === 0 && !going.length ? m.pickBadge : undefined,
+        badge: k === 0 && !going.length && !mine ? m.pickBadge : undefined,
         about: r.title.description,
       })),
     ];
@@ -802,10 +887,11 @@ export function App() {
         key: m.key,
         name: m.name,
         unit: m.unit,
-        label: going.length ? m.going : m.picks,
+        label: mine ? `For you · ${m.name}` : going.length ? m.going : m.picks,
         items,
         style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
         open: { label: `Open ${m.name}`, run: () => launch(m.app, m.name) },
+        note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
       },
       items.map((it) => ({ src: it.poster, type: m.kind })),
@@ -844,14 +930,22 @@ export function App() {
       run: (i) => void openApp(otherApps[i].id).catch(failed(otherApps[i].name)),
     });
   }
+  // The last card puts back what was taken off the home row.
+  const gone = removed(hidden);
+  push({
+    kind: "list",
+    key: "add",
+    label: "Add to home",
+    items: gone.map((e) => ({ title: e.label, sub: "Put it back on the home screen" })),
+    add: gone.length ? undefined : "Everything is on the home screen",
+    run: (i) => (i < gone.length ? restoreCard(gone[i].key) : flash("Everything is on the home screen")),
+  });
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   const rowArt = colAt >= 0 && focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
     rowArt
       ? rowArt
-      : focus.area === "results" && shownResults?.[focus.i]
-        ? { src: posterUrl(shownResults[focus.i].title), type: shownResults[focus.i].type }
-        : null;
+      : null;
   useEffect(() => {
     if (!focusedArt) return;
     let live = true;
@@ -934,21 +1028,53 @@ export function App() {
   const navKey = `${openCol}:${rowLayout(columns, openCol).nav.map((c) => `${c.count}/${c.across}`).join()}`;
   const layout: Layout = useMemo(
     () => ({
-      weather: Boolean(weather),
-      // One button: Ask Assistant.
+      // The assistant under the cards is one stop.
       ask: 1,
-      // While an answer is shown it takes the row's place.
-      cols: shownTurn ? [] : rowLayout(columns, openCol).nav,
-      results: shownResults?.length ?? 0,
+      cols: rowLayout(columns, openCol).nav,
       menu: menuOpen ? menuItems.length : 0,
     }),
-    [navKey, shownTurn, Boolean(weather), menuOpen],
+    [navKey, menuOpen],
   );
+
+  // Focusing the assistant (Down, or OK on its card) starts listening at once, so the wave shows only while someone
+  // speaks; leaving it drops the clip.
+  const talking = focus.area === "ask" || focus.area === "chat";
+  useEffect(() => {
+    if (!talking || view !== "home") return;
+    setSince(talk.turns[talk.turns.length - 1]?.id ?? 0);
+    if (!recording.current && !keyboardOnly.current && (SERVER_URL || GEMINI_KEY || GROQ_KEY)) void listen(true);
+    return () => recording.current?.cancel();
+  }, [talking, view]);
+
+  // An answer that is about a card puts focus on it, once the row holds what the answer found.
+  // The Recent card joins the row once Nest is idle, which moves every card after it, so wait for that first.
+  const rowSettled = recent.map((c) => c.key).join() === latestKey;
+  useEffect(() => {
+    if (!goto || !idle || !rowSettled) return;
+    const c = columns.findIndex((k) => k.key === goto.key);
+    setGoto(null);
+    if (c >= 0) setFocus(goto.inside ? { area: "row", col: c, i: 0, inside: true } : { area: "row", col: c, i: 0 });
+  }, [goto, idle, rowSettled]);
+
+  // The recommendation goes back to the card's usual titles once it was opened and left, or after a minute.
+  const foundKey = found ? MEDIA.find((m) => m.kind === found.kind)?.key : undefined;
+  const foundSeen = useRef(false);
+  useEffect(() => {
+    if (!found) return void (foundSeen.current = false);
+    const at = focus.area === "row" && focus.inside ? columns[focus.col ?? 0]?.key : undefined;
+    if (at === foundKey) foundSeen.current = true;
+    else if (foundSeen.current) setFound(null);
+  }, [found, focus]);
+  useEffect(() => {
+    if (!found) return;
+    const t = setTimeout(() => setFound(null), 60_000);
+    return () => clearTimeout(t);
+  }, [found]);
 
   // Keep focus valid when a card's items change. Focus waits on the row while it is still empty, so the first card is
   // focused once Continue Watching, the trending titles or the apps arrive.
   useEffect(() => {
-    if (focus.area === "row" && !layout.cols.some((c) => c.count > 0) && !shownTurn && !error) return;
+    if (focus.area === "row" && !layout.cols.some((c) => c.count > 0) && !error) return;
     const next = clamp(focus, layout);
     if (next.area !== focus.area || next.i !== focus.i || next.col !== focus.col || next.inside !== focus.inside) setFocus(next);
   }, [layout]);
@@ -974,12 +1100,7 @@ export function App() {
     if (card.kind === "alert") return homeConfigured() ? void setView("lights") : undefined;
     const turn = talk.turns.find((t) => `t${t.id}` === card.key);
     if (!turn) return;
-    if (turn.action === "watch") {
-      setShownTurn(turn);
-      if (turn.results?.length) setFocus({ area: "results", i: 0 });
-      return;
-    }
-    if (turn.action === "weather") return weather ? setWeatherOpen(true) : undefined;
+    if (turn.action === "watch" || turn.action === "weather") return showTurn(turn, true);
     if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
     if (turn.action === "reminder_added") return focusReminders(reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text)));
     void send(turn.prompt);
@@ -989,6 +1110,25 @@ export function App() {
   function focusReminders(at = 0) {
     const col = columns.findIndex((c) => c.key === "reminders");
     if (col >= 0) setFocus({ area: "row", col, i: Math.max(0, Math.min(at, 2)), inside: true });
+  }
+
+  /** Takes a card off the home row (a long OK, "Remove from home"); the last card brings it back. */
+  function removeCard(key: string) {
+    if (!canRemove(key)) return;
+    const next = [...hidden, key];
+    setHidden(next);
+    saveHidden(storage, next);
+    flash(`${labelOf(key)} removed · the last card adds it back`);
+    // The card after it takes its place in the row.
+    setFocus({ area: "row", col: Math.min(focus.col ?? 0, Math.max(0, columns.length - 2)), i: 0 });
+  }
+
+  function restoreCard(key: string) {
+    const next = hidden.filter((k) => k !== key);
+    setHidden(next);
+    saveHidden(storage, next);
+    flash(`${labelOf(key)} is back on the home screen`);
+    setGoto({ key, inside: false });
   }
 
   function toggleReminderAt(r: Reminder) {
@@ -1036,11 +1176,9 @@ export function App() {
     if (area === "menu") return runMenu(i);
     if (area === "header") {
       if (i === HEADER_PROFILE) {
-        setWeatherOpen(false);
         setMenuOpen(true);
         return setFocus({ area: "menu", i: 0 });
       }
-      if (i === HEADER_WEATHER) return setWeatherOpen((o) => !o);
       if (i === HEADER_PARTY) return void setView("party");
       if (i === HEADER_SEARCH) return openSearch();
       if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
@@ -1051,16 +1189,11 @@ export function App() {
       }
       return;
     }
-    if (area === "ask") return void listen();
-    if (area === "results") {
-      const hit = shownResults?.[i];
-      if (hit) openHit(hit);
-      return;
-    }
+    if (area === "ask" || area === "chat") return void listen();
     if (area === "row") {
       // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing;
-      // the last tile of an open media card opens the app.
-      if (!focus.inside) return setFocus(enter(focus, layout));
+      // the last tile of an open media card opens the app. On the Assistant card, OK opens the full chat.
+      if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
       if (col?.kind === "media" && i === col.items.length) return col.open.run();
       col?.run(i);
@@ -1069,17 +1202,26 @@ export function App() {
 
   // On a media card as a whole, OK is split: a short press opens it, a long one opens its style menu (the remote sends
   // no repeats for a held OK). Everywhere else OK acts on the keydown as before.
-  const pickedMedia = view === "home" && !styleMenu && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
-  const hold = useOkHold(
-    pickedMedia,
-    () => setFocus(enter(focus, layout)),
-    () => {
-      const c = columns[focus.col ?? 0];
-      if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
-    },
-  );
+  const pickedCard = view === "home" && !styleMenu && !removeMenu && focus.area === "row" && !focus.inside;
+  const openPicked = () => (columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout)));
+  const hold = useOkHold(pickedCard, openPicked, () => {
+    const c = columns[focus.col ?? 0];
+    if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
+    else if (c && canRemove(c.key)) setRemoveMenu(c.key);
+    else openPicked();
+  });
 
   useKeys(view === "home", (key) => {
+    // The remove menu (a long OK on any other card): OK removes the card, Back keeps it.
+    if (removeMenu) {
+      if (key === "Enter" && hold.holding()) return;
+      if (key === "Enter") {
+        const k = removeMenu;
+        setRemoveMenu(null);
+        removeCard(k);
+      } else if (key === "Back") setRemoveMenu(null);
+      return;
+    }
     // The card style menu takes every key while it is open. OK keeps the style, Back puts the old one back.
     if (styleMenu) {
       if (key === "Enter" && hold.holding()) return;
@@ -1090,7 +1232,11 @@ export function App() {
         saveCardStyles(storage, next);
         setStyleMenu(null);
       } else if (r === "undo") setStyleMenu(null);
-      else setStyleMenu(r);
+      else if (r === "remove") {
+        const k = styleMenu.key;
+        setStyleMenu(null);
+        removeCard(k);
+      } else setStyleMenu(r);
       return;
     }
     // Channel Down (CH-) or Search opens Spotlight Search from anywhere.
@@ -1109,24 +1255,18 @@ export function App() {
       setFocus({ area: "header", i: HEADER_SEARCH });
       return;
     }
-    if (key === "Enter") return pickedMedia || hold.holding() ? undefined : void activate();
+    if (key === "Enter") return pickedCard || hold.holding() ? undefined : void activate();
     if (menuOpen && key === "Back") return closeMenu();
     if (menuOpen && (key === "Left" || key === "Right")) return;
-    if (weatherOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Left" || key === "Right")) {
-      setWeatherOpen(false);
-      if (key === "Back") return;
-    }
     if (key === "Back" && focus.area === "row" && focus.inside) return setFocus(leave(focus));
-    if (key === "Back" && shownTurn) {
-      setShownTurn(null);
-      setFocus({ area: "ask", i: 0 });
-      return;
-    }
+    // Back on the chat leaves it for the Assistant card; Back on the assistant under the cards puts the screen back as it was.
+    if (key === "Back" && focus.area === "chat") return setFocus({ area: "row", col: 0, i: 0 });
+    if (key === "Back" && focus.area === "ask") return setFocus({ area: "row", col: 0, i: 0 });
     if (key === "Back") {
       const now = performance.now();
       if (now - lastBack.current < EXIT_WINDOW_MS) return void exitApp();
       lastBack.current = now;
-      flash("Press Back again to leave the perch");
+      flash("Press Back again to leave the nest");
       return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
@@ -1222,13 +1362,16 @@ export function App() {
   const lastAnswer = talk.turns[talk.turns.length - 1];
   const pending = talk.pending;
   const wave = waveState({ listening, asking, pending: Boolean(pending), answered });
+  // An answer from before the assistant was entered is not shown again in it.
+  const stale = !pending && (lastAnswer?.id ?? 0) <= since;
   const askView = {
     wave,
     status: WAVE_STATUS[wave] || (lastAnswer?.source === "companion" ? "From your phone" : ""),
-    history: (pending ? talk.turns : talk.turns.slice(0, -1)).slice(-3).map((t) => t.prompt),
-    prompt: listening ? undefined : (pending?.prompt ?? lastAnswer?.prompt),
-    reply: pending ? "" : (lastAnswer?.reply ?? summary ?? "Ask for something to watch, a reminder, or the lights."),
+    prompt: listening || stale ? undefined : (pending?.prompt ?? lastAnswer?.prompt),
+    reply: pending || stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
     turnId: lastAnswer?.id ?? 0,
+    focused: focus.area === "ask",
+    full: focus.area === "chat",
   };
 
   return (
@@ -1276,9 +1419,6 @@ export function App() {
           focus={focus}
           time={time}
           ask={askView}
-          results={shownTurn ? { query: shownTurn.query ?? "", items: shownResults ?? [] } : null}
-          weather={weather}
-          weatherOpen={weatherOpen}
           menu={menuOpen ? menuItems : null}
           menuInfo={menuInfo}
           links={links}
@@ -1288,6 +1428,7 @@ export function App() {
           status={status}
           me={me}
           styleMenu={styleMenu}
+          removeMenu={removeMenu}
         />
       )}
       {toast && (

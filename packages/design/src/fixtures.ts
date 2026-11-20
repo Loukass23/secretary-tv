@@ -1,7 +1,6 @@
 // Fixture data for the real screens, typed against their own props so `pnpm typecheck` catches drift.
 // Invented titles and places only (CLAUDE.md: no sources).
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
-import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
 import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
@@ -32,18 +31,20 @@ export const WEATHER: Weather = {
 export const ASK_IDLE: AskView = {
   wave: "idle",
   status: "",
-  history: [],
-  reply: "Good afternoon. Two reminders today, and the living room is at 21°.",
+  reply: "",
   turnId: 1,
+  focused: false,
+  full: false,
 };
 
 export const ASK_ANSWER: AskView = {
   wave: "speaking",
   status: "",
-  history: ["What's on tonight?", "Something calm"],
   prompt: "Films set by the sea",
   reply: "Here are six by the sea. The Quiet Harbour is the one you started last week.",
   turnId: 2,
+  focused: false,
+  full: false,
 };
 
 const title = (art: Art, i: number): Title => ({
@@ -87,6 +88,16 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     run: noop,
   });
   return [
+    {
+      kind: "assistant",
+      key: "assistant",
+      label: "Assistant",
+      run: noop,
+      greeting: "Good afternoon, Sworm",
+      lines: ["2 reminders", "Call the plumber · Today, 17:00"],
+    },
+    { kind: "weather", key: "weather", label: "Weather", run: noop, weather: WEATHER },
+    { kind: "calendar", key: "calendar", label: "Calendar", run: noop, date: new Date(2026, 10, 20) },
     card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 8, 2, (k) => (k < 2 ? "42 min left" : "Drama · 2019"))),
     card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 6, 2, (k) => `S0${k + 1} · E0${k + 3}`)),
     card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 1, () => "12 episodes")),
@@ -118,10 +129,6 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
       ],
     },
   ];
-}
-
-export function nestResults(art: Art): SearchResult[] {
-  return [0, 1, 6, 7, 10, 11].map((i) => ({ type: "movie", title: { ...title(art, i) } }));
 }
 
 export function catalogRows(art: Art): HomeRow[] {

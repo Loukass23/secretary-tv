@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { createTorbox, rank, type Candidate } from "@secretary/core";
 import {
+  AssistantUnavailable,
   forwardSmartThingsCommand,
   forwardSmartThingsScene,
   handleAiPrompt,
@@ -311,7 +312,13 @@ export function createApp(cfg: AppConfig) {
         const audio = new Uint8Array(await req.arrayBuffer());
         if (!audio.length) return json({ error: "missing audio" }, 400);
         if (audio.length > VOICE_MAX_BYTES) return json({ error: "clip too long" }, 413);
-        const transcript = await transcribe(audio, type === "audio/x-wav" ? "audio/wav" : type, key, f);
+        let transcript: string;
+        try {
+          transcript = await transcribe(audio, type === "audio/x-wav" ? "audio/wav" : type, key, f, true);
+        } catch (e) {
+          if (e instanceof AssistantUnavailable) return json({ error: "no assistant connected" }, 502);
+          throw e;
+        }
         return transcript ? json({ transcript }) : json({ error: "no speech" }, 422);
       }
       if (pathname === "/ai/state" && req.method === "GET") {

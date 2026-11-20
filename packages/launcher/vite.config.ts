@@ -19,6 +19,7 @@ export default defineConfig({
     // Ask Nest on the TV (docs/launcher.md): Gemini without the server, and where the weather is for.
     // Its own name: tizen.mjs also reads .env, and the server's GEMINI_API_KEY must not end up in a .wgt unasked.
     __GEMINI_KEY__: JSON.stringify(process.env.NEST_GEMINI_API_KEY ?? ""),
+    __GROQ_KEY__: JSON.stringify(process.env.NEST_GROQ_API_KEY ?? ""),
     __WEATHER_LAT__: JSON.stringify(process.env.WEATHER_LAT ?? ""),
     __WEATHER_LON__: JSON.stringify(process.env.WEATHER_LON ?? ""),
     __WEATHER_CITY__: JSON.stringify(process.env.WEATHER_CITY ?? ""),

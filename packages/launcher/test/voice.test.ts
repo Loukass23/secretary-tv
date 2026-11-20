@@ -18,6 +18,23 @@ test("a clip ends after speech and a pause, not during it", () => {
   assert.equal(ends.feed(0, 100), "silence");
 });
 
+test("a short noise is not speech: the clip gives up, and nothing is sent", () => {
+  const ends = endpointer();
+  assert.equal(ends.feed(0.3, 100), null);
+  assert.equal(ends.feed(0.001, 1000), null);
+  assert.equal(ends.heard, false);
+  let end = null;
+  for (let t = 0; t < 10_000 && !end; t += 100) end = ends.feed(0.001, 100);
+  assert.equal(end, "no-speech");
+  assert.equal(ends.heard, false);
+  // A quarter of a second of voice does count.
+  const voice = endpointer();
+  voice.feed(0.2, 150);
+  assert.equal(voice.heard, false);
+  voice.feed(0.2, 100);
+  assert.equal(voice.heard, true);
+});
+
 test("a clip gives up on silence, and stops at the cap", () => {
   const quiet = endpointer();
   let end = null;

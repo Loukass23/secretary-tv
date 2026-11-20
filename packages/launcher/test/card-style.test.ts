@@ -9,6 +9,7 @@ import {
   loadCardStyles,
   openStyleMenu,
   saveCardStyles,
+  REMOVE_LINE,
   SIZE_LINE,
   type StyleMenu,
   stepStyleMenu,
@@ -88,7 +89,6 @@ test("the menu previews each layout, then changes the size on its own line", () 
   m = stepStyleMenu(stepStyleMenu(stepStyleMenu(m, "Down") as StyleMenu, "Down") as StyleMenu, "Down") as StyleMenu;
   assert.equal(m.line, SIZE_LINE);
   assert.equal(m.style.layout, "row");
-  assert.equal(stepStyleMenu(m, "Down"), m);
   m = stepStyleMenu(m, "Left") as StyleMenu;
   assert.equal(m.style.size, "m");
   m = stepStyleMenu(stepStyleMenu(m, "Left") as StyleMenu, "Left") as StyleMenu;
@@ -97,9 +97,21 @@ test("the menu previews each layout, then changes the size on its own line", () 
   assert.equal(stepStyleMenu(m, "Back"), "undo");
 });
 
+test("the last line of the menu removes the card from home, and Left and Right leave it alone there", () => {
+  let m: StyleMenu = { ...openStyleMenu("cinema", DEFAULT_STYLES.cinema), line: SIZE_LINE };
+  m = stepStyleMenu(m, "Down") as StyleMenu;
+  assert.equal(m.line, REMOVE_LINE);
+  assert.deepEqual(m.style, DEFAULT_STYLES.cinema);
+  assert.equal(stepStyleMenu(m, "Down"), m);
+  assert.equal(stepStyleMenu(m, "Right"), m);
+  assert.equal(stepStyleMenu(m, "Enter"), "remove");
+  assert.equal(stepStyleMenu(m, "Back"), "undo");
+  assert.equal((stepStyleMenu(m, "Up") as StyleMenu).line, SIZE_LINE);
+});
+
 test("an opened media card is one row: OK lands on the first title, the Open tile is last, Up and Back fold it", () => {
   // Cinema opened with 5 titles (+ Open), then Shows and Home folded.
-  const open: Layout = { weather: true, ask: 1, cols: [{ count: 6, across: 6 }, { count: 2, across: 1 }, { count: 3, across: 1 }], results: 0, menu: 0 };
+  const open: Layout = { ask: 1, cols: [{ count: 6, across: 6 }, { count: 2, across: 1 }, { count: 3, across: 1 }], menu: 0 };
   const card = { area: "row" as const, col: 0, i: 0 };
   const at = (i: number) => ({ area: "row" as const, col: 0, i, inside: true });
   assert.deepEqual(enter(card, open), at(0));
@@ -107,6 +119,6 @@ test("an opened media card is one row: OK lands on the first title, the Open til
   assert.deepEqual(step(at(5), "Right", open), at(5));
   assert.deepEqual(step(at(0), "Left", open), at(0));
   assert.deepEqual(step(at(3), "Up", open), card);
-  assert.deepEqual(step(at(3), "Down", open), at(3));
+  assert.deepEqual(step(at(3), "Down", open), { area: "ask", i: 0 });
   assert.deepEqual(leave(at(4)), card);
 });

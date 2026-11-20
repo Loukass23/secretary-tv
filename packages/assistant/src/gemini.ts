@@ -30,10 +30,24 @@ export interface GeminiPart {
 /** How long one model may take before the next is tried: someone is waiting at the TV. */
 const GEMINI_TIMEOUT_MS = 8000;
 
-/** Posts one request to each model in turn until one answers with a part; null when none does. */
-export async function firstPart(models: readonly string[], key: string, body: unknown, f: typeof fetch): Promise<GeminiPart | null> {
+/** Gemini cannot be reached at all: every model refused or failed (a bad key, no billing or credit, no network). */
+export class AssistantUnavailable extends Error {
+  constructor() {
+    super("no assistant connected");
+  }
+}
+
+/** Posts one request to each model in turn until one answers with a part; null when none does. `tally` counts the failures. */
+export async function firstPart(
+  models: readonly string[],
+  key: string,
+  body: unknown,
+  f: typeof fetch,
+  tally?: { tried: number; failed: number },
+): Promise<GeminiPart | null> {
   const payload = JSON.stringify(body);
   for (const model of models) {
+    if (tally) tally.tried++;
     try {
       const res = await f(geminiUrl(model, key), {
         method: "POST",
@@ -41,19 +55,27 @@ export async function firstPart(models: readonly string[], key: string, body: un
         body: payload,
         signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (tally) tally.failed++;
+        continue;
+      }
       const out = (await res.json()) as { candidates?: { content?: { parts?: GeminiPart[] } }[] };
       const part = out.candidates?.[0]?.content?.parts?.[0];
       if (part) return part;
     } catch {
       // Try the next model.
+      if (tally) tally.failed++;
     }
   }
   return null;
 }
 
-/** What was said in a short clip, or "" when there was no speech (or Gemini is down). */
-export async function transcribe(audio: Uint8Array, mimeType: string, key: string, f: typeof fetch = fetch): Promise<string> {
+/**
+ * What was said in a short clip, or "" when there was no speech (or Gemini is down). With `strict`, a Gemini that
+ * refused every model throws AssistantUnavailable instead, so "no assistant" can be told apart from "no speech".
+ */
+export async function transcribe(audio: Uint8Array, mimeType: string, key: string, f: typeof fetch = fetch, strict = false): Promise<string> {
+  const tally = { tried: 0, failed: 0 };
   const part = await firstPart(
     GEMINI_FALLBACK_MODELS,
     key,
@@ -70,7 +92,9 @@ export async function transcribe(audio: Uint8Array, mimeType: string, key: strin
       ],
     },
     f,
+    tally,
   );
+  if (!part && strict && tally.tried > 0 && tally.failed === tally.tried) throw new AssistantUnavailable();
   // Gemini punctuates like dictation ("Remind me to water the plants."); a typed prompt has no full stop, and the
   // reminder would keep it. Quotes go too.
   return part?.text?.trim().replace(/^["“]|["”]$/g, "").replace(/[.。!！]+$/u, "").trim() ?? "";

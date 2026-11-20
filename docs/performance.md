@@ -411,3 +411,12 @@ frame by frame); the medians match the home row's. The page is 1920x1080 at devi
 
 Same day, after the opened card's titles grew to 280x420 with a three-line synopsis under the focused one: the open/fold
 walk (24 keys, two runs) gave 17 ms median, 33 ms p95, 83 ms worst and 4-6 frames over 50 ms of ~490.
+
+### Defocusing the cards for the assistant (2026-11-20)
+
+Focusing Ask Assistant dims the cards to 40 % and blurs them (`filter: blur(14px)` on one 1920x1080 layer, switched on
+once; only the opacity transitions), while the line rises to the middle by transform. Frame gaps measured with
+requestAnimationFrame on the reference TV over Down and Back, three cycles: 2-3 frames over 50 ms in each direction and
+83-106 ms worst (the very first switch after launch showed 561 ms, the blur's first raster). Opacity alone had no
+frame over 50 ms; blur radii of 3 and 6 px cost as many slow frames as 14 px, so the radius is not the lever. If the
+switch ever reads as a stutter, drop the `filter` line in `.nest-stage.is-away` and keep the dim.
