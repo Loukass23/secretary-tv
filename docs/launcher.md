@@ -107,26 +107,32 @@ node ../tv-kit/scripts/cdp.mjs <port> eval "localStorage.setItem('nest.lab','fak
 
 ## Home screen layout and keys
 
-The home screen (`src/home.tsx`) follows the concept video: the person top left; the weather, the time and quiet buttons
-top right; the assistant on the wallpaper at the left, with no card; and a row of content cards, one per app, running
-off the right edge (`src/cards.tsx`). `src/nest-nav.ts` moves focus between them and is unit tested.
+The home screen (`src/home.tsx`) follows the concept video: the person top left; a small clock and quiet buttons top
+right; and one row of content cards running off the right edge (`src/cards.tsx`): the Assistant first, then Weather and
+Calendar (one full card each), Recent, one card per app, and Add to home last. The assistant also sits under the cards,
+in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tested.
 
 | Area | Where | OK does |
 | --- | --- | --- |
 | Profile | top left; under the name, an icon for Nuvio sync and one for the server (an alert dot when it is offline), or a line when something needs doing | opens the profile menu: what the TV is connected to in words, then Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
-| Weather | top right | opens the forecast under it (next 6 hours, today and 3 days); Back or an arrow closes it |
 | Watch together, Search, Lights, Bell | top right, no fill until focused | the party; search; the Lights panel (or the next scene); the first open reminder in its card (the badge counts them) |
-| Ask Assistant | left, under the orb | listens on the room microphone (or opens the TV keyboard). At rest the wave draws into a small orb; it opens into the ribbons while Nest listens, thinks or speaks |
-| Recent | first card, while there is an answer | goes back to that answer (the titles, the forecast, the lights, the reminder, or asks again) |
+| Assistant (first card) | the greeting, the open reminders and the last exchange | the **full chat**: the cards defocus (dimmed, blurred) and the orb moves to the middle of the screen. Opening it starts listening: the line (blue while you speak, amber while Nest answers) shows only then, and your words and the answer are written around it; otherwise it is the orb. OK or the mic key listens again, Back returns to this card |
+| Weather | a full card: now, the next 5 hours and the next 4 days | OK says it in the toast; the old forecast drop-down is gone |
+| Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
+| Assistant under the cards | fixed at the bottom centre, under the orb | the **compact** mode. Down from a card or the last line inside one focuses it **and starts listening at once**; the ribbons show only while the room speaks or Nest answers, otherwise it is the orb (pulsing faster while it thinks), with a line of text under it (status, the answer, or "Press OK to talk"). Leaving it drops the clip. What it is asked moves focus to the card concerned: films open Cinema (or Shows, Anime) onto the picks, with what you asked and what the assistant did shown beside the card's label; the weather opens Weather, a reminder opens Reminders, the lights focus Home. Back returns to the first card |
+| Recent | after Today, while there is an answer | goes back to that answer (the picks, the weather, the lights, the reminder, or asks again) |
 | Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
 | Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
 | Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
-| Ask Nest results | in place of the row | opens the title in its app; Back brings the row back |
+| Add to home | the last card, listing what was removed | puts that element back on the home screen; with nothing removed it says so |
 
-Left and Right move from card to card, a ring around the whole card. OK goes inside it, on its first item. Inside,
+Left and Right move from card to card, a ring around the whole card. OK goes inside it, on its first item. A long OK on
+a card (`useOkHold`, 600 ms) opens its menu: on a media card the style menu with "Remove from home" as its last line, on
+the others a menu with that one line. Removed cards are kept in `localStorage["nest.hiddenCards"]` (`src/home-cards.ts`);
+the Assistant and Add to home cards stay. A card is removed or put back without restarting. Inside,
 the arrows stay in the card, Up from the top goes back to the card, and Back leaves it.
 
 ### Opening a media card
@@ -156,7 +162,7 @@ replies, and Back twice leaves. Without a server, everything but the phone compa
 ## Ask Nest, weather and Daylight
 
 Ideas taken from a light, glassy TV concept video: an assistant panel with a voice wave, answers that lay out titles next
-to it, an artwork-coloured glow, a quiet weather and clock header, a Recent row and a light theme. Its shopping flow is
+to it, an artwork-coloured glow, a weather and calendar cards, a clock, a Recent row and a light theme. Its shopping flow is
 out of scope, and so are its small grey text, large soft shadows and all-white screen at night.
 
 - **Ask Nest** (`src/assistant.ts`, the panel in `home.tsx`) shows the conversation: up to three earlier prompts above
@@ -206,22 +212,29 @@ The answers live in `packages/assistant` (`route()`), which the server and Nest 
 (`locations()` in `packages/smartthings`, looked up once a day), else `WEATHER_LAT`/`WEATHER_LON` or `WEATHER_CITY` from
 `.env.tizen` (a city is geocoded once). Both are kept in `localStorage["nest.place"]`; when SmartThings is down the last
 home still serves. The forecast (now, the next 6 hours, today and 3 days) is refreshed every 30 min and kept in
-`localStorage["nest.weather"]`, so the header has weather from the first frame after a restart (not when older than
+`localStorage["nest.weather"]`, so the weather card has it from the first frame after a restart (not when older than
 3 h). The server's `GET /weather` is only asked when the TV knows no place. Icons are one-colour line glyphs drawn as CSS
 masks, so they take the theme's ink.
 
 ## Room microphone
 
-A USB speakerphone on the TV (a Jabra Speak 510 here) can be Ask Nest's microphone and speaker, so nobody has to hold
-the remote up to their mouth. It has to be plugged into the TV: the server may run anywhere, even in the cloud, and only
-ever sees the recorded clip. Bluetooth to the TV does not work for this, since Samsung TVs pair Bluetooth audio as an
-output only.
+A speakerphone on the TV (a Jabra Speak 510 here) can be Ask Nest's microphone and speaker, so nobody has to hold
+the remote up to their mouth. It has to be connected to the TV, by USB or Bluetooth: the server may run anywhere, even
+in the cloud, and only ever sees the recorded clip. Over Bluetooth the reference TV lists the microphone as
+`Jabra SPEAK 510 USB (bluetooth voice)` and the speaker as `BluetoothMedia (bluetooth media)`, so the speaker label has
+no product name and `ROOM_DEVICE` also matches "bluetooth". Pair it in the TV's Bluetooth speaker list; the voice
+profile is what makes the microphone appear.
 
 - **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or the Ask chip) records from the first input
   whose name looks like a speakerphone ("Jabra", "Speakerphone", "Conference"), else the default input. The clip ends after
   1.2 s of quiet following speech, after 6 s with no speech, at 15 s, or on the key again. Nest encodes it as 16 kHz WAV
   with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and sends it to Gemini, from the TV with
-  `NEST_GEMINI_API_KEY` or through the server's `POST /ai/transcribe`, which returns only the words. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
+  `NEST_GEMINI_API_KEY` or through the server's `POST /ai/transcribe`, which returns only the words. With
+  `NEST_GROQ_API_KEY` as well, the TV sends the clip to Groq's Whisper first (`transcribeGroq`, about 0.4 s against
+  Gemini's 1.9 s on 2026-11-20) and falls back to Gemini when Groq refuses; answers and spoken replies stay on Gemini. Noise never becomes a question:
+  a clip needs 250 ms of voice-level sound to be sent at all (`MIN_SPEECH_MS`), and Groq's segments with a
+  `no_speech_prob` of 0.6 or more are dropped (Whisper otherwise invents "Thank you." from silence). Either way Nest says
+  "Couldn't hear anything" and nothing reaches the assistant. Entering the assistant hides earlier exchanges from it. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
   TV and never reaches the lights.
 - **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
   speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on

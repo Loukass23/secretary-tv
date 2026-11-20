@@ -1,7 +1,7 @@
 import { type Answer, describeIntent, type LightsCommand, route, type SearchResult, type WatchIntent } from "@secretary/assistant";
 import type { createStateStore, DomoticDevice, StoredReminder } from "./state.ts";
 
-export { describeIntent, pcmToWav, speak, transcribe, VOICE_MAX_BYTES, VOICE_TYPES } from "@secretary/assistant";
+export { AssistantUnavailable, describeIntent, pcmToWav, speak, transcribe, VOICE_MAX_BYTES, VOICE_TYPES } from "@secretary/assistant";
 
 type StateStore = ReturnType<typeof createStateStore>;
 

@@ -4,7 +4,8 @@
 //
 // A media card (Cinema, Shows, Anime) has a style the viewer picks with a long OK (card-style.ts). OK expands it in
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
-import { AppChip, Glass, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
+import { AppChip, Glass, Icon, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
+import type { Weather } from "./assistant.ts";
 import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
 import type { Column } from "./nest-nav.ts";
 
@@ -45,8 +46,15 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       style: CardStyle;
       /** The last tile of the expanded card: opens the app itself. */
       open: { label: string; run: () => void };
+      /** What the assistant understood and did, shown beside the label while the card holds its suggestions. */
+      note?: { prompt: string; reply: string };
     }
   | { kind: "home"; title: string; sub: string; actions: string[] }
+  // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
+  | { kind: "assistant"; greeting: string; lines: string[] }
+  | { kind: "weather"; weather: Weather | null }
+  // The month; its events come later.
+  | { kind: "calendar"; date: Date }
   | { kind: "list"; items: ListItem[]; add?: string }
   | { kind: "apps"; apps: { icon?: string; label: string }[] }
 );
@@ -61,6 +69,8 @@ const ADD_H = 76;
 const APP = { w: 176, h: 160, gap: 18, across: 2 };
 const HOME_W = 380;
 const ACTION_H = 72;
+const ASSIST_W = 440;
+const PANEL_W = 460;
 
 /** How wide a column is and how its items run for the remote; an expanded media card is one long row. */
 export function columnShape(c: RowColumn, expanded = false): { w: number } & Column {
@@ -72,6 +82,11 @@ export function columnShape(c: RowColumn, expanded = false): { w: number } & Col
     }
     case "home":
       return { w: HOME_W, count: c.actions.length, across: 1 };
+    case "assistant":
+      return { w: ASSIST_W, count: 1, across: 1 };
+    case "weather":
+    case "calendar":
+      return { w: PANEL_W, count: 1, across: 1 };
     case "list":
       return { w: LIST.w, count: c.items.length + (c.add ? 1 : 0), across: 1 };
     case "apps":
@@ -134,6 +149,78 @@ interface ColumnProps {
   focus: number | null;
   /** Another card is open: this one steps back. */
   dim?: boolean;
+}
+
+const dayName = (iso: string, k: number) =>
+  k === 0 ? "Today" : new Date(`${iso}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+
+/** The weather card: now, the next hours and the next days. */
+function WeatherCard({ w, page, focused }: { w: Weather | null; page: [number, number]; focused: boolean }) {
+  return (
+    <Glass x={0} y={0} w={PANEL_W} h={CARD_H} page={page} focused={focused} class="nest-weather-card">
+      {w ? (
+        <>
+          <div class="nest-wc-now">
+            {w.glyph && <Icon name={w.glyph} size={84} />}
+            <b>{w.tempC}°</b>
+            <div>
+              <small>{w.label}</small>
+              {w.place && <small>{w.place}</small>}
+            </div>
+          </div>
+          <div class="nest-wc-hours">
+            {(w.hours ?? []).slice(0, 5).map((h) => (
+              <div key={h.hour}>
+                <small>{h.hour}h</small>
+                {h.glyph && <Icon name={h.glyph} size={36} />}
+                <b>{h.tempC}°</b>
+              </div>
+            ))}
+          </div>
+          <div class="nest-wc-days">
+            {(w.days ?? []).slice(0, 4).map((d, k) => (
+              <div key={d.date}>
+                <small>{dayName(d.date, k)}</small>
+                {d.glyph && <Icon name={d.glyph} size={34} />}
+                <b>
+                  {d.maxC}° <span>{d.minC}°</span>
+                </b>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <small class="nest-wc-none">No weather yet</small>
+      )}
+    </Glass>
+  );
+}
+
+/** The calendar card: today's date and its month, Monday first, today marked. */
+function CalendarCard({ date, page, focused }: { date: Date; page: [number, number]; focused: boolean }) {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+  const days = new Date(y, m + 1, 0).getDate();
+  const cells = [...Array.from({ length: lead }, () => 0), ...Array.from({ length: days }, (_, k) => k + 1)];
+  return (
+    <Glass x={0} y={0} w={PANEL_W} h={CARD_H} page={page} focused={focused} class="nest-calendar-card">
+      <b>{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</b>
+      <small>{date.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</small>
+      <div class="nest-cal-grid">
+        {["M", "T", "W", "T", "F", "S", "S"].map((d, k) => (
+          <i key={k} class="nest-cal-dow">
+            {d}
+          </i>
+        ))}
+        {cells.map((n, k) => (
+          <i key={k} class={n === date.getDate() ? "nest-cal-today" : undefined}>
+            {n || ""}
+          </i>
+        ))}
+      </div>
+    </Glass>
+  );
 }
 
 /** The badge a media item shows: resuming says so (short on small tiles), others their own label. */
@@ -224,6 +311,11 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
       <span class={`nest-col-label${open ? " is-answer" : ""}`}>
         {open && col.kind === "media" ? `${col.name} · ${col.items.length} ${col.unit}` : col.label}
       </span>
+      {open && col.kind === "media" && col.note && (
+        <span class="nest-col-note">
+          <b>“{col.note.prompt}”</b> {col.note.reply}
+        </span>
+      )}
       <div class="nest-col-body">
         {/* The whole card picked: a ring faded in on its own layer, nothing moves. */}
         <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${columnHeight(col)}px` }} />
@@ -245,6 +337,17 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
           ))}
         </Glass>
       )}
+      {col.kind === "assistant" && (
+        <Glass x={0} y={0} w={ASSIST_W} h={CARD_H} page={page} class="nest-assist-card">
+          <b>{col.greeting}</b>
+          {col.lines.map((l, k) => (
+            <small key={k}>{l}</small>
+          ))}
+          <span class="nest-ac-hint">OK to talk</span>
+        </Glass>
+      )}
+      {col.kind === "weather" && <WeatherCard w={col.weather} page={page} focused={focus === 0} />}
+      {col.kind === "calendar" && <CalendarCard date={col.date} page={page} focused={focus === 0} />}
       {col.kind === "list" && (
         <>
           {col.items.map((it, i) => (

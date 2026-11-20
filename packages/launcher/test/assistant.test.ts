@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { themeFor, themePrompt, waveState } from "../src/assistant.ts";
+import { briefing, themeFor, themePrompt, waveState } from "../src/assistant.ts";
 
 test("the wave follows the keyboard, the request and the answer", () => {
   const none = { listening: false, asking: false, pending: false, answered: false };
@@ -35,4 +35,15 @@ test("theme prompts are answered on the TV", () => {
   assert.equal(themePrompt("automatic theme"), "auto");
   assert.equal(themePrompt("cinema mode"), null);
   assert.equal(themePrompt("turn the lights on"), null);
+});
+
+test("the briefing greets by the hour and counts the open reminders", () => {
+  const at = (h: number) => new Date(2026, 10, 20, h, 0);
+  assert.equal(briefing(at(9), "Sworm", []).greeting, "Good morning, Sworm");
+  assert.equal(briefing(at(14), undefined, []).greeting, "Good afternoon");
+  assert.equal(briefing(at(21), " ", []).greeting, "Good evening");
+  assert.deepEqual(briefing(at(14), "A", []).lines, ["No reminders"]);
+  assert.deepEqual(briefing(at(14), "A", [{ text: "Water the plants" }]).lines, ["1 reminder", "Water the plants"]);
+  const three = [{ text: "Call mum", due: "6pm" }, { text: "Bins" }, { text: "Post" }];
+  assert.deepEqual(briefing(at(14), "A", three).lines, ["3 reminders", "Call mum · 6pm", "Bins", "Post"]);
 });

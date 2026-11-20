@@ -1,12 +1,14 @@
 // Remote navigation for the Nest home screen (docs/launcher.md). Pure so it can be tested.
 //
-//   header    profile, weather, then Watch together, Search, Lights and Bell, across the top
-//   ask       the Ask Assistant button, under the wave (left)
-//   row       the content cards (Cinema, Shows, Anime, Home, Reminders, Apps). Left and Right move from card to card;
+//   header    profile, then Watch together, Search, Lights and Bell, across the top
+//   ask       the assistant under the cards (the compact mode), fixed at the bottom centre; Down from a card or the last
+//             line inside one goes straight to it. What it is asked moves focus to the card concerned
+//   chat      the full-screen assistant, opened with OK on the Assistant card (the first card); Back leaves it
+//   row       the content cards (Assistant, At a glance, Recent, Cinema, Shows, Anime, Home, Reminders, Apps). Left and
+//             Right move from card to card;
 //             OK goes inside one (`inside`), where an app card offers its Launch button (i = -1) before its items
-//   results   what the assistant found, in place of the row while shown
 //   menu      the profile menu, while it is open
-export type Area = "header" | "ask" | "row" | "results" | "menu";
+export type Area = "header" | "ask" | "chat" | "row" | "menu";
 
 export interface Focus {
   area: Area;
@@ -25,21 +27,17 @@ export interface Column {
 }
 
 export interface Layout {
-  /** The weather is shown (and so focusable). */
-  weather: boolean;
   ask: number;
   cols: readonly Column[];
-  results: number;
   menu: number;
 }
 
 export const HEADER_PROFILE = 0;
-export const HEADER_WEATHER = 1;
-export const HEADER_PARTY = 2;
-export const HEADER_SEARCH = 3;
-export const HEADER_LIGHTS = 4;
-export const HEADER_BELL = 5;
-export const HEADER_LENGTH = 6;
+export const HEADER_PARTY = 1;
+export const HEADER_SEARCH = 2;
+export const HEADER_LIGHTS = 3;
+export const HEADER_BELL = 4;
+export const HEADER_LENGTH = 5;
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
 
@@ -59,11 +57,6 @@ function rowStart(len: Layout): Focus | null {
   return c < 0 ? null : card(c);
 }
 
-/** What lies right of the assistant: the answer when one is shown, else the row. */
-function rightOfAsk(len: Layout): Focus | null {
-  return len.results > 0 ? { area: "results", i: 0 } : rowStart(len);
-}
-
 /** OK on a card: inside it, on its Launch button when it has one, else on its first item. */
 export function enter(at: Focus, len: Layout): Focus {
   const col = len.cols[at.col ?? 0];
@@ -81,26 +74,20 @@ export function step(at: Focus, key: string, len: Layout): Focus {
   switch (area) {
     case "header": {
       if (key === "Left" || key === "Right") {
-        let next = i + (key === "Right" ? 1 : -1);
-        if (next === HEADER_WEATHER && !len.weather) next += key === "Right" ? 1 : -1;
+        const next = i + (key === "Right" ? 1 : -1);
         return next < 0 || next >= HEADER_LENGTH ? at : header(next);
       }
-      if (key === "Down") {
-        // The profile and the weather sit over the assistant, the buttons over the cards.
-        if (i <= HEADER_WEATHER) return len.ask > 0 ? { area: "ask", i: 0 } : (rightOfAsk(len) ?? at);
-        return rightOfAsk(len) ?? (len.ask > 0 ? { area: "ask", i: 0 } : at);
-      }
+      if (key === "Down") return rowStart(len) ?? (len.ask > 0 ? { area: "ask", i: 0 } : at);
       return at;
     }
     case "ask":
+      // Fixed at the bottom of the screen: Up goes back to the cards above it.
       if (key === "Left") return i > 0 ? { area, i: i - 1 } : at;
-      if (key === "Right") return i < len.ask - 1 ? { area, i: i + 1 } : (rightOfAsk(len) ?? at);
-      if (key === "Up") return header(HEADER_PROFILE);
+      if (key === "Right") return i < len.ask - 1 ? { area, i: i + 1 } : at;
+      if (key === "Up") return rowStart(len) ?? header(HEADER_PROFILE);
       return at;
-    case "results":
-      if (key === "Left") return i > 0 ? { area, i: i - 1 } : len.ask > 0 ? { area: "ask", i: len.ask - 1 } : at;
-      if (key === "Right") return i < len.results - 1 ? { area, i: i + 1 } : at;
-      if (key === "Up") return header(HEADER_SEARCH);
+    case "chat":
+      // The full-screen assistant keeps the arrows to itself; Back leaves it (app.tsx).
       return at;
     case "menu":
       if (key === "Up") return i > 0 ? { area, i: i - 1 } : at;
@@ -118,21 +105,23 @@ export function step(at: Focus, key: string, len: Layout): Focus {
         }
         if (key === "Left") {
           const p = columnFrom(len.cols, c - 1, -1);
-          if (p >= 0) return card(p);
-          return len.ask > 0 ? { area: "ask", i: len.ask - 1 } : at;
+          return p >= 0 ? card(p) : at;
         }
         if (key === "Up") return header(HEADER_PARTY);
+        if (key === "Down" && len.ask > 0) return { area: "ask", i: 0 };
         return at;
       }
-      // Inside: the Launch button, then the items as a stack or a grid; the edges keep focus in the card.
+      // Inside: the Launch button, then the items as a stack or a grid; the sides keep focus in the card, and Down
+      // from the last line goes to the assistant.
+      const toAsk: Focus = len.ask > 0 ? { area: "ask", i: 0 } : at;
       if (i === LAUNCH) {
-        if (key === "Down" && col.count > 0) return { ...at, i: 0 };
+        if (key === "Down") return col.count > 0 ? { ...at, i: 0 } : toAsk;
         if (key === "Up") return card(c);
         return at;
       }
       const a = col.across;
       const x = i % a;
-      if (key === "Down") return i + a < col.count ? { ...at, i: i + a } : at;
+      if (key === "Down") return i + a < col.count ? { ...at, i: i + a } : toAsk;
       if (key === "Up") return i - a >= 0 ? { ...at, i: i - a } : col.launch ? { ...at, i: LAUNCH } : card(c);
       if (key === "Right") return x < a - 1 && i + 1 < col.count ? { ...at, i: i + 1 } : at;
       if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;
@@ -145,12 +134,10 @@ export function step(at: Focus, key: string, len: Layout): Focus {
 export function clamp(at: Focus, len: Layout): Focus {
   switch (at.area) {
     case "header":
-      return at.i === HEADER_WEATHER && !len.weather ? header(HEADER_PROFILE) : at;
+    case "chat":
+      return at;
     case "ask":
       if (len.ask > at.i) return at;
-      break;
-    case "results":
-      if (len.results > 0) return at.i < len.results ? at : { area: "results", i: len.results - 1 };
       break;
     case "menu":
       if (len.menu > 0) return at.i < len.menu ? at : { area: "menu", i: len.menu - 1 };

@@ -32,16 +32,16 @@ function ribbon(cycles: number, phase: number, amp: number, thick: number, from:
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-/** Cool ribbons while the room talks, warm ones while Nest does; the two sets swap by opacity. */
+/** One colour per speaker, so it is clear who is talking: blue ribbons while the room does, amber while Nest does. */
 const ROOM = [
-  ribbon(1.5, 0, 34, 7, "#7b6cff", "#4fc3ff"),
-  ribbon(2, 1.6, 26, 5, "#ff7ad9", "#7b6cff"),
-  ribbon(1, 3.1, 20, 9, "#4fc3ff", "#b78bff"),
+  ribbon(1.5, 0, 34, 7, "#1d9bf0", "#5cc8ff"),
+  ribbon(2, 1.6, 26, 5, "#4db8ff", "#1d9bf0"),
+  ribbon(1, 3.1, 20, 9, "#8fd9ff", "#4db8ff"),
 ];
 const NEST = [
-  ribbon(1.5, 0, 34, 7, "#b06cff", "#ff7ad9"),
-  ribbon(2, 1.6, 26, 5, "#ffb36b", "#b06cff"),
-  ribbon(1, 3.1, 20, 9, "#ff7ad9", "#ffd36b"),
+  ribbon(1.5, 0, 34, 7, "#ff9f1c", "#ffc857"),
+  ribbon(2, 1.6, 26, 5, "#ffb84d", "#ff9f1c"),
+  ribbon(1, 3.1, 20, 9, "#ffd98a", "#ffb84d"),
 ];
 
 /** The orb the ribbons retract into: a soft violet sphere with a highlight, drawn once. */
@@ -53,6 +53,9 @@ const ORB = (() => {
     `</radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#b)"/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 })();
+
+/** The orb as a CSS background, for places that show it beside the wave (the Assistant card). */
+export const WAVE_ORB = ORB;
 
 // --- the level bus: one voice at a time, read by every mounted wave ---
 
@@ -118,10 +121,10 @@ export function VoiceWave({ x, y, w, h, state }: { x: number; y: number; w: numb
       class={`sg-wave is-${state}`}
       style={{ left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` }}
     >
-      {/* The orb sits at the wave's start, under the text column; the ribbons draw back into it. */}
-      <span class="sg-wave-orb" style={{ backgroundImage: ORB, width: `${h}px`, height: `${h}px`, left: 0 }} />
+      {/* The orb sits in the middle of the wave's width; the ribbons grow out of it to both edges and draw back into it. */}
+      <span class="sg-wave-orb" style={{ backgroundImage: ORB, width: `${h}px`, height: `${h}px`, left: `calc(50% - ${h / 2}px)` }} />
       {[ROOM, NEST].map((set, s) => (
-        <span key={s} class={`sg-wave-set sg-wave-${s ? "nest" : "room"}`} style={{ transformOrigin: `${h / 2}px 50%` }}>
+        <span key={s} class={`sg-wave-set sg-wave-${s ? "nest" : "room"}`} style={{ transformOrigin: "50% 50%" }}>
           {set.map((bg, i) => (
             <span key={i} class="sg-wave-amp">
               <i class={`sg-wave-r${i}`} style={{ backgroundImage: bg }} />

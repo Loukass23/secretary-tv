@@ -79,26 +79,6 @@ html, body {
 .nest-menu-item.is-picked::after { content: ""; width: 10px; height: 10px; margin-left: auto; border-radius: 50%; background: currentColor; }
 .nest-style-hint { font-size: 23px; }
 
-/* --- the assistant (home.tsx): on the wallpaper, no card; earlier prompts fade as they rise --- */
-.nest-ask { position: absolute; }
-.nest-ask-status { display: block; height: 32px; font-size: 24px; }
-.nest-ask-stack { display: flex; flex-direction: column; justify-content: flex-end; height: 114px; }
-.nest-ask-old { font-size: 27px; line-height: 38px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nest-ask-old.is-1 { opacity: 0.75; }
-.nest-ask-old.is-2 { opacity: 0.45; }
-.nest-ask-old.is-3 { opacity: 0.22; }
-.nest-ask-log { margin-top: 10px; animation: nestRise 420ms var(--sg-ease) both; }
-.nest-ask-log b { display: block; font-size: 44px; font-weight: 500; line-height: 1.2; letter-spacing: -0.01em; }
-.nest-ask-log p {
-  margin: 12px 0 0;
-  font-size: 29px;
-  line-height: 1.35;
-  color: var(--sg-ink-dim);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-}
 /* A new answer rises into place: opacity and transform only. */
 @keyframes nestRise {
   from { opacity: 0; transform: translate3d(0, 14px, 0); }
@@ -133,18 +113,6 @@ html, body {
 .nest-chip.is-focus::before { opacity: 1; }
 
 /* --- the forecast (home.tsx WeatherSheet), dropping down under the weather --- */
-.nest-forecast { padding: 26px 36px 20px; }
-.nest-forecast-head { display: flex; align-items: baseline; justify-content: space-between; height: 30px; }
-.nest-forecast-head small { font-size: 24px; }
-.nest-forecast-now { display: flex; align-items: center; gap: 22px; height: 112px; margin-top: 10px; }
-.nest-forecast-now b { font-size: 72px; font-weight: 600; letter-spacing: -0.02em; }
-.nest-forecast-now small { font-size: 29px; }
-.nest-forecast-row { display: flex; justify-content: space-between; height: 134px; padding-top: 12px; box-shadow: inset 0 1px 0 var(--sg-line); }
-.nest-forecast-row > div { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 116px; }
-.nest-forecast-row small { font-size: 23px; }
-.nest-forecast-row b { font-size: 29px; font-weight: 600; }
-.nest-forecast-row b span { font-weight: 500; opacity: 0.55; }
-.nest-forecast-row.is-days > div { min-width: 180px; }
 
 /* --- the content row (cards.tsx): one column per app, a small label over each --- */
 /* Cards are placed by transform, so when one opens the cards after it slide aside on the compositor; the others step
@@ -328,16 +296,31 @@ html, body {
 }
 .nest-col-ring.is-on { opacity: 1; }
 /* The assistant's one button, under the orb. */
-.nest-ask-button { position: absolute; height: 60px; padding: 0 30px; border-radius: 30px; font-size: 26px; }
+.nest-bottom { transition: opacity 300ms var(--sg-ease), transform 600ms var(--sg-ease); will-change: transform, opacity; }
+.nest-bottom.is-away { opacity: 0; }
+/* Focused: the orb's line rises from the bottom to the middle of the screen (WAVE.y 880 + 36 to 540). */
+.nest-bottom.is-centred { transform: translate3d(0, -376px, 0); }
+/* With the assistant focused the cards stay where they are but defocus: dimmed and blurred behind the line. The blur is a
+   plain filter switched on once (not animated); only the opacity fades. */
+.nest-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transition: opacity 450ms var(--sg-ease); will-change: opacity; }
+/* Its children are the root's direct children as far as the layout goes (.sg-root > * is absolute). */
+.nest-stage > * { position: absolute; }
+.nest-stage.is-away { opacity: 0.4; filter: blur(14px); }
+/* What was said and the answer, written on the screen around the line while the assistant has focus. */
+.nest-say { position: absolute; left: 360px; width: 1200px; text-align: center; opacity: 0; transition: opacity 400ms var(--sg-ease); }
+.nest-say.is-on { opacity: 1; }
+.nest-say-you { top: 330px; height: 150px; display: flex; flex-direction: column; justify-content: flex-end; }
+.nest-say-reply { top: 610px; }
+.nest-say small { display: block; font-size: 26px; color: var(--sg-ink-dim); }
+.nest-say b { display: block; font-size: 42px; font-weight: 500; line-height: 1.2; color: #7cc8ff; }
+.nest-say p { margin: 0; font-size: 34px; line-height: 1.4; color: #ffd08a; animation: nestRise 420ms var(--sg-ease) both; }
+/* What the assistant has for the day, in the left column before the cards: the greeting, the reminder count, the first ones. */
+.nest-ask-dock { position: absolute; left: 0; width: 1920px; display: flex; justify-content: center; transition: opacity 300ms var(--sg-ease); }
+.nest-ask-dock.is-gone { opacity: 0; }
+/* Only a hint: quiet text, no button. The line itself shows that the assistant has focus. */
+.nest-ask-hint { max-width: 1200px; font-size: 26px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-ask-hint.is-live { color: var(--sg-ink); }
 
-/* The assistant scrolls off with the row (home.tsx): moved and faded on its own layer, in step with the row. */
-.nest-assist {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: transform var(--sg-move) var(--sg-ease), opacity var(--sg-move) var(--sg-ease);
-  will-change: transform, opacity;
-}
 
 /* --- the glass components on Nest's home, at sofa size: the catalog apps keep tv-kit's own sizes --- */
 .nest .sg-user { font-size: 34px; }
@@ -351,3 +334,37 @@ html, body {
 .nest .sg-app img, .nest .sg-app-letter { width: 80px; height: 80px; }
 .nest .sg-app-letter { font-size: 42px; line-height: 80px; border-radius: 20px; }
 .nest .sg-app small { font-size: 23px; }
+
+/* --- the Assistant card, first in the row: what it has for the day and the last exchange --- */
+.nest-assist-card { padding: 34px; }
+.nest-assist-card > b { display: block; margin-top: 26px; font-size: 38px; font-weight: 600; line-height: 1.15; }
+.nest-assist-card > small { display: block; margin-top: 10px; font-size: 27px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-assist-card > small:first-of-type { color: var(--sg-ink); }
+.sg-glass > .nest-ac-hint { position: absolute; left: 34px; right: 34px; }
+.nest-ac-hint { bottom: 34px; font-size: 24px; color: var(--sg-ink-dim); }
+
+
+/* --- the weather card and the calendar card, one full card each --- */
+.nest-weather-card { padding: 30px 32px; }
+.nest-wc-now { display: flex; align-items: center; gap: 20px; height: 120px; }
+.nest-wc-now b { font-size: 84px; font-weight: 600; letter-spacing: -0.03em; }
+.nest-wc-now small { display: block; font-size: 26px; line-height: 1.25; }
+.nest-wc-hours { display: flex; justify-content: space-between; margin-top: 12px; padding: 12px 0; box-shadow: inset 0 1px 0 var(--sg-line), inset 0 -1px 0 var(--sg-line); }
+.nest-wc-hours > div { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.nest-wc-hours small { font-size: 22px; }
+.nest-wc-hours b { font-size: 26px; font-weight: 600; }
+.nest-wc-days > div { display: flex; align-items: center; justify-content: space-between; height: 52px; }
+.nest-wc-days small { width: 100px; font-size: 25px; }
+.nest-wc-days b { font-size: 26px; font-weight: 600; }
+.nest-wc-days b span { font-weight: 500; opacity: 0.55; }
+.nest-wc-none { font-size: 28px; color: var(--sg-ink-dim); }
+.nest-calendar-card { padding: 30px 28px; }
+.nest-calendar-card > b { display: block; font-size: 34px; font-weight: 600; line-height: 42px; }
+.nest-calendar-card > small { display: block; margin-bottom: 14px; font-size: 25px; }
+.nest-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 27px; line-height: 54px; }
+.nest-cal-grid i { font-style: normal; }
+.nest-cal-dow { font-size: 21px; opacity: 0.55; }
+.nest-cal-today { border-radius: 27px; box-shadow: inset 0 0 0 3px currentColor; font-weight: 600; }
+/* What the assistant understood, beside the label while a card holds its suggestions: your words, then what it did. */
+.nest-col-note { position: absolute; left: 380px; top: 9px; max-width: 1100px; font-size: 25px; color: #ffd08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-col-note b { font-weight: 500; color: #7cc8ff; }

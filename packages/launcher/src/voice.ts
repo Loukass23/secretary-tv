@@ -7,6 +7,8 @@
 export const CLIP_RATE = 16000;
 /** Level (RMS, 0..1) above which a frame counts as speech. */
 const SPEECH_RMS = 0.02;
+/** Loud time it takes to count as speech: a click, a cough or a bump on the table is not a question. */
+const MIN_SPEECH_MS = 250;
 /** Silence after speech that ends the clip. */
 const TRAILING_SILENCE_MS = 1200;
 /** Give up when nobody speaks this long after the key press. */
@@ -26,12 +28,14 @@ export type EndReason = "silence" | "no-speech" | "max";
 export function endpointer() {
   let elapsed = 0;
   let heard = false;
+  let loud = 0;
   let quiet = 0;
   return {
     feed(level: number, ms: number): EndReason | null {
       elapsed += ms;
       if (level >= SPEECH_RMS) {
-        heard = true;
+        loud += ms;
+        if (loud >= MIN_SPEECH_MS) heard = true;
         quiet = 0;
       } else {
         quiet += ms;
@@ -134,8 +138,9 @@ export function envelope(wav: Uint8Array): number[] {
 }
 
 /** A speakerphone by its device label, for both its microphone and its speaker. */
-// Not a bare "speak": the TV calls its own output "builtin-speaker".
-const ROOM_DEVICE = /jabra|speakerphone|conference/i;
+// Not a bare "speak": the TV calls its own output "builtin-speaker". Over Bluetooth the TV labels the microphone
+// "<name> (bluetooth voice)" and the speaker just "BluetoothMedia (bluetooth media)", with no product name.
+const ROOM_DEVICE = /jabra|speakerphone|conference|bluetooth/i;
 
 /** The microphone stays open between asks, so the second press starts at once. */
 let mic: Promise<MediaStream> | null = null;
@@ -163,6 +168,9 @@ export function micName(stream: MediaStream): string {
 export interface Recording {
   /** Ends the clip now (the mic key pressed again). */
   stop(): void;
+  /** Drops the clip: focus left the assistant, so nothing is sent. `done` resolves null and `cancelled` is true. */
+  cancel(): void;
+  readonly cancelled: boolean;
   /** The clip as WAV, or null when nobody spoke. */
   done: Promise<Uint8Array<ArrayBuffer> | null>;
   /** Which microphone it is recording from. */
@@ -198,6 +206,18 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
   let finish!: (clip: Uint8Array<ArrayBuffer> | null) => void;
   const done = new Promise<Uint8Array<ArrayBuffer> | null>((r) => (finish = r));
   let stopped = false;
+  let cancelled = false;
+
+  const cancel = () => {
+    if (stopped) return;
+    cancelled = true;
+    stopped = true;
+    onLevel?.(null);
+    node.disconnect();
+    source.disconnect();
+    void ctx.suspend();
+    finish(null);
+  };
 
   const stop = () => {
     if (stopped) return;
@@ -227,7 +247,7 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
   source.connect(node);
   // A ScriptProcessor only runs while connected to the output; it writes silence there.
   node.connect(ctx.destination);
-  return { stop, done, name: micName(stream) };
+  return { stop, cancel, done, name: micName(stream), get cancelled() { return cancelled; } };
 }
 
 /**
