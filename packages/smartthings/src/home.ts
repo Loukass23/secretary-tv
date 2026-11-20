@@ -37,6 +37,21 @@ export function roomLux(devices: readonly StDevice[]): number | null {
   return s?.lux ?? null;
 }
 
+/**
+ * Lights that no mode, scene or "all the lights" prompt touches: matched by a fragment of their name, the way the
+ * by-name prompts are. Naming one ("turn off the computer desk") still works. The default is the reference home's desk.
+ */
+export const INDEPENDENT_DEFAULT: readonly string[] = ["computer desk"];
+
+export function isIndependent(d: StDevice, fragments: readonly string[] = INDEPENDENT_DEFAULT): boolean {
+  const n = norm(d.name);
+  return fragments.some((f) => norm(f).trim() !== "" && n.includes(norm(f)));
+}
+
+/** Every light a mode is allowed to switch. */
+export const sharedLights = (devices: readonly StDevice[], independent: readonly string[] = INDEPENDENT_DEFAULT): StDevice[] =>
+  devices.filter((d) => d.kind === "light" && !isIndependent(d, independent));
+
 /** The TV that reports a picture mode, if any. */
 export const pictureTv = (devices: readonly StDevice[]): StDevice | undefined => devices.find((d) => d.kind === "tv" && d.pictureMode);
 
@@ -73,7 +88,7 @@ export type HomeAction =
   | { kind: "scene"; scene: StScene; reply: string; picture?: string }
   | { kind: "devices"; targets: { device: StDevice; commands: StCommand[] }[]; reply: string; picture?: string };
 
-const norm = (s: string) =>
+export const norm = (s: string) =>
   ` ${s
     .toLowerCase()
     .normalize("NFD")
@@ -115,7 +130,12 @@ function lightIntent(text: string): { on: boolean; level?: number } | null {
  * A prompt that names a scene, a light (or "lights") or the vacuum, as an action; null for anything else, which then
  * goes to the assistant as before.
  */
-export function homeAction(prompt: string, devices: readonly StDevice[], scenes: readonly StScene[]): HomeAction | null {
+export function homeAction(
+  prompt: string,
+  devices: readonly StDevice[],
+  scenes: readonly StScene[],
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+): HomeAction | null {
   const text = norm(prompt);
   const lights = devices.filter((d) => d.kind === "light");
 
@@ -134,6 +154,20 @@ export function homeAction(prompt: string, devices: readonly StDevice[], scenes:
         kind: "devices",
         targets: [{ device: vac, commands: vacuumCommands(start) }],
         reply: start ? `Sending ${vac.name} to clean.` : `Sending ${vac.name} back to its dock.`,
+      };
+    }
+  }
+
+  // The sound system by name: "turn on the sound system", "music off", "stop the music". "Music mode" is the assistant's.
+  const sound = devices.find((d) => d.kind === "audio");
+  if (sound && / (?:sound|soundbar|speakers?|stereo|hifi|audio|music) /.test(text)) {
+    const off = / (?:off|stop|quiet|silence) /.test(text);
+    const on = !off && !/ mode /.test(text) && / (?:switch|turn) on | on /.test(text);
+    if (off || on) {
+      return {
+        kind: "devices",
+        targets: [{ device: sound, commands: lightCommands(on) }],
+        reply: on ? `Turning on ${sound.name}.` : `Turning off ${sound.name}.`,
       };
     }
   }
@@ -166,10 +200,12 @@ export function homeAction(prompt: string, devices: readonly StDevice[], scenes:
       reply: intent.on && intent.level !== undefined ? `Setting ${light.name} ${say("").trim()}` : say(light.name),
     };
   }
-  if (/ (?:lights|lamps|everything) /.test(text) && lights.length) {
+  // "The lights" are the shared ones: an independent light (the computer desk) only answers to its own name.
+  const shared = sharedLights(devices, independent);
+  if (/ (?:lights|lamps|everything) /.test(text) && shared.length) {
     return {
       kind: "devices",
-      targets: lights.map((d) => ({ device: d, commands: lightCommands(intent.on, d.dimmable ? intent.level : undefined) })),
+      targets: shared.map((d) => ({ device: d, commands: lightCommands(intent.on, d.dimmable ? intent.level : undefined) })),
       reply: intent.on && intent.level !== undefined ? `Setting the lights ${say("").trim()}` : say("the lights"),
     };
   }

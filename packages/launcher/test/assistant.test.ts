@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { briefing, themeFor, themePrompt, waveState } from "../src/assistant.ts";
+import { briefing, ripplePrompt, themeFor, themePrompt, waveState } from "../src/assistant.ts";
 
 test("the wave follows the keyboard, the request and the answer", () => {
   const none = { listening: false, asking: false, pending: false, answered: false };
@@ -35,6 +35,15 @@ test("theme prompts are answered on the TV", () => {
   assert.equal(themePrompt("automatic theme"), "auto");
   assert.equal(themePrompt("cinema mode"), null);
   assert.equal(themePrompt("turn the lights on"), null);
+});
+
+test("ripple prompts play the lights' ripple on request", () => {
+  assert.equal(ripplePrompt("ripple test"), "open");
+  assert.equal(ripplePrompt("Test the ripple"), "open");
+  assert.equal(ripplePrompt("launch ripple"), "launch");
+  assert.equal(ripplePrompt("test the quick ripple"), "launch");
+  assert.equal(ripplePrompt("cinema mode"), null);
+  assert.equal(ripplePrompt("turn the lights on"), null);
 });
 
 test("the briefing greets by the hour and counts the open reminders", () => {

@@ -174,3 +174,13 @@ export function themePrompt(prompt: string): ThemePref | null {
   if (/\b(?:dark|night)\b/.test(p)) return "night";
   return null;
 }
+
+/**
+ * The lights' ripple on request, to try it without reopening Nest or another app: "ripple test", "test the launch
+ * ripple". The quick one is for "launch" (or app, quick), the slow one otherwise.
+ */
+export function ripplePrompt(prompt: string): "open" | "launch" | null {
+  const p = prompt.trim().toLowerCase();
+  if (!/\bripple\b/.test(p)) return null;
+  return /\b(?:launch|apps?|quick|fast)\b/.test(p) ? "launch" : "open";
+}

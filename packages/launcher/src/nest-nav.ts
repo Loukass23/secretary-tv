@@ -1,6 +1,6 @@
 // Remote navigation for the Nest home screen (docs/launcher.md). Pure so it can be tested.
 //
-//   header    profile, then Watch together, Search, Lights, Picture mode and Bell, across the top
+//   header    profile, then Watch together, Search, Lights, Picture mode, Sound and Bell, across the top
 //   ask       the assistant under the cards (the compact mode), fixed at the bottom centre; Down from a card or the last
 //             line inside one goes straight to it. What it is asked moves focus to the card concerned
 //   chat      the full-screen assistant, opened with OK on the Assistant card (the first card); Back leaves it
@@ -37,8 +37,9 @@ export const HEADER_PARTY = 1;
 export const HEADER_SEARCH = 2;
 export const HEADER_LIGHTS = 3;
 export const HEADER_PICTURE = 4;
-export const HEADER_BELL = 5;
-export const HEADER_LENGTH = 6;
+export const HEADER_SOUND = 5;
+export const HEADER_BELL = 6;
+export const HEADER_LENGTH = 7;
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
 

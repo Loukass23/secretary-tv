@@ -226,7 +226,9 @@ export async function handleAiPrompt(
   const lights = async (cmd: LightsCommand) => {
     if ("scene" in cmd) {
       const prev = structuredClone(state.getDomotics());
-      await forwardSmartThingsScene(opts.smartThingsToken, prev, state.applyDomoticScene(cmd.scene), opts.fetch, opts.dryRun);
+      // The server has no sound system or light show: music mode is its warm scene.
+      const scene = cmd.scene === "music" ? "warm" : cmd.scene;
+      await forwardSmartThingsScene(opts.smartThingsToken, prev, state.applyDomoticScene(scene), opts.fetch, opts.dryRun);
       return;
     }
     const on = cmd.level > 0;

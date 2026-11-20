@@ -25,7 +25,7 @@ export function LightsPanel({
   onChange: () => void;
   onClose: () => void;
 }) {
-  const lights = useMemo(() => devices.filter((d) => d.kind === "light"), [devices]);
+  const lights = useMemo(() => devices.filter((d) => d.kind === "light" || d.kind === "audio"), [devices]);
   const [focus, setFocus] = useState({ row: 0, col: 0 });
   const [picked, setPicked] = useState<MovieScenes>(movieScenes);
   const [note, setNote] = useState<string | null>(null);

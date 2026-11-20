@@ -2,14 +2,23 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   authorizeUrl,
+  cinemaShow,
   homeAction,
   homeAlerts,
+  isIndependent,
+  musicShow,
   nextPictureMode,
   oauthTokens,
   pictureScene,
   type RawDevice,
   resolvePictureMode,
+  restoreCommands,
+  rippleLevel,
+  rippleShow,
+  runShow,
   roomLux,
+  sharedLights,
+  type ShowStep,
   smartThings,
   type StDevice,
   type StTokens,
@@ -141,6 +150,247 @@ test("the TV's picture mode: read, set by prompt, and flipped between two favour
   // Any other mode, or an unknown one, goes to the first favourite.
   assert.equal(nextPictureMode("Standard", ["Dynamic", "Eco"], tv.pictureModes), "Dynamic");
   assert.equal(nextPictureMode(undefined, ["Dynamic", "Eco"]), "Dynamic");
+});
+
+// A living room like the reference one: three bulbs in the side lamp, a couch strip, a kitchen light, a sound system on a
+// plug, and lights elsewhere that the shows leave alone.
+const ROOM_RAW: RawDevice[] = [
+  { deviceId: "side-top", label: "Side Light Top", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "on" }, switchLevel: { level: 80 } }) }] },
+  { deviceId: "side-mid", label: "Side Light Mid", type: "MATTER", components: [{ id: "main", capabilities: status({ switch: { switch: "on" }, switchLevel: { level: 80 } }) }] },
+  { deviceId: "side-low", label: "Side Light Low", type: "MATTER", components: [{ id: "main", capabilities: status({ switch: { switch: "off" }, switchLevel: { level: 80 } }) }] },
+  { deviceId: "couch", label: "Couch light", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "on" } }) }] },
+  { deviceId: "kitchen", label: "Kitchen Light", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "off" } }) }] },
+  { deviceId: "sound", label: "sound system", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "off" } }) }] },
+  { deviceId: "desk", label: "Computer Desk", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "on" } }) }] },
+  { deviceId: "bedroom", label: "Bedroom light", type: "VIPER", components: [{ id: "main", capabilities: status({ switch: { switch: "on" }, switchLevel: { level: 50 } }) }] },
+];
+const ROOM = ROOM_RAW.map(toDevice).filter((d): d is StDevice => d !== null);
+const flat = (steps: ShowStep[]) => steps.map((s) => s.targets.map((t) => `${t.device.id}:${t.commands.map((c) => `${c.command}${c.arguments ? `(${c.arguments})` : ""}`).join("+")}`));
+
+test("a sound system is not a light", () => {
+  assert.deepEqual(ROOM.map((d) => [d.id, d.kind]).filter(([, k]) => k === "audio"), [["sound", "audio"]]);
+  // "All the lights" leaves it alone, and it has its own words.
+  const all = homeAction("turn off the lights", ROOM, []);
+  assert.ok(all?.kind === "devices");
+  assert.ok(!all.targets.some((t) => t.device.id === "sound"));
+  const on = homeAction("turn on the sound system", ROOM, []);
+  assert.ok(on?.kind === "devices");
+  assert.deepEqual(on.targets.map((t) => [t.device.id, t.commands[0].command]), [["sound", "on"]]);
+  assert.equal(on.reply, "Turning on sound system.");
+  const stop = homeAction("stop the music", ROOM, []);
+  assert.ok(stop?.kind === "devices");
+  assert.deepEqual(stop.targets.map((t) => [t.device.id, t.commands[0].command]), [["sound", "off"]]);
+  // "Music mode" is for the assistant, not a switch of the sound system.
+  assert.equal(homeAction("music mode", ROOM, []), null);
+});
+
+test("cinema: the top side light dimmed, every other shared light off, the computer desk and the sound system left alone", () => {
+  const steps = cinemaShow(ROOM)!;
+  // One step, no sweep: the shared lights in the order of the home.
+  assert.equal(steps.length, 1);
+  assert.deepEqual(flat(steps)[0].sort(), [
+    "bedroom:off",
+    "couch:off",
+    "kitchen:off",
+    "side-low:off",
+    "side-mid:off",
+    "side-top:on+setLevel(15)",
+  ]);
+  const touched = steps[0].targets.map((t) => t.device.id);
+  assert.ok(!touched.includes("desk") && !touched.includes("sound"), "the desk is independent, the sound system is not a light");
+  // Another home: its own light left on, at its own level; an unknown one just turns everything off.
+  assert.deepEqual(flat(cinemaShow(ROOM, { keep: "kitchen", level: 30 })!)[0].filter((t) => t.startsWith("kitchen")), ["kitchen:on"]);
+  assert.ok(flat(cinemaShow(ROOM, { keep: "garage", level: 15 })!)[0].every((t) => t.endsWith(":off")));
+  // Another independent light.
+  assert.ok(!cinemaShow(ROOM, undefined, ["bedroom"])![0].targets.some((t) => t.device.id === "bedroom"));
+  assert.equal(cinemaShow([]), null);
+});
+
+test("the computer desk is independent: no mode, and no 'all the lights' prompt, touches it", () => {
+  assert.ok(isIndependent(ROOM.find((d) => d.id === "desk")!));
+  assert.ok(!sharedLights(ROOM).some((d) => d.id === "desk"));
+  assert.ok(!musicShow(ROOM, { lights: ["computer desk", "couch"], off: ["computer desk"], level: 50 })!.some((s) => s.targets.some((t) => t.device.id === "desk")));
+  for (const p of ["turn off the lights", "dim the lights to 20 percent", "lights on"]) {
+    const a = homeAction(p, ROOM, []);
+    assert.ok(a?.kind === "devices", p);
+    assert.ok(!a.targets.some((t) => t.device.id === "desk"), p);
+    assert.ok(a.targets.some((t) => t.device.id === "bedroom"), p);
+  }
+  // By its own name it still answers.
+  const named = homeAction("turn off the computer desk", ROOM, []);
+  assert.ok(named?.kind === "devices");
+  assert.deepEqual(named.targets.map((t) => t.device.id), ["desk"]);
+  // Nothing independent in another home: every light is shared.
+  assert.ok(homeAction("turn off the lights", ROOM, [], [])!.kind === "devices");
+  assert.ok((homeAction("turn off the lights", ROOM, [], []) as { targets: { device: StDevice }[] }).targets.some((t) => t.device.id === "desk"));
+});
+
+// The side lamp as it reports: three bulbs that take colour and white, Mid and Low off (remembering 70%), Top at cinema's 15%.
+const bulb = (id: string, label: string, on: boolean, level: number, hue = 85, saturation = 46, kelvin = 2300): RawDevice => ({
+  deviceId: id,
+  label,
+  type: "VIPER",
+  components: [
+    {
+      id: "main",
+      capabilities: status({
+        switch: { switch: on ? "on" : "off" },
+        switchLevel: { level },
+        colorControl: { hue, saturation },
+        colorTemperature: { colorTemperature: kelvin },
+      }),
+    },
+  ],
+});
+const LAMP = [bulb("low", "Side Light Low", false, 70), bulb("mid", "Side Light Mid", false, 70), bulb("top", "Side Light Top", true, 15)]
+  .map(toDevice)
+  .filter((d): d is StDevice => d !== null);
+const cmds = (steps: ShowStep[]) =>
+  steps.map((s) => s.targets.map((t) => `${t.device.id}[${t.commands.map((c) => `${c.command}${c.arguments ? JSON.stringify(c.arguments) : ""}`).join(" ")}]`).join(" "));
+
+test("lights report their colour and white", () => {
+  const top = LAMP[2];
+  assert.deepEqual([top.colour, top.hue, top.saturation, top.colorTemp], [true, 85, 46, 2300]);
+  assert.equal(ROOM.find((d) => d.id === "couch")!.colour, undefined);
+});
+
+test("the open ripple: slow, from lights that are off, through a cool colour to a warm white, then everything back as it was", () => {
+  const r = rippleShow(LAMP, "open")!;
+  assert.deepEqual(cmds(r.steps), [
+    // The cool wave: on, a soft cool tint, 25%, even for the two that were off (no sensor: a middle 35% for the warm wave).
+    'low[on setColor[{"hue":62,"saturation":35}] setLevel[25]]',
+    'mid[on setColor[{"hue":62,"saturation":35}] setLevel[25]]',
+    'top[on setColor[{"hue":62,"saturation":35}] setLevel[25]]',
+    // The warm wave: 2700 K, 35%.
+    "low[on setColorTemperature[2700] setLevel[35]]",
+    "mid[on setColorTemperature[2700] setLevel[35]]",
+    "top[on setColorTemperature[2700] setLevel[35]]",
+    // And back: their own white, their own level, on or off last. Low and Mid go dark again, Top stays at 15%.
+    "low[setColorTemperature[2300] setLevel[70] off]",
+    "mid[setColorTemperature[2300] setLevel[70] off]",
+    "top[setColorTemperature[2300] setLevel[15] on]",
+  ]);
+  assert.deepEqual(r.steps.map((s) => s.after), [500, 500, 250, 400, 400, 400, 300, 300, 0], "slow, with a beat between the waves");
+  assert.deepEqual(cmds([r.undo]), [r.steps.slice(6).map((s) => cmds([s])[0]).join(" ")]);
+});
+
+test("the ripple's brightness follows the room's light, from the TV's sensor", () => {
+  assert.deepEqual([0, 50, 150, 400, 900].map(rippleLevel), [15, 30, 50, 75, 75]);
+  assert.equal(rippleLevel(null), 35);
+  assert.ok(rippleLevel(25) > rippleLevel(10) && rippleLevel(250) > rippleLevel(100), "brighter room, brighter ripple");
+  // The reference home's sensor reads 42 lux: 28% for the warm wave, 20% for the cool one.
+  const sensor = DEVICES.find((d) => d.kind === "lightSensor")!;
+  const dim = rippleShow([...LAMP, sensor], "open")!;
+  assert.deepEqual(dim.steps.map((s) => s.targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0]).slice(0, 6), [20, 20, 20, 28, 28, 28]);
+  // Pretending a bright room (a test routine can) lifts it.
+  const bright = rippleShow(LAMP, "open", undefined, undefined, 400)!;
+  assert.equal(bright.steps[3].targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0], 75);
+  // A light that is already on never dims for the wave: it keeps its own level, and only its colour shifts.
+  const lit = LAMP.map((d) => (d.id === "top" ? { ...d, on: true, level: 80 } : d));
+  const lifted = rippleShow(lit, "open")!;
+  assert.equal(lifted.steps[2].targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0], 80);
+  assert.equal(lifted.steps[5].targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0], 80);
+});
+
+test("the launch ripple is the quick one: warm wave and back, about a second", () => {
+  const r = rippleShow(LAMP, "launch")!;
+  assert.equal(r.steps.length, 6);
+  assert.ok(r.steps.slice(0, 3).every((s) => s.targets[0].commands.some((c) => c.command === "setColorTemperature" && c.arguments![0] === 2700)));
+  assert.deepEqual(r.steps.map((s) => s.after), [200, 200, 400, 150, 150, 0]);
+  assert.ok(r.steps.reduce((ms, s) => ms + s.after, 0) <= 1100);
+});
+
+test("a light showing a colour comes back as that colour, not as white", () => {
+  const red = toDevice(bulb("top", "Side Light Top", true, 40, 5, 95, 2300))!;
+  assert.deepEqual(restoreCommands(red).map((c) => [c.command, c.arguments]), [
+    ["setColor", [{ hue: 5, saturation: 95 }]],
+    ["setLevel", [40]],
+    ["on", undefined],
+  ]);
+  // A plain light (no colour, no level) just goes back on or off.
+  assert.deepEqual(restoreCommands(ROOM.find((d) => d.id === "kitchen")!).map((c) => c.command), ["off"]);
+});
+
+test("the ripple skips lights that are not the side lamp, and the computer desk", () => {
+  const r = rippleShow(ROOM, "open")!;
+  const touched = new Set(r.steps.flatMap((s) => s.targets.map((t) => t.device.id)));
+  assert.deepEqual([...touched].sort(), ["side-low", "side-mid", "side-top"]);
+  assert.ok(!["couch", "kitchen", "bedroom", "desk", "sound"].some((id) => touched.has(id)));
+  assert.equal(rippleShow([], "open"), null);
+  assert.equal(rippleShow(ROOM.filter((d) => !d.name.startsWith("Side Light"))), null);
+});
+
+test("a show goes out on schedule, each light's commands in order, and puts the lights back when a step fails", async () => {
+  const r = rippleShow(LAMP, "launch")!;
+  type Target = ShowStep["targets"][number];
+
+  // Every call takes a different time, longer than the schedule: each light's own order must still hold.
+  const log: string[] = [];
+  const slept: number[] = [];
+  let n = 0;
+  const run = runShow(r.steps, {
+    send: async (t: Target) => {
+      await new Promise((res) => setTimeout(res, (n++ * 7) % 23));
+      log.push(t.device.id + ":" + t.commands.map((c) => c.command).join("+"));
+    },
+    sleep: async (ms) => void slept.push(ms),
+  });
+  await run.started;
+  await run.finished;
+  assert.deepEqual(slept, [200, 200, 400, 150, 150], "the schedule, not the network, sets the pace");
+  for (const id of ["low", "mid", "top"]) {
+    const mine = log.filter((l) => l.startsWith(id + ":"));
+    assert.equal(mine.length, 2);
+    assert.match(mine[0], /setColorTemperature/, id + ": the wave first");
+    assert.ok(mine[1].endsWith("+on") || mine[1].endsWith("+off"), id + ": then back, on or off last");
+  }
+
+  // Cancelled after the first step: nothing else goes out.
+  let asked = 0;
+  const sent: string[] = [];
+  const cut = runShow(r.steps, { send: async (t: Target) => void sent.push(t.device.id), sleep: async () => undefined, cancelled: () => ++asked > 1 });
+  await cut.finished;
+  assert.deepEqual(sent, ["low", "mid"]);
+
+  // A step that fails: the lights are put back (the undo goes out), the error is reported once.
+  const goes: string[] = [];
+  const errors: unknown[] = [];
+  let k = 0;
+  const bad = runShow(r.steps, {
+    send: async (t: Target) => {
+      if (++k === 3) throw new Error("rate limited");
+      goes.push(t.device.id + ":" + t.commands.map((c) => c.command).join("+"));
+    },
+    sleep: async () => undefined,
+    undo: r.undo,
+    onError: (e) => errors.push(e),
+  });
+  await bad.finished;
+  assert.equal(errors.length, 1);
+  // Top was on at 15%: the undo (sent after the rest) leaves it set back, with "on" last, and so for each light.
+  const backs = goes.filter((g) => g.endsWith("+on") || g.endsWith("+off"));
+  assert.ok(backs.length >= 6, "the way back went out once in the show and once more in the undo");
+  assert.ok(goes.at(-1)!.startsWith("top:") && goes.at(-1)!.endsWith("+on"), "the undo is the last thing sent");
+
+  // The first step failing reaches the caller at once.
+  const first = runShow(r.steps, { send: async () => Promise.reject(new Error("401")), sleep: async () => undefined });
+  await assert.rejects(first.started, /401/);
+  await first.finished;
+});
+
+test("music: the sound system on, a warm room, the kitchen dark", () => {
+  const steps = musicShow(ROOM)!;
+  assert.deepEqual(flat(steps), [
+    ["sound:on"],
+    ["side-low:on+setLevel(50)"],
+    ["side-mid:on+setLevel(50)"],
+    ["side-top:on+setLevel(50)"],
+    ["couch:on"],
+    ["kitchen:off"],
+  ]);
+  assert.equal(musicShow([]), null);
+  // Without a sound system the lights still make the room warm.
+  assert.equal(flat(musicShow(ROOM.filter((d) => d.kind !== "audio"))!)[0][0], "side-low:on+setLevel(50)");
 });
 
 test("the client sends commands, runs scenes, and refreshes once on a 401", async () => {

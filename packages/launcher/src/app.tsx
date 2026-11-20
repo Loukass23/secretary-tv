@@ -12,6 +12,7 @@ import {
   fetchReminders,
   launchApp,
   listApps,
+  onBeforeLaunch,
   openApp,
   openTitleInApp,
   orderReminders,
@@ -36,6 +37,7 @@ import {
   THEME_PREFS,
   type ThemePref,
   themeFor,
+  ripplePrompt,
   themePrompt,
   transcribeClip,
   VoiceError,
@@ -61,11 +63,25 @@ import {
   HEADER_PICTURE,
   HEADER_PROFILE,
   HEADER_SEARCH,
+  HEADER_SOUND,
   type Layout,
   leave,
   step,
 } from "./nest-nav.ts";
-import { home, homeConfigured, lastPictureMode, rememberPictureMode, runLights, togglePictureMode } from "./home-control.ts";
+import {
+  home,
+  homeConfigured,
+  independentLights,
+  lastPictureMode,
+  noteStatus,
+  playOpenRipple,
+  playRippleTest,
+  rememberPictureMode,
+  rippleBeforeLaunch,
+  runLights,
+  toggleSound,
+  togglePictureMode,
+} from "./home-control.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
@@ -88,6 +104,8 @@ const WEATHER_POLL_MS = 30 * 60_000;
 const MAX_RECENT = 4;
 /** SmartThings device status while Nest is up: one call per rate-limit window (10 per ~15 s, shared with commands). */
 const HOME_POLL_MS = 15_000;
+/** Nest has to have been off screen this long (another app, the TV's own menus) for the slow ripple to play on its return. */
+const RIPPLE_AWAY_MS = 20_000;
 /** How long the wave keeps "speaking" after an answer arrives. */
 const SPEAK_MS = 3000;
 /** The glow when an artwork's colour cannot be read: the app's own tint. */
@@ -167,7 +185,15 @@ const SCENES: readonly [Scene, string][] = [
   ["cinema", "🎬 Cinema lights"],
   ["warm", "🕯 Warm lights"],
   ["off", "🌙 Lights off"],
+  ["music", "🎵 Music mode"],
 ];
+/** The Home card's buttons: the same scenes (toasts keep the emoji), as line icons and short names. */
+const CARD_ACTION: Record<Scene, { icon: IconName; label: string }> = {
+  cinema: { icon: "cinema", label: "Cinema" },
+  warm: { icon: "warm", label: "Warm" },
+  off: { icon: "power", label: "Off" },
+  music: { icon: "music", label: "Music" },
+};
 
 /** localStorage, or memory when the TV refuses it: the TV's reminders then last until Nest restarts. */
 const memory = new Map<string, string>();
@@ -267,6 +293,9 @@ export function App() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /** The sound system's state just asked for, shown until SmartThings reports it (a few seconds at most). */
+  const [soundSet, setSoundSet] = useState<boolean | null>(null);
+  const soundTimer = useRef<ReturnType<typeof setTimeout>>();
   /** The picture mode Nest last set (kept across restarts): SmartThings' own status for it is stale on this TV. */
   const [pictureSet, setPictureSet] = useState<string | null>(() => lastPictureMode() ?? null);
   const [time, setTime] = useState(clock);
@@ -437,8 +466,14 @@ export function App() {
   const send = async (prompt: string, spoken = false) => {
     const pref = themePrompt(prompt);
     if (pref) return pickTheme(pref);
+    // "ripple test": the lights' ripple on request, from a fresh status, to try it (docs/smartthings.md).
+    const rippleStyle = ripplePrompt(prompt);
+    if (rippleStyle) {
+      flash(rippleStyle === "launch" ? "✨ Launch ripple" : "✨ Open ripple");
+      return void playRippleTest(rippleStyle).catch(() => flash("SmartThings didn't take that; try again"));
+    }
     // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no server or Gemini.
-    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes) : null;
+    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes, independentLights()) : null;
     if (act) {
       flash(act.reply);
       if (act.picture) {
@@ -600,6 +635,21 @@ export function App() {
     );
   };
 
+  /** The Sound button: the sound system on or off; the icon flips at once and SmartThings confirms a moment later. */
+  const toggleSoundButton = () => {
+    const sound = devices.find((d) => d.kind === "audio");
+    toggleSound(devices, soundSet ?? sound?.on).then(
+      (on) => {
+        setSoundSet(on);
+        clearTimeout(soundTimer.current);
+        soundTimer.current = setTimeout(() => setSoundSet(null), 8000);
+        flash(on ? "🔊 Sound system on" : "🔇 Sound system off");
+        pollHomeSoon();
+      },
+      (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the sound system"),
+    );
+  };
+
   const nextScene = () => {
     const [id, label] = SCENES[scene.current];
     scene.current = (scene.current + 1) % SCENES.length;
@@ -741,6 +791,9 @@ export function App() {
           for (const a of news) flash(a.text);
           if (news.length) setAlerts((prev) => [...news.map((a) => ({ text: a.text, at: Date.now() })), ...prev].slice(0, MAX_RECENT));
         }
+        // The first status read of this run (Nest just opened): the ripple down the side lights.
+        if (lastDevices.current === null) playOpenRipple(next).catch((e) => console.warn("[nest] open ripple", e));
+        noteStatus(next);
         lastDevices.current = next;
         setDevices(next);
         // Scenes once per run, after the first poll that works (the sign-in may come after Nest started).
@@ -773,6 +826,23 @@ export function App() {
     const t = setInterval(pollHome, HOME_POLL_MS);
     return () => clearInterval(t);
   }, [view]);
+
+  // The lights' ripples (docs/smartthings.md): a quick one before another app opens, and the slow one when Nest comes
+  // back to the screen after a while away (the first one, at start, is in pollHome).
+  useEffect(() => {
+    onBeforeLaunch(rippleBeforeLaunch);
+    let hiddenAt = 0;
+    const onVisible = () => {
+      if (document.visibilityState === "hidden") return void (hiddenAt = Date.now());
+      if (hiddenAt && Date.now() - hiddenAt > RIPPLE_AWAY_MS) playOpenRipple().catch((e) => console.warn("[nest] open ripple", e));
+      hiddenAt = 0;
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      onBeforeLaunch(null);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
   const talk = mergeTurns(assistant, localState);
@@ -924,7 +994,7 @@ export function App() {
     label: "Home",
     title: lights.length ? `${lit} light${lit === 1 ? "" : "s"} on` : "Lights",
     sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.length} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
-    actions: ["🎬 Cinema", "🕯 Warm", "🌙 Off"],
+    actions: SCENES.map(([id]) => CARD_ACTION[id]),
     run: (i) => runScene(SCENES[i][0], SCENES[i][1]),
   });
   const shownReminders = reminders.slice(0, 3);
@@ -1202,6 +1272,7 @@ export function App() {
       if (i === HEADER_SEARCH) return openSearch();
       if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
       if (i === HEADER_PICTURE) return togglePicture();
+      if (i === HEADER_SOUND) return toggleSoundButton();
       if (i === HEADER_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
@@ -1452,6 +1523,7 @@ export function App() {
           styleMenu={styleMenu}
           removeMenu={removeMenu}
           pictureMode={pictureSet ?? pictureTv(devices)?.pictureMode}
+          soundOn={soundSet ?? devices.find((d) => d.kind === "audio")?.on}
         />
       )}
       {toast && (

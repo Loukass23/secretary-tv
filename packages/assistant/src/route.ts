@@ -8,7 +8,7 @@ import type { Weather } from "./weather.ts";
 
 export type AskAction = "reminder_added" | "domotics_updated" | "briefing" | "watch" | "weather";
 
-export type LightsCommand = { scene: "cinema" | "warm" | "off" } | { level: number };
+export type LightsCommand = { scene: "cinema" | "warm" | "off" | "music" } | { level: number };
 
 export interface Effects {
   addReminder(text: string, due?: string): unknown;
@@ -94,13 +94,19 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
     if (w) return { reply: sayWeather(w), action: "weather" };
   }
 
+  // Music mode: the sound system and a warm room. Cinema never starts the sound system.
+  if (/\bmusic mode\b/.test(lower)) {
+    await fx.lights({ scene: "music" });
+    return { reply: "🎵 Music mode: the sound system is on and the room is warm.", action: "domotics_updated" };
+  }
+
   // 4. Check for lighting / domotics intent: "cinema mode", "dim lights to 20%", "turn off lights", "turn on lights"
   if (/(?:light|lamp|cinema|dim|bright)/i.test(lower)) {
     const pctMatch = lower.match(/(\d{1,3})\s*%/);
     let reply: string;
     if (lower.includes("cinema") || lower.includes("movie mode")) {
       await fx.lights({ scene: "cinema" });
-      reply = "🦅 Cinema stomp executed: Dimmable lights crushed to 15%, glare eliminated.";
+      reply = "🦅 Cinema mode: the lights go down and the glare is eliminated.";
     } else if (lower.includes("off")) {
       await fx.lights({ scene: "off" });
       reply = "🦅 All territory lights extinguished.";

@@ -9,6 +9,7 @@ import {
   HEADER_PICTURE,
   HEADER_PROFILE,
   HEADER_SEARCH,
+  HEADER_SOUND,
   LAUNCH,
   type Layout,
   leave,
@@ -32,8 +33,10 @@ const full: Layout = {
 const card = (col: number) => ({ area: "row" as const, col, i: 0 });
 const inside = (col: number, i: number) => ({ area: "row" as const, col, i, inside: true });
 
-test("the header runs profile, then the five buttons", () => {
-  assert.deepEqual(step({ area: "header", i: HEADER_PICTURE }, "Right", full), { area: "header", i: HEADER_BELL });
+test("the header runs profile, then the six buttons", () => {
+  assert.deepEqual(step({ area: "header", i: HEADER_PICTURE }, "Right", full), { area: "header", i: HEADER_SOUND });
+  assert.deepEqual(step({ area: "header", i: HEADER_SOUND }, "Right", full), { area: "header", i: HEADER_BELL });
+  assert.deepEqual(step({ area: "header", i: HEADER_SOUND }, "Left", full), { area: "header", i: HEADER_PICTURE });
   assert.deepEqual(step({ area: "header", i: HEADER_PICTURE }, "Left", full), { area: "header", i: HEADER_PICTURE - 1 });
   assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Right", full), { area: "header", i: HEADER_PARTY });
   assert.deepEqual(step({ area: "header", i: HEADER_BELL }, "Right", full), { area: "header", i: HEADER_BELL });
