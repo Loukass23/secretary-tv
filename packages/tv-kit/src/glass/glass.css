@@ -28,6 +28,18 @@
   font-family: system-ui, -apple-system, sans-serif;
 }
 .sg-root > * { position: absolute; }
+/* The wallpaper that was just replaced, fading out on its own layer: opacity only. */
+.sg-root > .sg-wall-out {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  pointer-events: none;
+  will-change: opacity;
+  animation: sgWallOut 800ms ease-out forwards;
+}
+@keyframes sgWallOut { from { opacity: 1; } to { opacity: 0; } }
 .sg-root small { display: block; color: var(--sg-ink-dim); }
 
 /* --- surface --- */

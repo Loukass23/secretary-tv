@@ -27,4 +27,5 @@ if (lab) {
   render(<App />, root);
 }
 
-runBootAnimation();
+// With the splash on, the bird gets its time (any key skips it); off, the boot screen leaves as quickly as before.
+runBootAnimation(document.documentElement.dataset.splash === "off" ? {} : { holdMs: 5200 });

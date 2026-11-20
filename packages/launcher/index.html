@@ -3,25 +3,63 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Secretary Nest</title>
+<title>Secretary</title>
+<script>
+// The splash lights and the bird are the light effects' (Lights panel): off, the plain crest shows, as before.
+try {
+  var fx = JSON.parse(localStorage.getItem("nest.lightFx") || "null");
+  if (fx && (fx.enabled === false || fx.splash === false)) document.documentElement.dataset.splash = "off";
+} catch (e) {}
+</script>
 <style>
 #boot{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#090a0d;color:#f3f2ef;font:700 32px/1.1 system-ui,sans-serif;will-change:transform,opacity;transition:transform 360ms cubic-bezier(.4,0,.2,1),opacity 320ms ease-in}
 #boot .b-crest{width:88px;height:88px;border-radius:26px;background:#14161e;border:2px solid #282c3a;display:flex;align-items:center;justify-content:center;font-size:42px;animation:bRise 480ms cubic-bezier(.2,.8,.2,1) both}
 #boot .b-kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#ff5a26}
-#boot .b-title{font-size:38px;font-weight:800;letter-spacing:-.02em}
+#boot .b-title{font:800 44px/1 Futura,"Avenir Next","Century Gothic","Trebuchet MS",system-ui,sans-serif;letter-spacing:.34em;margin-right:-.34em;color:#ffb35c;text-transform:uppercase;animation:bRise 1000ms cubic-bezier(.2,.8,.2,1) 2800ms both}
 #boot .b-bar{width:220px;height:4px;border-radius:2px;background:#1c1f2a;overflow:hidden;margin-top:4px}
 #boot .b-bar i{display:block;height:100%;width:100%;background:#ff5a26;transform-origin:left;animation:bSweep 520ms cubic-bezier(.22,1,.36,1) both}
 #boot[data-stage="exit"]{opacity:0;transform:translate3d(0,-24px,0);pointer-events:none}
 #boot[data-mode="fade"][data-stage="exit"]{transform:none}
 @keyframes bRise{from{opacity:0;transform:translate3d(0,14px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
 @keyframes bSweep{from{transform:scaleX(.12)}to{transform:scaleX(1)}}
+
+/* The secretary bird, a sun: spikes, petals and the bird's head bloom out of a glowing core. Each part is its own <svg>, an
+   HTML element on its own compositor layer, so the animation (transform and opacity only) never repaints the drawing and
+   the app starting up behind it cannot make it stutter. Every drawing is centred on 0,0, the layers stack in one box. */
+#boot .b-bird{position:relative;width:460px;height:460px;margin-bottom:-14px}
+#boot .b-bird svg,#boot .b-bird .b-spin{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;will-change:transform,opacity}
+html[data-splash="off"] #boot .b-bird{display:none}
+html:not([data-splash="off"]) #boot .b-crest{display:none}
+#boot .b-bird .b-spin{animation:bSpin 70s linear infinite}
+#boot .b-bird .b-spikes{animation:bBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 0ms both}
+#boot .b-bird .b-in{animation:bBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 500ms both}
+#boot .b-bird .b-out{animation:bBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 1000ms both}
+#boot .b-bird .b-halo{animation:bHalo 3200ms ease-in-out infinite alternate}
+#boot .b-bird .b-orbs{animation:bOrb 3400ms ease-in-out infinite alternate}
+#boot .b-bird .b-core{animation:bCore 2200ms ease-in-out infinite alternate}
+#boot .b-bird .b-head{animation:bHead 1000ms cubic-bezier(.2,.9,.3,1.2) 2000ms both}
+@keyframes bSpin{to{transform:rotate(360deg)}}
+@keyframes bBloom{from{opacity:0;transform:scale(.08) rotate(-40deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes bHalo{from{opacity:.25;transform:scale(.95)}to{opacity:.6;transform:scale(1.05)}}
+@keyframes bOrb{from{opacity:.2;transform:scale(.97)}to{opacity:.75;transform:scale(1.04)}}
+@keyframes bCore{from{transform:scale(.97)}to{transform:scale(1.05)}}
+@keyframes bHead{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){#boot .b-bird *{animation:none!important}}
 </style>
 </head>
 <body>
 <div id="boot">
+  <div class="b-bird" aria-hidden="true">
+    <div class="b-spin"><svg class="b-spikes" viewBox="-200 -200 400 400" aria-hidden="true"><g transform="rotate(0)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#f59a2b"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#ffd27a" opacity=".35"/></g><g transform="rotate(45)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#4a46e0"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#7b7bff" opacity=".35"/></g><g transform="rotate(90)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#f59a2b"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#ffd27a" opacity=".35"/></g><g transform="rotate(135)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#4a46e0"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#7b7bff" opacity=".35"/></g><g transform="rotate(180)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#f59a2b"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#ffd27a" opacity=".35"/></g><g transform="rotate(225)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#4a46e0"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#7b7bff" opacity=".35"/></g><g transform="rotate(270)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#f59a2b"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#ffd27a" opacity=".35"/></g><g transform="rotate(315)"><path d="M0 -196 L-40 -84 L40 -84 Z" fill="#4a46e0"/><path d="M0 -196 L0 -84 L40 -84 Z" fill="#7b7bff" opacity=".35"/></g></svg></div>
+    <svg class="b-halo" viewBox="-200 -200 400 400" aria-hidden="true"><circle r="150" fill="#ff7a1a" opacity=".3"/></svg>
+    <svg class="b-orbs" viewBox="-200 -200 400 400" aria-hidden="true"><circle r="118" fill="none" stroke="#ff7a1a" stroke-width="5"/><circle r="168" fill="none" stroke="#ff9a3c" stroke-width="3"/></svg>
+    <svg class="b-in" viewBox="-200 -200 400 400" aria-hidden="true"><defs><g id="pt"><path d="M0 -36 L24 -96 L0 -156 L-24 -96 Z" fill="#ffb52e"/><path d="M0 -36 L24 -96 L0 -156 Z" fill="#ff8a1f"/><path d="M-14 -78 L0 -96 L14 -78 M-15 -106 L0 -124 L15 -106" stroke="#fff0b8" stroke-width="3" fill="none" stroke-linejoin="round"/></g></defs><g transform="rotate(15) scale(.7)"><use href="#pt"/></g><g transform="rotate(45) scale(.7)"><use href="#pt"/></g><g transform="rotate(75) scale(.7)"><use href="#pt"/></g><g transform="rotate(105) scale(.7)"><use href="#pt"/></g><g transform="rotate(135) scale(.7)"><use href="#pt"/></g><g transform="rotate(165) scale(.7)"><use href="#pt"/></g><g transform="rotate(195) scale(.7)"><use href="#pt"/></g><g transform="rotate(225) scale(.7)"><use href="#pt"/></g><g transform="rotate(255) scale(.7)"><use href="#pt"/></g><g transform="rotate(285) scale(.7)"><use href="#pt"/></g><g transform="rotate(315) scale(.7)"><use href="#pt"/></g><g transform="rotate(345) scale(.7)"><use href="#pt"/></g></svg>
+    <svg class="b-out" viewBox="-200 -200 400 400" aria-hidden="true"><g transform="rotate(0)"><use href="#pt"/></g><g transform="rotate(30)"><use href="#pt"/></g><g transform="rotate(60)"><use href="#pt"/></g><g transform="rotate(90)"><use href="#pt"/></g><g transform="rotate(120)"><use href="#pt"/></g><g transform="rotate(150)"><use href="#pt"/></g><g transform="rotate(180)"><use href="#pt"/></g><g transform="rotate(210)"><use href="#pt"/></g><g transform="rotate(240)"><use href="#pt"/></g><g transform="rotate(270)"><use href="#pt"/></g><g transform="rotate(300)"><use href="#pt"/></g><g transform="rotate(330)"><use href="#pt"/></g></svg>
+    <svg class="b-core" viewBox="-200 -200 400 400" aria-hidden="true"><circle r="52" fill="#fff0c4"/><circle r="52" fill="none" stroke="#ff7a1a" stroke-width="5"/><circle r="60" fill="none" stroke="#ffb35c" stroke-width="3"/></svg>
+    <svg class="b-head" viewBox="-200 -200 400 400" aria-hidden="true"><g transform="rotate(-66)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(-44)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(-22)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(0)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(22)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(44)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><g transform="rotate(66)"><path d="M0 -20 L0 -46" stroke="#14161e" stroke-width="3.4" stroke-linecap="round"/><circle cy="-47" r="3" fill="#14161e"/></g><path d="M-21 -12 L-12 -24 L12 -24 L21 -12 L17 12 L0 30 L-17 12 Z" fill="#e4e8ef"/><path d="M-21 -12 L-12 -24 L0 -24 L0 30 L-17 12 Z" fill="#c9ced8"/><ellipse cx="-9" cy="-4" rx="8" ry="6" fill="#ff5a26"/><ellipse cx="9" cy="-4" rx="8" ry="6" fill="#ff5a26"/><circle cx="-8" cy="-4" r="2.8" fill="#14161e"/><circle cx="8" cy="-4" r="2.8" fill="#14161e"/><path d="M-6 5 L6 5 L4 17 L0 24 L-4 17 Z" fill="#f0b13a"/><path d="M-3 17 L0 24 L3 17 Z" fill="#3a3d45"/></svg>
+  </div>
   <div class="b-crest">🪶</div>
-  <span class="b-kicker">SECRETARY · TIZEN PERCH</span>
-  <div class="b-title">Secretary Nest</div>
+  <div class="b-title">SECRETARY</div>
   <div class="b-bar"><i></i></div>
 </div>
 <div id="root"></div>

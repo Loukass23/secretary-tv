@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Filled by tv-kit's tizen.mjs package from .env.tizen. Add a privilege only with the feature that uses it. -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://secretary-tv.local/launcher" version="{{VERSION}}" viewmodes="maximized">
-  <name>Secretary Nest</name>
+  <name>Secretary</name>
   <icon src="icon.png"/>
   <content src="index.html"/>
   <feature name="http://tizen.org/feature/screen.size.all"/>

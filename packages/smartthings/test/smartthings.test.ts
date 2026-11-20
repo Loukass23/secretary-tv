@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import {
   authorizeUrl,
   cinemaShow,
+  danceShow,
+  fadeShow,
   homeAction,
   homeAlerts,
   isIndependent,
+  moodShow,
   musicShow,
   nextPictureMode,
   oauthTokens,
@@ -20,6 +23,7 @@ import {
   sharedLights,
   type ShowStep,
   smartThings,
+  stColour,
   type StDevice,
   type StTokens,
   toDevice,
@@ -462,4 +466,75 @@ test("an early refresh that fails keeps the current token until it expires", asy
   const token = oauthTokens({ clientId: "c", clientSecret: "s" }, { load: () => saved, save: () => {} }, f, () => now);
   assert.equal(await token(), "a1");
   await assert.rejects(token(true), /SmartThings token: 503/);
+});
+
+test("the splash ripple swells warm, slowly, then fades in stages to a dim orange-yellow glow that stays", () => {
+  const r = rippleShow(LAMP, "splash")!;
+  // Three lights warming one after the other, then four fade steps that move all three together.
+  assert.equal(r.steps.length, 7);
+  assert.ok(r.steps.slice(0, 3).every((s) => s.targets[0].commands.some((c) => c.command === "setColorTemperature" && c.arguments![0] === 2700)));
+  assert.ok(!cmds(r.steps).some((s) => s.includes('"saturation":35')), "no cool tint");
+  const fade = r.steps.slice(3);
+  assert.ok(fade.every((s) => s.targets.length === 3), "the lights fade together");
+  assert.ok(fade[0].targets.every((t) => t.commands.some((c) => c.command === "setColor")), "the colour turns in the first step");
+  assert.ok(fade.slice(1).every((s) => s.targets.every((t) => !t.commands.some((c) => c.command === "setColor"))));
+  const levels = fade.map((s) => s.targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0] as number);
+  assert.deepEqual([...levels].sort((a, b) => b - a), levels, "only ever dimmer");
+  assert.ok(levels[3] < (r.steps[0].targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0] as number), "ends dimmer than the swell");
+  assert.ok(!cmds(r.steps).some((s) => s.includes(" off]")), "nothing is put back off");
+  assert.equal(r.steps[6].after, 0);
+  assert.ok(r.steps.reduce((ms, st) => ms + st.after, 0) >= 4000, "a long, unhurried splash");
+});
+
+test("stColour turns sRGB into SmartThings hue and saturation (0-100)", () => {
+  assert.deepEqual(stColour([255, 0, 0]), { hue: 0, saturation: 100 });
+  assert.deepEqual(stColour([0, 255, 0]), { hue: 33, saturation: 100 });
+  assert.deepEqual(stColour([0, 0, 255]), { hue: 67, saturation: 100 });
+  assert.deepEqual(stColour([128, 128, 128]), { hue: 0, saturation: 0 });
+});
+
+test("the mood show sends colour to lights that have it, in one step, with the lights put back by undo", () => {
+  const r = moodShow(LAMP, [30, 70, 200])!;
+  assert.equal(r.steps.length, 1);
+  const top = r.steps[0].targets.find((t) => t.device.id === "top")!;
+  assert.deepEqual(top.commands.find((c) => c.command === "setColor")!.arguments, [{ hue: 63, saturation: 85 }]);
+  // The level follows the room; the top light is on at 15% and never dims.
+  assert.equal(top.commands.find((c) => c.command === "setLevel")!.arguments![0], 35);
+  // A desaturated mood is lifted to a colour that still reads as one.
+  const grey = moodShow(LAMP, [120, 125, 130])!;
+  assert.equal((grey.steps[0].targets[0].commands.find((c) => c.command === "setColor")!.arguments![0] as { saturation: number }).saturation, 45);
+  assert.equal(cmds([r.undo])[0], cmds(rippleShow(LAMP, "open")!.steps.slice(6)).join(" "));
+  assert.equal(moodShow([], [30, 70, 200]), null);
+});
+
+test("the farewell fades lights that are on to off, together, and leaves the others alone", () => {
+  const lit = LAMP.map((d) => (d.id === "low" ? { ...d, on: false } : { ...d, on: true, level: 40 }));
+  const steps = fadeShow(lit, 0, undefined, undefined, 3, 700)!;
+  assert.equal(steps.length, 3);
+  assert.ok(steps.every((s) => s.targets.length === 2), "only the two lit lights");
+  const levels = steps.slice(0, 2).map((s) => s.targets[0].commands.find((c) => c.command === "setLevel")!.arguments![0] as number);
+  assert.ok(levels[0] <= 40 && levels[1] <= levels[0], "dimmer each step");
+  assert.ok(steps[2].targets.every((t) => t.commands.length === 1 && t.commands[0].command === "off"), "the last step switches them off");
+  assert.equal(fadeShow(LAMP.map((d) => ({ ...d, on: false })), 0), null, "nothing to fade when all are off");
+});
+
+test("dimming for media only lowers: a light under the target keeps its level", () => {
+  const lit = LAMP.map((d, i) => ({ ...d, on: true, level: i === 0 ? 10 : 80 }));
+  const steps = fadeShow(lit, 15, undefined, undefined, 2, 500)!;
+  const last = steps[steps.length - 1];
+  const lvl = (id: string) => last.targets.find((t) => t.device.id === id)!.commands.find((c) => c.command === "setLevel")!.arguments![0];
+  assert.equal(lvl("low"), 10);
+  assert.equal(lvl("mid"), 15);
+  assert.ok(!cmds(steps).some((s) => s.includes(" off]")));
+});
+
+test("the dance is a chase: one light takes the next colour each beat while the one before eases back", () => {
+  const steps = danceShow(LAMP, ["side light low", "side light mid", "side light top"], undefined, 6)!;
+  assert.equal(steps.length, 6);
+  assert.deepEqual(steps.map((s) => s.targets[0].device.id), ["low", "mid", "top", "low", "mid", "top"]);
+  assert.ok(steps.every((s) => s.targets[0].commands.some((c) => c.command === "setColor")));
+  assert.notDeepEqual(steps[0].targets[0].commands.find((c) => c.command === "setColor"), steps[1].targets[0].commands.find((c) => c.command === "setColor"));
+  assert.ok(steps[1].targets.length === 2 && steps[1].targets[1].device.id === "low", "the previous light eases back");
+  assert.ok(steps.every((s) => s.after >= 1000), "a beat cloud calls can keep up with");
+  assert.equal(danceShow([], ["side light low"]), null);
 });

@@ -34,6 +34,8 @@ export interface DashboardSettings {
   };
   domotics: {
     cinemaAutoDim: boolean;
+    /** The background takes the mood of the focused poster (its dominant colour). */
+    moodBackground: boolean;
   };
   /** How Nuvio collections look (lib/collectionlayout.ts); a row or a folder can carry its own choice on top. */
   collections: {
@@ -131,6 +133,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   },
   domotics: {
     cinemaAutoDim: false,
+    moodBackground: true,
   },
   collections: { cardShape: "auto", cardSize: "auto", folderView: "auto", tabStyle: "auto" },
   playback: {
@@ -206,7 +209,10 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null): Dash
       clockFormat: g.clockFormat ?? DEFAULT_SETTINGS.general.clockFormat,
       accentTheme: g.accentTheme ?? DEFAULT_SETTINGS.general.accentTheme,
     },
-    domotics: { cinemaAutoDim: d.cinemaAutoDim ?? DEFAULT_SETTINGS.domotics.cinemaAutoDim },
+    domotics: {
+      cinemaAutoDim: d.cinemaAutoDim ?? DEFAULT_SETTINGS.domotics.cinemaAutoDim,
+      moodBackground: d.moodBackground ?? DEFAULT_SETTINGS.domotics.moodBackground,
+    },
     collections: {
       cardShape: pick(CARD_SHAPES, c.cardShape),
       cardSize: pick(CARD_SIZES, c.cardSize),
@@ -456,6 +462,17 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     cycle: (s) => ({
       ...s,
       domotics: { ...s.domotics, cinemaAutoDim: !s.domotics.cinemaAutoDim },
+    }),
+  },
+  {
+    id: "domotics.moodBackground",
+    section: "Lights",
+    label: "Poster colour",
+    description: "Tint the metallic background with the colour of the poster in focus. Off keeps the neutral background",
+    getValue: (s) => (s.domotics.moodBackground ? "On" : "Off"),
+    cycle: (s) => ({
+      ...s,
+      domotics: { ...s.domotics, moodBackground: !s.domotics.moodBackground },
     }),
   },
 ];

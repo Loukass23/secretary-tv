@@ -1,5 +1,5 @@
 import { type ComponentChildren, createContext } from "preact";
-import { useContext } from "preact/hooks";
+import { useContext, useRef } from "preact/hooks";
 import { FROST_SCALE, PAGE_H, PAGE_W } from "./backdrop.ts";
 import "./glass.css";
 
@@ -23,8 +23,15 @@ interface RootProps {
 
 /** The page a glass screen lives on: 1920x1080, with the backdrop and the frost for its surfaces. */
 export function GlassRoot({ mode, wallpaper, frost, class: cls, children }: RootProps) {
+  // A new wallpaper fades in over the old one: the old one stays on its own layer and fades out (opacity only).
+  const shown = useRef<{ now?: string; before?: string }>({});
+  if (shown.current.now !== wallpaper) {
+    shown.current = { now: wallpaper, before: shown.current.now };
+  }
+  const before = shown.current.before;
   return (
     <div class={`sg-root sg-${mode}${cls ? ` ${cls}` : ""}`} style={wallpaper ? { backgroundImage: `url(${wallpaper})` } : undefined}>
+      {before && <i key={before} class="sg-wall-out" style={{ backgroundImage: `url(${before})` }} />}
       <FrostContext.Provider value={mode === "fake" ? (frost ?? null) : null}>{children}</FrostContext.Provider>
     </div>
   );

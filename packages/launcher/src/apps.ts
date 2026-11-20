@@ -146,7 +146,7 @@ export function openYoutube(watch?: string): Promise<void> {
 
 /** Starts playing in the catalog app at once, on the sources the embedded catalog already found (no second search). */
 export async function playInApp(play: PlayNow): Promise<void> {
-  await beforeLaunch();
+  await beforeMedia();
   // The first sources are the ones the player would try; the rest only grow the payload.
   await launchCatalogApp(APP_IDS[play.type], undefined, launchApp, undefined, { ...play, streams: play.streams.slice(0, PLAY_STREAMS_MAX) });
 }
@@ -161,6 +161,18 @@ export async function openFolderInApp(type: CatalogKind, collectionId: string, f
 let before: (() => Promise<void>) | null = null;
 export const onBeforeLaunch = (fn: (() => Promise<void>) | null) => {
   before = fn;
+};
+/** Something to do before media starts playing (Nest dims the side lights); like `before`, it never blocks the launch. */
+let beforePlay: (() => Promise<void>) | null = null;
+export const onBeforePlay = (fn: (() => Promise<void>) | null) => {
+  beforePlay = fn;
+};
+const beforeMedia = async () => {
+  try {
+    await (beforePlay ?? before)?.();
+  } catch {
+    // The app opens anyway.
+  }
 };
 const beforeLaunch = async () => {
   try {
@@ -181,7 +193,7 @@ export async function openTitleInApp(
   autoPlay = false,
   f: typeof fetch = fetch,
 ): Promise<void> {
-  await beforeLaunch();
+  await (autoPlay ? beforeMedia() : beforeLaunch());
   // With Nuvio the title travels in the launch payload only; the server's handoff would open it a second time.
   if (serverUrl && SYNC_BACKEND === "secretary") {
     try {

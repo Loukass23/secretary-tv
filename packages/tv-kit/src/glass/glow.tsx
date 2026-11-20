@@ -2,6 +2,7 @@
 // (docs/performance.md, glass lab), so the glow is a small blurred blob drawn once per colour on a
 // canvas, scaled up by the compositor and moved and faded with transform and opacity only.
 import { useRef } from "preact/hooks";
+import { extractPalette, type Palette } from "./palette.ts";
 import { blob, canvas } from "./wallpaper.ts";
 
 const blobs = new Map<string, Promise<string>>();
@@ -60,6 +61,32 @@ export function artColour(src: string): Promise<string | null> {
       img.src = src;
     });
     colours.set(src, hit);
+  }
+  return hit;
+}
+
+const palettes = new Map<string, Promise<Palette | null>>();
+
+/** The mood of an image (palette.ts), cached per src; null when it is grey or cannot be read. Same-origin or CORS art only. */
+export function artPalette(src: string): Promise<Palette | null> {
+  let hit = palettes.get(src);
+  if (!hit) {
+    hit = new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const [, g] = canvas(32, 18);
+          g.drawImage(img, 0, 0, 32, 18);
+          resolve(extractPalette(g.getImageData(0, 0, 32, 18).data, 32, 18));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    palettes.set(src, hit);
   }
   return hit;
 }

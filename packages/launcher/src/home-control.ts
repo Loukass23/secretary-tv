@@ -7,8 +7,11 @@ import {
   CINEMA_DEFAULT,
   type CinemaConfig,
   cinemaShow,
+  danceShow,
+  fadeShow,
   INDEPENDENT_DEFAULT,
   lightCommands,
+  moodShow,
   MUSIC_DEFAULT,
   type MusicConfig,
   musicShow,
@@ -25,12 +28,14 @@ import {
   sharedLights,
   type ShowStep,
   smartThings,
+  stColour,
   type StDevice,
   type StScene,
   type StTokens,
   type TokenSource,
 } from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
+import { effective, lightFx } from "./light-fx.ts";
 import { ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
 
 /** Where the setup script (tv-kit/scripts/smartthings.mjs authorize) writes the first token pair. */
@@ -233,8 +238,9 @@ function startShow(steps: readonly ShowStep[], run: number, undo?: ShowStep) {
 
 const RIPPLE_KEY = "nest.openRipple";
 
-/** The ripples are on unless `nest.openRipple` is "off" (or a JSON object with `enabled: false`). */
+/** The ripples are on unless the light effects are off (Lights panel), or `nest.openRipple` is "off" (or a JSON object with `enabled: false`). */
 export function openRippleEnabled(): boolean {
+  if (!lightFx().enabled) return false;
   try {
     const raw = localStorage.getItem(RIPPLE_KEY);
     if (raw === "off") return false;
@@ -302,6 +308,107 @@ async function playRipple(style: RippleStyle, devices?: readonly StDevice[], for
 /** When Nest opens or comes back: the slow ripple, from the status just read. */
 export const playOpenRipple = (devices?: readonly StDevice[]) => playRipple("open", devices);
 
+/** The warm swell that plays with the splash (the secretary bird): only when the splash and the light effects are on. */
+export async function playSplashRipple(devices?: readonly StDevice[]): Promise<void> {
+  if (!effective(lightFx()).splash) return;
+  await playRipple("splash", devices);
+}
+
+/**
+ * The bird leaving: the side lights fade out and go off as Nest is left. Waits for it (never more than a few seconds), so
+ * the caller can exit afterwards; also stops a dance. Nothing happens with the light effects off or without lights on.
+ */
+export async function playFarewell(): Promise<void> {
+  if (!homeConfigured() || !effective(lightFx()).splash) return;
+  const run = ++current;
+  baseline = null;
+  moodLights = null;
+  moodSent = null;
+  const steps = fadeShow(await freshStatus(), 0, rippleConfig(), independentLights(), 3, 700);
+  status = null;
+  if (!steps) return;
+  const { started, finished } = startShow(steps, run);
+  await Promise.race([started.then(() => finished), sleep(4_000)]).catch((e) => console.warn("[nest] farewell", e));
+}
+
+/**
+ * When something starts playing: the side lights ease down to the cinema level (they keep their colour) instead of the
+ * ripple, and the room is dim when the picture comes up. Quick, never holds the app up, and a no-op with the effects off.
+ */
+export async function dimForMedia(limitMs = 2_500): Promise<void> {
+  if (!homeConfigured() || !effective(lightFx()).enabled) return;
+  const run = ++current;
+  baseline = null;
+  moodLights = null;
+  moodSent = null;
+  const steps = fadeShow(await freshStatus(), cinemaConfig().level, rippleConfig(), independentLights(), 2, 500);
+  status = null;
+  if (!steps) return;
+  const { started, finished } = startShow(steps, run);
+  await Promise.race([started.then(() => finished), sleep(limitMs)]).catch((e) => console.warn("[nest] dim for media", e));
+}
+
+/** The dance's length: a round is ~35 s, so this is some twenty minutes, after which the lights stay as they are. */
+const DANCE_ROUNDS = 36;
+
+/** Music mode's dance, round after round, until another lights command replaces it. */
+async function dance(run: number, devices: readonly StDevice[]): Promise<void> {
+  const steps = danceShow(devices, musicConfig().lights, independentLights());
+  if (!steps) return;
+  for (let round = 0; round < DANCE_ROUNDS && run === current; round++) await startShow(steps, run).finished;
+}
+
+// --- the side lights following the poster in focus ---
+
+/** The least time between two colour changes: each is a cloud call, and a walk along a row would queue dozens. */
+export const MOOD_GAP_MS = 4_000;
+/** The least change of hue (0-100) that is worth a call. */
+const MOOD_MIN_STEP = 5;
+
+let moodLights: readonly StDevice[] | null = null;
+let moodSent: { hue: number } | null = null;
+let moodAt = 0;
+let moodTimer: ReturnType<typeof setTimeout> | undefined;
+let moodWanted: readonly [number, number, number] | null = null;
+
+/**
+ * Puts the side lights in `rgb` (a poster's accent), or back as they were when it is null (focus left the art, or the
+ * setting went off). Rate-limited, with the newest colour sent last; a ripple or another lights command takes over.
+ */
+export function syncMood(rgb: readonly [number, number, number] | null): void {
+  moodWanted = rgb;
+  if (moodTimer) return;
+  const wait = Math.max(0, moodAt + MOOD_GAP_MS - Date.now());
+  // Going back to normal is not held up by the limit.
+  moodTimer = setTimeout(() => {
+    moodTimer = undefined;
+    void applyMood(moodWanted).catch((e) => console.warn("[nest] mood lights", e));
+  }, moodWanted ? wait : 0);
+}
+
+async function applyMood(rgb: readonly [number, number, number] | null): Promise<void> {
+  if (!homeConfigured() || baseline) return;
+  const on = rgb !== null && effective(lightFx()).sync;
+  if (!on) {
+    if (!moodLights) return;
+    const before = moodLights;
+    moodLights = null;
+    moodSent = null;
+    const lights = rippleShow(before, "launch", rippleConfig(), independentLights());
+    if (lights) await startShow([lights.undo], ++current).finished;
+    return;
+  }
+  const { hue } = stColour(rgb);
+  if (moodSent && Math.abs(moodSent.hue - hue) < MOOD_MIN_STEP) return;
+  // The lights as they were before the first colour, so the way back restores them, not a colour of ours.
+  moodLights ??= await freshStatus();
+  const show = moodShow(moodLights, rgb, rippleConfig(), independentLights());
+  if (!show) return;
+  moodSent = { hue };
+  moodAt = Date.now();
+  await startShow(show.steps, ++current, show.undo).started;
+}
+
 /** A ripple on request ("ripple test" to Ask Nest): plays whether or not the ripples are switched off, from a fresh status. */
 export async function playRippleTest(style: RippleStyle): Promise<void> {
   status = null;
@@ -326,12 +433,19 @@ export async function runLights(cmd: LightsCommand, devices: readonly StDevice[]
   if (!homeConfigured()) throw new NestError("Lights need SmartThings on this TV, or Secretary Server.");
   const run = ++current;
   status = null;
-  // A lights command defines the room now, so a ripple it cut short has nothing left to restore to.
+  // A lights command defines the room now, so a ripple it cut short has nothing left to restore to, nor a mood colour.
   baseline = null;
+  moodLights = null;
+  moodSent = null;
   if ("scene" in cmd) {
     const apart = independentLights();
     const show = cmd.scene === "cinema" ? cinemaShow(devices, cinemaConfig(), apart) : cmd.scene === "music" ? musicShow(devices, musicConfig(), apart) : null;
-    if (show) return startShow(show, run).started;
+    if (show) {
+      const { started, finished } = startShow(show, run);
+      // Music mode: once the room is warm, the side lights dance (an effect of its own, off with the master switch).
+      if (cmd.scene === "music" && effective(lightFx()).dance) void started.then(() => finished).then(() => dance(run, devices));
+      return started;
+    }
     const id = (cmd.scene === "cinema" ? movieScenes().movie : undefined) ?? scenes.find((s) => SCENE_NAMES[cmd.scene].test(s.name))?.id;
     if (id) return void (await home.runScene(id));
     if (cmd.scene === "music") throw new NestError("Music mode needs a sound system or lights SmartThings can see.");

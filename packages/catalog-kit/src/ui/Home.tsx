@@ -135,7 +135,7 @@ export function Home({
   const lengths = rows.map((r) => r.items.length);
   const activeRow = rows[focus.row];
   const current = activeRow?.items[focus.col];
-  const { backdrop, shade } = useBase(type);
+  const { backdrop, shade } = useBase(type, current ? heroArt(current) : undefined);
   // The focused card's art becomes the backdrop once focus rests on it.
   const hero = useHeroArt(current?.id, current ? heroArt(current) : undefined, active);
 

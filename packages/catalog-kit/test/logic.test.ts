@@ -396,6 +396,9 @@ test("settings & reminders: organized settings persist and reminders switch clea
   const dimDef = SETTING_ITEMS.find((i) => i.id === "domotics.cinemaAutoDim")!;
   assert.equal(saveSettings(dimDef.cycle(initial, 1)).domotics.cinemaAutoDim, true);
   assert.equal(loadSettings().domotics.cinemaAutoDim, true);
+  assert.equal(initial.domotics.moodBackground, true);
+  const moodDef = SETTING_ITEMS.find((i) => i.id === "domotics.moodBackground")!;
+  assert.equal(moodDef.cycle(initial, 1).domotics.moodBackground, false);
   const legacy = mergeSettings({ general: { startupView: "dashboard", accentTheme: "gold" } } as never);
   assert.deepEqual(Object.keys(legacy.general).sort(), ["accentTheme", "bootAnimation", "clockFormat"]);
   assert.equal(legacy.general.accentTheme, "gold");
