@@ -4,7 +4,7 @@
 //
 // A media card (Cinema, Shows, Anime) has a style the viewer picks with a long OK (card-style.ts). OK expands it in
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
-import { AppChip, Glass, Icon, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
+import { AppChip, Glass, Icon, type IconName, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
 import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
 import type { Column } from "./nest-nav.ts";
@@ -49,7 +49,7 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       /** What the assistant understood and did, shown beside the label while the card holds its suggestions. */
       note?: { prompt: string; reply: string };
     }
-  | { kind: "home"; title: string; sub: string; actions: string[] }
+  | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
   | { kind: "assistant"; greeting: string; lines: string[] }
   | { kind: "weather"; weather: Weather | null }
@@ -68,7 +68,8 @@ const LIST = { w: 420, h: 136 };
 const ADD_H = 76;
 const APP = { w: 176, h: 160, gap: 18, across: 2 };
 const HOME_W = 380;
-const ACTION_H = 72;
+/** The Home card's buttons (Cinema, Warm, Off, Music): four under its title and the bulb. */
+const ACTION_H = 60;
 const ASSIST_W = 440;
 const PANEL_W = 460;
 
@@ -328,11 +329,12 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
           <small>{col.sub}</small>
           {col.actions.map((a, i) => (
             <span
-              key={a}
+              key={a.label}
               class={`nest-home-action${focus === i ? " is-focus" : ""}`}
-              style={{ top: `${CARD_H - (col.actions.length - i) * (ACTION_H + 12) - 16}px` }}
+              style={{ top: `${CARD_H - (col.actions.length - i) * (ACTION_H + 8) - 16}px` }}
             >
-              {a}
+              <Icon name={a.icon} size={30} />
+              {a.label}
             </span>
           ))}
         </Glass>

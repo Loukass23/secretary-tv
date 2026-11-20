@@ -3,7 +3,33 @@
 // launch payload instead (homeGrant).
 import type { HomeGrant } from "@secretary/nuvio";
 import type { LightsCommand } from "@secretary/assistant";
-import { lightCommands, oauthTokens, smartThings, type StDevice, type StScene, type StTokens, type TokenSource } from "@secretary/smartthings";
+import {
+  CINEMA_DEFAULT,
+  type CinemaConfig,
+  cinemaShow,
+  INDEPENDENT_DEFAULT,
+  lightCommands,
+  MUSIC_DEFAULT,
+  type MusicConfig,
+  musicShow,
+  nextPictureMode,
+  oauthTokens,
+  pictureModeCommands,
+  pictureScene,
+  pictureTv,
+  RIPPLE_DEFAULT,
+  type RippleConfig,
+  runShow,
+  type RippleStyle,
+  rippleShow,
+  sharedLights,
+  type ShowStep,
+  smartThings,
+  type StDevice,
+  type StScene,
+  type StTokens,
+  type TokenSource,
+} from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
 import { ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
 
@@ -81,27 +107,248 @@ export async function homeGrant(now = Date.now()): Promise<HomeGrant | null> {
   }
 }
 
+const PICTURE_KEY = "nest.pictureModes";
+/** The two modes the quick toggle flips between: Dynamic by day (a bright window), Eco at night. */
+export const DEFAULT_PICTURE_PAIR: readonly [string, string] = ["Dynamic", "Eco"];
+
+export function picturePair(): readonly [string, string] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PICTURE_KEY) ?? "null") as unknown;
+    if (Array.isArray(v) && v.length === 2 && v.every((m) => typeof m === "string" && m)) return [v[0], v[1]];
+  } catch {
+    // Unreadable: the defaults.
+  }
+  return DEFAULT_PICTURE_PAIR;
+}
+
+const PICTURE_LAST_KEY = "nest.pictureLast";
+
+/** The picture mode Nest last set. SmartThings' own picture-mode status is stale on this TV (it never updates), so the toggle and the icon go by this. */
+export function lastPictureMode(): string | undefined {
+  try {
+    return localStorage.getItem(PICTURE_LAST_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Flips the TV's picture mode between the two favourites and returns the mode it asked for. It runs the scene named for
+ * the mode ("TV Eco", made in the SmartThings app), because this TV ignores the picture-mode command from the cloud API
+ * but obeys a scene; without one it sends the command anyway.
+ */
+export async function togglePictureMode(devices: readonly StDevice[], scenes: readonly StScene[]): Promise<string> {
+  if (!homeConfigured()) throw new NestError("Picture mode needs SmartThings on this TV.");
+  const tv = pictureTv(devices);
+  const mode = nextPictureMode(lastPictureMode() ?? tv?.pictureMode, picturePair(), tv?.pictureModes);
+  const scene = pictureScene(mode, scenes);
+  if (scene) await home.runScene(scene.id);
+  else if (tv) await home.command(tv.id, pictureModeCommands(mode, tv.pictureCap));
+  else throw new NestError(`Make a SmartThings scene named “TV ${mode}” to switch the picture.`);
+  rememberPictureMode(mode);
+  return mode;
+}
+
+/** Keeps the mode Nest just set, by the button or by a prompt. */
+export function rememberPictureMode(mode: string) {
+  try {
+    localStorage.setItem(PICTURE_LAST_KEY, mode);
+  } catch {
+    // The toggle then starts from SmartThings' status again after a restart.
+  }
+}
+
 /** Scene names that stand for Ask Nest's "cinema mode", "warm lights" and "lights off". */
-const SCENE_NAMES: Record<"cinema" | "warm" | "off", RegExp> = {
+const SCENE_NAMES: Record<"cinema" | "warm" | "off" | "music", RegExp> = {
+  music: /music/i,
   cinema: /cinema|movie|film/i,
   warm: /warm|evening|relax|cos[yi]/i,
   off: /off|good ?night|bed/i,
 };
 /** The levels used when no scene fits: what the server's own scenes set. */
-const SCENE_LEVEL = { cinema: 15, warm: 70, off: 0 } as const;
+const SCENE_LEVEL = { cinema: 15, warm: 70, off: 0, music: 50 } as const;
+
+const CINEMA_KEY = "nest.cinemaShow";
+const MUSIC_KEY = "nest.musicMode";
+
+const names = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
+const stored = (key: string): Record<string, unknown> => {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "null") as unknown;
+    return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const INDEPENDENT_KEY = "nest.independentLights";
+
+/** Lights no mode touches: the computer desk, or `nest.independentLights` (name fragments) for another home. */
+export function independentLights(): readonly string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(INDEPENDENT_KEY) ?? "null") as unknown;
+    if (names(v)) return v;
+  } catch {
+    // Unreadable: the default.
+  }
+  return INDEPENDENT_DEFAULT;
+}
+
+/** Cinema's light: the defaults (the top side light, dimmed to 15%), or `nest.cinemaShow` ({ keep, level }) for another home. */
+export function cinemaConfig(): CinemaConfig {
+  const v = stored(CINEMA_KEY);
+  return {
+    keep: typeof v.keep === "string" ? v.keep : CINEMA_DEFAULT.keep,
+    level: typeof v.level === "number" ? Math.max(1, Math.min(100, v.level)) : CINEMA_DEFAULT.level,
+  };
+}
+
+/** Music mode's lights: the defaults, or `nest.musicMode` ({ lights, off, level }). */
+export function musicConfig(): MusicConfig {
+  const v = stored(MUSIC_KEY);
+  return {
+    lights: names(v.lights) ? v.lights : MUSIC_DEFAULT.lights,
+    off: names(v.off) ? v.off : MUSIC_DEFAULT.off,
+    level: typeof v.level === "number" ? Math.max(1, Math.min(100, v.level)) : MUSIC_DEFAULT.level,
+  };
+}
+
+/** The newest lights command: a show stops when another command comes in (lights off in the middle of the sweep). */
+let current = 0;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
- * Ask Nest's lights from the TV: the movie scene picked in Lights (or a scene with a fitting name), else every light at
- * the scene's level.
+ * Starts a show on SmartThings: `started` settles when its first step has gone out, so a failure reaches the caller and
+ * the toast can say so at once; the rest follows in the background until another lights command replaces it
+ * (`finished` is for a caller that has to wait it out).
+ */
+function startShow(steps: readonly ShowStep[], run: number, undo?: ShowStep) {
+  return runShow(steps, {
+    send: (t) => home.command(t.device.id, t.commands),
+    cancelled: () => run !== current,
+    undo,
+    onError: (e) => console.warn("[nest] lights show", e),
+  });
+}
+
+const RIPPLE_KEY = "nest.openRipple";
+
+/** The ripples are on unless `nest.openRipple` is "off" (or a JSON object with `enabled: false`). */
+export function openRippleEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(RIPPLE_KEY);
+    if (raw === "off") return false;
+    return (stored(RIPPLE_KEY).enabled ?? true) !== false;
+  } catch {
+    return true;
+  }
+}
+
+/** The ripple's lights: the side lights, or `nest.openRipple` ({ lights }) for another home. */
+export function rippleConfig(): RippleConfig {
+  const v = stored(RIPPLE_KEY);
+  return { lights: names(v.lights) ? v.lights : RIPPLE_DEFAULT.lights };
+}
+
+/** The last status read and when, so a ripple can use it while it is fresh instead of asking again. */
+let status: { devices: readonly StDevice[]; at: number } | null = null;
+const FRESH_MS = 8_000;
+
+/**
+ * The lights as they were when the ripple now playing began. Every ripple that starts meanwhile restores to this, not to
+ * a status read in the middle of the wave (which would make the wave the new "original").
+ */
+let baseline: readonly StDevice[] | null = null;
+
+/** Nest's poller reports each status read here; one taken while a ripple is playing shows the wave, so it is dropped. */
+export function noteStatus(devices: readonly StDevice[]) {
+  if (!baseline) status = { devices, at: Date.now() };
+}
+
+/** A status no older than a few seconds, else a read now; a lights command in between makes the old one stale. */
+async function freshStatus(): Promise<readonly StDevice[]> {
+  if (status && Date.now() - status.at < FRESH_MS) return status.devices;
+  const devices = await home.devices();
+  noteStatus(devices);
+  return devices;
+}
+
+/**
+ * Plays the ripple for `style`; returns when it is over. The room is as it was afterwards, so the caller can carry on
+ * (open another app) without lights left halfway. Does nothing without SmartThings, with the ripple switched off, or
+ * without the side lights.
+ */
+async function playRipple(style: RippleStyle, devices?: readonly StDevice[], force = false): Promise<void> {
+  if (!homeConfigured() || (!force && !openRippleEnabled())) return;
+  const source = baseline ?? devices ?? (await freshStatus());
+  const ripple = rippleShow(source, style, rippleConfig(), independentLights());
+  if (!ripple) return;
+  baseline = source;
+  const run = ++current;
+  const { started, finished } = startShow(ripple.steps, run, ripple.undo);
+  try {
+    await started;
+    // The steps after the first run in the background: wait them out (the room is as it was by then), unless another command took over.
+    await finished;
+  } finally {
+    // Only the newest ripple ends the baseline; an older one that another ripple cut short leaves it to that one.
+    if (run === current) {
+      baseline = null;
+      status = null;
+    }
+  }
+}
+
+/** When Nest opens or comes back: the slow ripple, from the status just read. */
+export const playOpenRipple = (devices?: readonly StDevice[]) => playRipple("open", devices);
+
+/** A ripple on request ("ripple test" to Ask Nest): plays whether or not the ripples are switched off, from a fresh status. */
+export async function playRippleTest(style: RippleStyle): Promise<void> {
+  status = null;
+  await playRipple(style, undefined, true);
+}
+
+/**
+ * Before another app opens: the quick ripple, then the app. Never longer than the limit, and a failure never stops the
+ * app from opening.
+ */
+export async function rippleBeforeLaunch(limitMs = 3_000): Promise<void> {
+  await Promise.race([playRipple("launch").catch((e) => console.warn("[nest] launch ripple", e)), sleep(limitMs)]);
+}
+
+/**
+ * Ask Nest's lights from the TV. Cinema is a show (the lights come on one after the other, then settle to one dim
+ * glow), music is the sound system plus a warm room; either falls back to the movie scene picked in Lights (or a scene
+ * with a fitting name), else every light at the scene's level. The sound system is not a light, so cinema, warm and off
+ * never touch it.
  */
 export async function runLights(cmd: LightsCommand, devices: readonly StDevice[], scenes: readonly StScene[]): Promise<void> {
   if (!homeConfigured()) throw new NestError("Lights need SmartThings on this TV, or Secretary Server.");
+  const run = ++current;
+  status = null;
+  // A lights command defines the room now, so a ripple it cut short has nothing left to restore to.
+  baseline = null;
   if ("scene" in cmd) {
+    const apart = independentLights();
+    const show = cmd.scene === "cinema" ? cinemaShow(devices, cinemaConfig(), apart) : cmd.scene === "music" ? musicShow(devices, musicConfig(), apart) : null;
+    if (show) return startShow(show, run).started;
     const id = (cmd.scene === "cinema" ? movieScenes().movie : undefined) ?? scenes.find((s) => SCENE_NAMES[cmd.scene].test(s.name))?.id;
     if (id) return void (await home.runScene(id));
+    if (cmd.scene === "music") throw new NestError("Music mode needs a sound system or lights SmartThings can see.");
   }
   const level = "level" in cmd ? cmd.level : SCENE_LEVEL[cmd.scene];
-  const lights = devices.filter((d) => d.kind === "light");
+  const lights = sharedLights(devices, independentLights());
   if (!lights.length) throw new NestError("I can't see any SmartThings lights yet.");
   await Promise.all(lights.map((d) => home.command(d.id, lightCommands(level > 0, d.dimmable ? level : undefined))));
+}
+
+/** The header's sound button: the sound system on if it is off, off if it is on. Returns the state it asked for. */
+export async function toggleSound(devices: readonly StDevice[], now?: boolean): Promise<boolean> {
+  if (!homeConfigured()) throw new NestError("The sound system needs SmartThings on this TV.");
+  const sound = devices.find((d) => d.kind === "audio");
+  if (!sound) throw new NestError("I can't see a sound system in SmartThings.");
+  const on = !(now ?? sound.on ?? false);
+  await home.command(sound.id, lightCommands(on));
+  status = null;
+  return on;
 }

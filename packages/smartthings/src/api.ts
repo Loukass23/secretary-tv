@@ -3,7 +3,10 @@
 // pollers stay at one call per 15 s.
 import { ST_API, type TokenSource } from "./oauth.ts";
 
-export type DeviceKind = "light" | "vacuum" | "phone" | "tv" | "lightSensor" | "other";
+export type DeviceKind = "light" | "vacuum" | "phone" | "tv" | "lightSensor" | "audio" | "other";
+
+/** A plain on/off device named like this is a sound system (a smart plug on the amplifier), not a light. */
+const AUDIO_NAME = /\b(?:sound|audio|speakers?|soundbar|stereo|hi-?fi|subwoofer)\b/i;
 
 export interface StDevice {
   id: string;
@@ -22,7 +25,21 @@ export interface StDevice {
   vacuum?: string;
   /** Lux, from the TV's light sensor. */
   lux?: number;
+  /** The TV's picture mode (Dynamic, Standard, Eco, …) and the modes it offers, when it exposes them. */
+  pictureMode?: string;
+  pictureModes?: string[];
+  /** The capability that carries it, which a command has to name. */
+  pictureCap?: string;
+  /** Takes colour or colour temperature commands. */
+  colour?: boolean;
+  /** Colour as the light reports it (0-100 each), and its white temperature in kelvin. */
+  hue?: number;
+  saturation?: number;
+  colorTemp?: number;
 }
+
+/** The capabilities a Samsung TV has shown its picture mode under, in the order tried. */
+export const PICTURE_CAPS = ["custom.picturemode", "samsungvd.pictureMode"] as const;
 
 export interface StScene {
   id: string;
@@ -77,6 +94,7 @@ export function toDevice(raw: RawDevice): StDevice | null {
   const caps = new Map((main?.capabilities ?? []).map((c) => [c.id ?? "", c.status ?? {}]));
   const value = (cap: string, attr: string) => caps.get(cap)?.[attr]?.value;
   const ocf = raw.ocf?.ocfDeviceType ?? "";
+  const label = (raw.label || raw.name || raw.deviceId).trim();
   const kind: DeviceKind =
     raw.type === "MOBILE" || caps.has("presenceSensor")
       ? "phone"
@@ -86,12 +104,14 @@ export function toDevice(raw: RawDevice): StDevice | null {
           ? "tv"
           : caps.has("illuminanceMeasurement")
             ? "lightSensor"
-            : caps.has("switch")
-              ? "light"
-              : "other";
+            : caps.has("switch") && AUDIO_NAME.test(label)
+              ? "audio"
+              : caps.has("switch")
+                ? "light"
+                : "other";
   const d: StDevice = {
     id: raw.deviceId,
-    name: (raw.label || raw.name || raw.deviceId).trim(),
+    name: label,
     kind,
     local: raw.executionContext === "LOCAL" || raw.type === "MATTER" || raw.type === "ZIGBEE" || raw.type === "ZWAVE",
     dimmable: caps.has("switchLevel"),
@@ -108,6 +128,24 @@ export function toDevice(raw: RawDevice): StDevice | null {
   if (typeof move === "string") d.vacuum = move;
   const lux = value("illuminanceMeasurement", "illuminance");
   if (typeof lux === "number") d.lux = lux;
+  if (caps.has("colorControl") || caps.has("colorTemperature")) {
+    d.colour = true;
+    const hue = value("colorControl", "hue");
+    const sat = value("colorControl", "saturation");
+    const temp = value("colorTemperature", "colorTemperature");
+    if (typeof hue === "number") d.hue = hue;
+    if (typeof sat === "number") d.saturation = sat;
+    if (typeof temp === "number") d.colorTemp = temp;
+  }
+  for (const cap of PICTURE_CAPS) {
+    const mode = value(cap, "pictureMode");
+    if (typeof mode !== "string") continue;
+    d.pictureMode = mode;
+    d.pictureCap = cap;
+    const modes = value(cap, "supportedPictureModes");
+    if (Array.isArray(modes)) d.pictureModes = modes.filter((m): m is string => typeof m === "string");
+    break;
+  }
   return d;
 }
 
@@ -184,6 +222,21 @@ export function lightCommands(on: boolean, level?: number): StCommand[] {
   }
   return out;
 }
+
+/** A colour (hue and saturation, 0-100 each). */
+export const colorCommands = (hue: number, saturation: number): StCommand[] => [
+  { capability: "colorControl", command: "setColor", arguments: [{ hue: Math.round(hue), saturation: Math.round(saturation) }] },
+];
+
+/** A white, in kelvin. */
+export const whiteCommands = (kelvin: number): StCommand[] => [
+  { capability: "colorTemperature", command: "setColorTemperature", arguments: [Math.round(kelvin)] },
+];
+
+/** Set the TV's picture mode, on the capability it reported (custom.picturemode when unknown). */
+export const pictureModeCommands = (mode: string, cap: string = PICTURE_CAPS[0]): StCommand[] => [
+  { capability: cap, command: "setPictureMode", arguments: [mode] },
+];
 
 /** Start cleaning (auto mode), or send the vacuum back to its dock. */
 export const vacuumCommands = (start: boolean): StCommand[] =>

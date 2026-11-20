@@ -101,7 +101,7 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 8, 2, (k) => (k < 2 ? "42 min left" : "Drama · 2019"))),
     card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 6, 2, (k) => `S0${k + 1} · E0${k + 3}`)),
     card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 1, () => "12 episodes")),
-    { key: "home", label: "Home", run: noop, kind: "home", title: "Living room", sub: "3 lights on · 21°", actions: ["Movie night", "All off", "Warm"] },
+    { key: "home", label: "Home", run: noop, kind: "home", title: "Living room", sub: "3 lights on · 21°", actions: [{ icon: "cinema", label: "Cinema" }, { icon: "warm", label: "Warm" }, { icon: "power", label: "Off" }, { icon: "music", label: "Music" }] },
     {
       key: "reminders",
       label: "Reminders",

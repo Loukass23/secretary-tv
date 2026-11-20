@@ -51,6 +51,14 @@ test("lights: scenes and levels", async () => {
   assert.deepEqual(lights, [{ scene: "cinema" }, { scene: "off" }, { level: 20 }, { scene: "warm" }]);
 });
 
+test("music mode is its own scene, apart from cinema", async () => {
+  const { fx, lights } = effects();
+  const a = await route("Music mode", fx);
+  assert.equal(a.action, "domotics_updated");
+  await route("cinema mode", fx);
+  assert.deepEqual(lights, [{ scene: "music" }, { scene: "cinema" }]);
+});
+
 test("the weather comes from the forecast, without Gemini", async () => {
   const w = { tempC: 18, label: "Partly cloudy", icon: "⛅", place: "Berlin", days: [{ date: "2026-11-01", minC: 9, maxC: 21, glyph: "partly" as const }] };
   const { fx } = effects({ weather: async () => w, geminiKey: "k", fetch: () => Promise.reject(new Error("no network")) });

@@ -124,8 +124,23 @@ export function launchApp(id: string): Promise<void> {
 }
 
 /** The catalog apps get Nest's launch payload (a session of their own, a title to open); other apps a plain launch. */
-export const openApp = (id: string): Promise<void> =>
-  (Object.values(APP_IDS) as string[]).includes(id) ? launchCatalogApp(id, undefined, launchApp) : launchApp(id);
+export async function openApp(id: string): Promise<void> {
+  await beforeLaunch();
+  return (Object.values(APP_IDS) as string[]).includes(id) ? launchCatalogApp(id, undefined, launchApp) : launchApp(id);
+}
+
+/** Something to finish before another app opens (Nest plays the lights' ripple); none in tests, and it never blocks the launch. */
+let before: (() => Promise<void>) | null = null;
+export const onBeforeLaunch = (fn: (() => Promise<void>) | null) => {
+  before = fn;
+};
+const beforeLaunch = async () => {
+  try {
+    await before?.();
+  } catch {
+    // The app opens anyway.
+  }
+};
 
 /**
  * Launches the target catalog app on the title's Detail view: the title travels in the launch payload, and through
@@ -138,6 +153,7 @@ export async function openTitleInApp(
   autoPlay = false,
   f: typeof fetch = fetch,
 ): Promise<void> {
+  await beforeLaunch();
   // With Nuvio the title travels in the launch payload only; the server's handoff would open it a second time.
   if (serverUrl && SYNC_BACKEND === "secretary") {
     try {
@@ -207,7 +223,8 @@ export const toggleReminder = (serverUrl: string, id: string, f: typeof fetch = 
 export const addReminder = (serverUrl: string, text: string, f: typeof fetch = fetch) =>
   call<ReminderState>(f, `${serverUrl}/reminders`, post({ text, source: "local" }));
 
-export type Scene = "cinema" | "warm" | "off";
+export type Scene = "cinema" | "warm" | "off" | "music";
 
+/** Through the server, which has no sound system: music mode is its warm scene. */
 export const setScene = (serverUrl: string, scene: Scene, f: typeof fetch = fetch) =>
-  call<unknown>(f, `${serverUrl}/domotics/command`, post({ scene }));
+  call<unknown>(f, `${serverUrl}/domotics/command`, post({ scene: scene === "music" ? "warm" : scene }));
