@@ -3,6 +3,9 @@
 import { DEFAULT_SETTINGS } from "@secretary/catalog-kit/src/lib/settings.ts";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
+import { Detail } from "@secretary/catalog-kit/src/ui/Detail.tsx";
+import type { StreamClient } from "@secretary/catalog-kit/src/lib/streams.ts";
+import type { Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import "@secretary/catalog-kit/src/style.css";
 import { useKeys, useOkHold, type Focus as GridFocus } from "@secretary/tv-kit";
 import { GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
@@ -18,7 +21,7 @@ import type { PageProps } from "../app.tsx";
 import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
-export const SCREENS = ["Nest home", "Nest assistant", "Nest chat", "Cinema", "Shows", "Anime"] as const;
+export const SCREENS = ["Nest home", "Nest assistant", "Nest chat", "Cinema", "Shows", "Anime", "Detail resumed", "Detail slim", "Detail offline"] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
@@ -26,6 +29,7 @@ const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series",
 export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
+  if (name.startsWith("Detail")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Nest chat" ? "chat" : name === "Nest assistant" ? "ask" : "row"} />;
 }
@@ -159,6 +163,54 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       onOpenHub={noop}
       onOpenNest={noop}
       onSwitchType={noop}
+      onBack={noop}
+    />
+  );
+}
+
+const LONG =
+  "Neil McCauley is a career thief with a crew he trusts and a code he keeps. Lieutenant Vincent Hanna hunts him across Los Angeles, " +
+  "obsessed and out of marriages, and the two men recognise each other long before they meet. As the next score closes in, loyalty, " +
+  "love and the clock all start to cost more than the money is worth, and neither can walk away from the chase.";
+
+const streams: StreamClient = { get: async () => [], watch: (_i, _h, _t, cb) => (cb([], true), () => {}), warm: async () => {} };
+
+/** Detail on fixture data. `fetch` is stubbed while it is mounted: "Detail slim" gets its synopsis from the network, "offline" never does. */
+function DetailScreen({ variant, art }: { variant: string; art: Art }) {
+  const slim = variant !== "Detail resumed";
+  const offline = variant === "Detail offline";
+  const title: Title = {
+    id: "tt0113277",
+    name: "The Quiet Harbour at the End of the Longest Winter",
+    year: "1995",
+    rating: "8.3",
+    poster: art.posters[0],
+    background: art.backgrounds[0],
+    ...(slim ? {} : { description: LONG, genre: ["Crime", "Drama", "Thriller"], runtime: "170 min" }),
+  };
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const real = window.fetch;
+    window.fetch = (async () =>
+      offline
+        ? Promise.reject(new Error("offline"))
+        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: "170 min", year: "1995", imdbRating: "8.3" } }) }) as typeof fetch;
+    setReady(true);
+    return () => {
+      window.fetch = real;
+    };
+  }, [variant]);
+  if (!ready) return null;
+  return (
+    <Detail
+      type="movie"
+      title={title}
+      streams={streams}
+      resume={{ title, posSec: 4200, durSec: 10200, updated: 1 }}
+      active
+      onPlay={noop}
+      onOpenTimeline={noop}
+      onWatchedChange={noop}
       onBack={noop}
     />
   );

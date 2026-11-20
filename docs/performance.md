@@ -420,3 +420,12 @@ requestAnimationFrame on the reference TV over Down and Back, three cycles: 2-3 
 83-106 ms worst (the very first switch after launch showed 561 ms, the blur's first raster). Opacity alone had no
 frame over 50 ms; blur radii of 3 and 6 px cost as many slow frames as 14 px, so the radius is not the lever. If the
 switch ever reads as a stutter, drop the `filter` line in `.nest-stage.is-away` and keep the dim.
+
+## Continue watching and Detail (2026-11-20)
+
+Cinema on the Samsung TV after the synopsis fallback, Continue text and Back-to-Home changes. Warm walks gave 17 ms
+median, 33 ms p95 and 5-7 frames over 50 ms of ~400, the same as the earlier catalog walks. A walk right after a
+cold start was slower (p95 67 ms, 19 over 50 ms, with first cards at 5.5 s), so measure the second walk. A resumed
+Heat showed its synopsis, runtime, genres and resume bar inside the Detail panel. On Home the info panel cuts the
+synopsis at two lines with an explicit `max-height`: the TV's engine draws a sliver of a third line when `-webkit-line-clamp`
+sits in a flex item that is taller than the clamp.

@@ -96,5 +96,10 @@ export function pickFile<T extends { id: number; name: string; size: number }>(
       .sort((a, b) => b.score - a.score || bySize(a.x, b.x));
     if (scored.length) return scored[0].x;
   }
-  return pool.find((x) => x.id === fileIdx) ?? [...pool].sort(bySize)[0];
+  const chosen = pool.find((x) => x.id === fileIdx);
+  if (chosen) return chosen;
+  // An episode was asked for and no file in a pack is it: the largest file would be some other episode, or another
+  // show's release. A single file is the provider's own answer and stays.
+  if (hint && pool.length > 1) return undefined;
+  return [...pool].sort(bySize)[0];
 }

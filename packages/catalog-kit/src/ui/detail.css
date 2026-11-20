@@ -26,13 +26,17 @@
   -webkit-line-clamp: 5;
 }
 .det-plot.short { -webkit-line-clamp: 3; }
+/* A resumed film also shows the progress row: one plot line less keeps a two-line title inside the panel. */
+.det-plot.snug { -webkit-line-clamp: 4; }
+.det-plot-empty { color: var(--sg-ink-dim); font-style: italic; }
+.det-plot { flex-shrink: 0; }
 
 .det-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: auto; }
 
 .det-will { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 19px; }
-.det-will-k { font-size: 14px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.det-will-k { font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
 .det-will-dim { color: var(--sg-ink-dim); }
-.det-badge { padding: 3px 10px; border-radius: 8px; background: var(--sg-raised); font-size: 16px; font-weight: 700; }
+.det-badge { padding: 3px 10px; border-radius: 8px; background: var(--sg-raised); font-size: 19px; font-weight: 700; }
 
 /* --- episodes --- */
 .det-ep { position: absolute; top: 0; width: 320px; height: 250px; }
@@ -61,12 +65,12 @@
 /* Provider tabs over the source list: placed like the list (the sheet's other children flow), and up to nine, so
    smaller than the glass default. */
 .det-sheet > .det-tabs { position: absolute; }
-.det-tabs .sg-seg-item { font-size: 17px; white-space: nowrap; }
+.det-tabs .sg-seg-item { font-size: 19px; white-space: nowrap; }
 /* Section headers in the sources sheet (ui/sheet.ts): small caps text, no surface. */
-.det-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: 17px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.det-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
 /* Filter chips over the source list: placed like the tabs, smaller text so six fit. */
 .det-sheet > .det-chips { position: absolute; }
-.det-chips .sg-seg-item { font-size: 16px; white-space: nowrap; }
+.det-chips .sg-seg-item { font-size: 19px; white-space: nowrap; }
 /* The details card over the sheet's list (Detail.tsx SourceDetails): smoked, no frost, text only. */
 .det-sheet > .det-details { position: absolute; z-index: 5; padding: 24px 30px; }
 .det-details::after { background: rgba(10, 11, 14, 0.94); }
@@ -75,7 +79,7 @@
 .det-facts dd { margin: 0; overflow-wrap: anywhere; }
 .det-raw { white-space: pre-wrap; color: var(--sg-ink-dim); font-size: 18px; }
 /* "16% watched · 38 min left" over the Resume button: a thin accent bar, moved by transform. */
-.det-progress { display: flex; align-items: center; gap: 14px; margin-top: auto; font-size: 18px; color: var(--sg-ink-dim); }
+.det-progress { display: flex; align-items: center; gap: 14px; margin-top: auto; font-size: 20px; color: var(--sg-ink-dim); }
 .det-progress + .det-actions { margin-top: 12px; }
 .det-progress-bar { display: block; width: 180px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
 .det-progress-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; }

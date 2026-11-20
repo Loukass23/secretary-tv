@@ -122,6 +122,28 @@ test("ids: IMDb to TMDB through /find with a key, Cinemeta without; anime passes
   assert.equal(await keyless("tt0000001", "movie"), null);
 });
 
+test("ids: an ARM mapping that is no TV show, or began after the title, is not trusted (two shows of one name)", async () => {
+  const f = fakeFetch({
+    "https://arm.haglund.dev/api/v2/ids?source=kitsu&id=1": json({ themoviedb: 500 }),
+    "https://arm.haglund.dev/api/v2/ids?source=kitsu&id=2": json({ themoviedb: 600 }),
+    "https://arm.haglund.dev/api/v2/ids?source=kitsu&id=3": json({ themoviedb: 700 }),
+    "https://api.themoviedb.org/3/tv/600": json({ first_air_date: "2024-07-01" }),
+    "https://api.themoviedb.org/3/tv/700": json({ first_air_date: "2019-04-01" }),
+    // tv/500 is not listed: TMDB answers 404, the number is a movie's.
+  });
+  const target = createIdMapper({ fetch: f, tmdbKey: "k" });
+  const hint = { season: 1, episode: 2, absolute: 2 };
+  // A movie number: back to the Kitsu passthrough, which only anime providers answer.
+  assert.deepEqual(await target("kitsu:1:2", "series", { ...hint, year: 2024 }), { tmdbId: "kitsu:1", mediaType: "tv", season: null, episode: 2 });
+  // A show from 2024 for a title from 2016: another show.
+  assert.deepEqual(await target("kitsu:2:2", "series", { ...hint, year: 2016 }), { tmdbId: "kitsu:2", mediaType: "tv", season: null, episode: 2 });
+  // A later season of a show that began in 2019, a title from 2022: the same show.
+  assert.deepEqual(await target("kitsu:3:2", "series", { ...hint, year: 2022 }), { tmdbId: "700", mediaType: "tv", season: 1, episode: 2 });
+  // No year or no key: the mapping stands.
+  assert.equal((await target("kitsu:2:2", "series", hint))?.tmdbId, "600");
+  assert.equal((await createIdMapper({ fetch: f })("kitsu:1:2", "series", { ...hint, year: 2024 }))?.tmdbId, "500");
+});
+
 test("store: defaults, toggles, refresh keeps the old manifest, code cached six hours", async () => {
   let up = true;
   let t = 0;

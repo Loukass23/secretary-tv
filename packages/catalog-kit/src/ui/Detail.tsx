@@ -1,7 +1,7 @@
 import { type Dir, type Focus, getTvInputBridge, move, useKeys, windowOf } from "@secretary/tv-kit";
 import { Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { backgroundUrl, fetchMeta } from "../lib/cinemeta.ts";
+import { backgroundUrl, fetchMeta, mergeMeta } from "../lib/cinemeta.ts";
 import {
   type SagaDef,
   fetchTmdbCollection,
@@ -162,6 +162,7 @@ export function Detail({
   onBack,
 }: Props) {
   const [meta, setMeta] = useState<Title>(title);
+  const [metaState, setMetaState] = useState<"loading" | "done" | "failed">("loading");
   const [found, setFound] = useState<Found | null>(null);
   // Sources found so far while plugins are still answering; `found` is the final list.
   const [partial, setPartial] = useState<{ id: string; value: Stream[] } | null>(null);
@@ -245,21 +246,17 @@ export function Detail({
 
     fetchMeta(type, title.id).then(
       (m) => {
-        if (!live || !m) return;
-        setMeta({
-          ...title,
-          ...m,
-          rating: m.rating || title.rating,
-          poster: m.poster ?? title.poster,
-          background: m.background ?? title.background,
-        });
+        if (!live) return;
+        if (!m) return setMetaState("failed");
+        setMeta(mergeMeta(title, m));
+        setMetaState("done");
         if (!curated && m.tmdbCollection?.id) {
           void fetchTmdbCollection(m.tmdbCollection.id, m.tmdbCollection.name).then((dynCol) => {
             if (live && dynCol) setSagaCol(dynCol);
           });
         }
       },
-      () => {},
+      () => live && setMetaState("failed"),
     );
     return () => {
       live = false;
@@ -273,7 +270,13 @@ export function Detail({
     const t = setTimeout(
       () => {
         searchStarted.current = Date.now();
-        stop = streams.watch(targetId, target ? fileHintFor(target) : undefined, streamType(type), (s, done) => {
+        const yearNum = Number(/\d{4}/.exec(title.year)?.[0]);
+        const hint = {
+          ...(target ? fileHintFor(target) : undefined),
+          ...(yearNum ? { year: yearNum } : {}),
+          anime: (title.catalogType ?? type) === "anime",
+        };
+        stop = streams.watch(targetId, hint, streamType(type), (s, done) => {
           if (!live) return;
           if (done) {
             setFound({ id: targetId, value: s.length ? s : "none" });
@@ -338,8 +341,9 @@ export function Detail({
       isDead: (s) => failedOf(s) != null,
       caps: deviceCapSet(),
       langs: { audio: audioLangsOf(langs), subs: subLangsOf(langs) },
+      title: { name: title.name, year: title.year },
     };
-  }, [limits?.maxSizeGb, limits?.minSizeGb, limits?.require, limits?.prefer, limits?.audioLangs, limits?.subLangs, providerOrder, failedOf]);
+  }, [title.name, title.year, limits?.maxSizeGb, limits?.minSizeGb, limits?.require, limits?.prefer, limits?.audioLangs, limits?.subLangs, providerOrder, failedOf]);
   // The viewer's source from last time (lib/sourcepref.ts), read again when the sources change.
   const pref = useMemo(() => (remember ? sourcePrefs.recall(title.id) : null), [remember, title.id, ready, sourcesOpen]);
   const { previous, bestIdx, best } = useMemo(() => {
@@ -756,7 +760,13 @@ export function Detail({
               .filter(Boolean)
               .join("  ·  ")}
           </div>
-          {meta.description && <p class={series ? "det-plot short" : "det-plot"}>{meta.description}</p>}
+          {meta.description ? (
+            <p class={series ? "det-plot short" : progress ? "det-plot snug" : "det-plot"}>{meta.description}</p>
+          ) : (
+            <p class={`${series ? "det-plot short" : "det-plot"} det-plot-empty`}>
+              {metaState === "loading" ? "Loading synopsis…" : "No synopsis available for this title."}
+            </p>
+          )}
           {progress && (
             <div class="det-progress">
               <span class="det-progress-bar">
