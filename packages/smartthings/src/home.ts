@@ -1,7 +1,7 @@
 // What Nest does with the devices: notices worth a toast between two polls, and prompts that name a device or scene
 // ("turn off the couch light", "run energetic lights", "start the vacuum"), matched here so they need neither the
 // server nor Gemini.
-import { lightCommands, type StCommand, type StDevice, type StScene, vacuumCommands } from "./api.ts";
+import { lightCommands, pictureModeCommands, type StCommand, type StDevice, type StScene, vacuumCommands } from "./api.ts";
 
 export interface HomeAlert {
   deviceId: string;
@@ -37,9 +37,41 @@ export function roomLux(devices: readonly StDevice[]): number | null {
   return s?.lux ?? null;
 }
 
+/** The TV that reports a picture mode, if any. */
+export const pictureTv = (devices: readonly StDevice[]): StDevice | undefined => devices.find((d) => d.kind === "tv" && d.pictureMode);
+
+const modeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** A spoken or saved mode as the name this TV uses ("echo" and "eco" both find "Eco"); capitalised as given when unlisted. */
+export function resolvePictureMode(want: string, supported: readonly string[] = []): string {
+  const k = modeKey(want) === "echo" ? "eco" : modeKey(want);
+  const hit = supported.find((m) => modeKey(m) === k) ?? supported.find((m) => modeKey(m).startsWith(k));
+  const word = k === "eco" ? "eco" : want;
+  return hit ?? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+/**
+ * The scene that sets a picture mode: one named after the mode and the TV ("TV Eco", "Picture Dynamic"). The TV here
+ * ignores the picture-mode command from the cloud API but obeys a scene, which runs the SmartThings app's own action.
+ */
+export function pictureScene(mode: string, scenes: readonly StScene[]): StScene | undefined {
+  const m = norm(mode);
+  return scenes.find((s) => {
+    const n = norm(s.name);
+    return n.includes(m) && / (?:tv|picture|screen) /.test(n);
+  });
+}
+
+/** The other of two favourite modes: the first unless the TV is on it already, then the second. */
+export function nextPictureMode(current: string | undefined, pair: readonly [string, string], supported: readonly string[] = []): string {
+  const [a, b] = pair.map((m) => resolvePictureMode(m, supported));
+  return current !== undefined && modeKey(current) === modeKey(a) ? b : a;
+}
+
+/** `picture` is set when the action switches the TV's picture mode, so the caller can remember it. */
 export type HomeAction =
-  | { kind: "scene"; scene: StScene; reply: string }
-  | { kind: "devices"; targets: { device: StDevice; commands: StCommand[] }[]; reply: string };
+  | { kind: "scene"; scene: StScene; reply: string; picture?: string }
+  | { kind: "devices"; targets: { device: StDevice; commands: StCommand[] }[]; reply: string; picture?: string };
 
 const norm = (s: string) =>
   ` ${s
@@ -102,6 +134,23 @@ export function homeAction(prompt: string, devices: readonly StDevice[], scenes:
         kind: "devices",
         targets: [{ device: vac, commands: vacuumCommands(start) }],
         reply: start ? `Sending ${vac.name} to clean.` : `Sending ${vac.name} back to its dock.`,
+      };
+    }
+  }
+
+  // "switch to eco mode", "dynamic picture", "picture mode standard".
+  const picked = text.match(/ (dynamic|eco|echo|standard|natural) /);
+  if (picked && / (?:picture|screen|mode|tv) /.test(text)) {
+    const tv = pictureTv(devices);
+    const mode = resolvePictureMode(picked[1], tv?.pictureModes);
+    const modeScene = pictureScene(mode, scenes);
+    if (modeScene) return { kind: "scene", scene: modeScene, reply: `Switching the picture to ${mode}.`, picture: mode };
+    if (tv) {
+      return {
+        kind: "devices",
+        targets: [{ device: tv, commands: pictureModeCommands(mode, tv.pictureCap) }],
+        reply: `Switching the picture to ${mode}.`,
+        picture: mode,
       };
     }
   }

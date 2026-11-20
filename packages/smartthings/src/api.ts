@@ -22,7 +22,15 @@ export interface StDevice {
   vacuum?: string;
   /** Lux, from the TV's light sensor. */
   lux?: number;
+  /** The TV's picture mode (Dynamic, Standard, Eco, …) and the modes it offers, when it exposes them. */
+  pictureMode?: string;
+  pictureModes?: string[];
+  /** The capability that carries it, which a command has to name. */
+  pictureCap?: string;
 }
+
+/** The capabilities a Samsung TV has shown its picture mode under, in the order tried. */
+export const PICTURE_CAPS = ["custom.picturemode", "samsungvd.pictureMode"] as const;
 
 export interface StScene {
   id: string;
@@ -108,6 +116,15 @@ export function toDevice(raw: RawDevice): StDevice | null {
   if (typeof move === "string") d.vacuum = move;
   const lux = value("illuminanceMeasurement", "illuminance");
   if (typeof lux === "number") d.lux = lux;
+  for (const cap of PICTURE_CAPS) {
+    const mode = value(cap, "pictureMode");
+    if (typeof mode !== "string") continue;
+    d.pictureMode = mode;
+    d.pictureCap = cap;
+    const modes = value(cap, "supportedPictureModes");
+    if (Array.isArray(modes)) d.pictureModes = modes.filter((m): m is string => typeof m === "string");
+    break;
+  }
   return d;
 }
 
@@ -184,6 +201,11 @@ export function lightCommands(on: boolean, level?: number): StCommand[] {
   }
   return out;
 }
+
+/** Set the TV's picture mode, on the capability it reported (custom.picturemode when unknown). */
+export const pictureModeCommands = (mode: string, cap: string = PICTURE_CAPS[0]): StCommand[] => [
+  { capability: cap, command: "setPictureMode", arguments: [mode] },
+];
 
 /** Start cleaning (auto mode), or send the vacuum back to its dock. */
 export const vacuumCommands = (start: boolean): StCommand[] =>

@@ -6,13 +6,20 @@ import { useRef } from "preact/hooks";
 import { Avatar, Glass, Glow, Icon, IconButton, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
-import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PROFILE, HEADER_SEARCH } from "./nest-nav.ts";
+import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH } from "./nest-nav.ts";
 
 const PAD = 80;
 const HEAD_Y = 44;
-/** Party, Search, Lights and Bell, right to left from the edge. */
+/** Party, Search, Lights, Picture and Bell, right to left from the edge. */
 const ICON = { w: 88, h: 78, gap: 28 };
-const ICONS_X = 1920 - PAD - 4 * ICON.w - 3 * ICON.gap;
+const ICON_COUNT = 5;
+const ICONS_X = 1920 - PAD - ICON_COUNT * ICON.w - (ICON_COUNT - 1) * ICON.gap;
+
+/** The picture button shows the mode the TV is on: a sun for Dynamic, a moon for Eco, a screen for anything else. */
+function pictureIcon(mode: string | undefined): IconName {
+  const m = (mode ?? "").toLowerCase();
+  return m.startsWith("dynamic") ? "clear" : m.startsWith("eco") ? "clear-night" : "partly";
+}
 /** The full screen width: the orb rests in the middle under the cards, and the ribbons run out to both edges. */
 const WAVE = { x: 0, y: 880, w: 1920, h: 72 };
 /** The cards start at the left edge, the assistant being the first of them. The row clips sideways; it is tall enough for
@@ -58,6 +65,8 @@ interface Props {
   styleMenu?: StyleMenu | null;
   /** The remove menu (a long OK on any other card), while it is open: the card's key. */
   removeMenu?: string | null;
+  /** The TV's picture mode, when SmartThings reports it; the Picture button's icon follows it. */
+  pictureMode?: string;
 }
 
 const INFO_H = 36;
@@ -121,7 +130,7 @@ function RemoveMenu({ x, y, name }: { x: number; y: number; name: string }) {
 /** The style a card shows: the menu's while it is open on that card. */
 export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
-export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu }: Props) {
+export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, pictureMode }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
 
   // A media card is open while the remote is inside it; the row scrolls just enough to keep the focused column whole.
@@ -154,17 +163,17 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
           <b>{time}</b>
         </div>
       </div>
-      {(["party", "search", "lights", "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
+      {(["party", "search", "lights", pictureIcon(pictureMode), "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
         <IconButton
-          key={icon}
+          key={k}
           x={ICONS_X + k * (ICON.w + ICON.gap)}
           y={HEAD_Y}
           w={ICON.w}
           h={ICON.h}
           class="nest-quiet"
           icon={<Icon name={icon} />}
-          badge={k === 3 ? open : undefined}
-          focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_BELL][k])}
+          badge={k === 4 ? open : undefined}
+          focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_BELL][k])}
         />
       ))}
 

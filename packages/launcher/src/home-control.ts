@@ -3,7 +3,7 @@
 // launch payload instead (homeGrant).
 import type { HomeGrant } from "@secretary/nuvio";
 import type { LightsCommand } from "@secretary/assistant";
-import { lightCommands, oauthTokens, smartThings, type StDevice, type StScene, type StTokens, type TokenSource } from "@secretary/smartthings";
+import { lightCommands, nextPictureMode, oauthTokens, pictureModeCommands, pictureScene, pictureTv, smartThings, type StDevice, type StScene, type StTokens, type TokenSource } from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
 import { ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
 
@@ -78,6 +78,57 @@ export async function homeGrant(now = Date.now()): Promise<HomeGrant | null> {
     return { token: t, exp, ...scenes };
   } catch {
     return null;
+  }
+}
+
+const PICTURE_KEY = "nest.pictureModes";
+/** The two modes the quick toggle flips between: Dynamic by day (a bright window), Eco at night. */
+export const DEFAULT_PICTURE_PAIR: readonly [string, string] = ["Dynamic", "Eco"];
+
+export function picturePair(): readonly [string, string] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PICTURE_KEY) ?? "null") as unknown;
+    if (Array.isArray(v) && v.length === 2 && v.every((m) => typeof m === "string" && m)) return [v[0], v[1]];
+  } catch {
+    // Unreadable: the defaults.
+  }
+  return DEFAULT_PICTURE_PAIR;
+}
+
+const PICTURE_LAST_KEY = "nest.pictureLast";
+
+/** The picture mode Nest last set. SmartThings' own picture-mode status is stale on this TV (it never updates), so the toggle and the icon go by this. */
+export function lastPictureMode(): string | undefined {
+  try {
+    return localStorage.getItem(PICTURE_LAST_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Flips the TV's picture mode between the two favourites and returns the mode it asked for. It runs the scene named for
+ * the mode ("TV Eco", made in the SmartThings app), because this TV ignores the picture-mode command from the cloud API
+ * but obeys a scene; without one it sends the command anyway.
+ */
+export async function togglePictureMode(devices: readonly StDevice[], scenes: readonly StScene[]): Promise<string> {
+  if (!homeConfigured()) throw new NestError("Picture mode needs SmartThings on this TV.");
+  const tv = pictureTv(devices);
+  const mode = nextPictureMode(lastPictureMode() ?? tv?.pictureMode, picturePair(), tv?.pictureModes);
+  const scene = pictureScene(mode, scenes);
+  if (scene) await home.runScene(scene.id);
+  else if (tv) await home.command(tv.id, pictureModeCommands(mode, tv.pictureCap));
+  else throw new NestError(`Make a SmartThings scene named “TV ${mode}” to switch the picture.`);
+  rememberPictureMode(mode);
+  return mode;
+}
+
+/** Keeps the mode Nest just set, by the button or by a prompt. */
+export function rememberPictureMode(mode: string) {
+  try {
+    localStorage.setItem(PICTURE_LAST_KEY, mode);
+  } catch {
+    // The toggle then starts from SmartThings' status again after a restart.
   }
 }
 

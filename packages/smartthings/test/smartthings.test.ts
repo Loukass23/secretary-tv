@@ -4,8 +4,11 @@ import {
   authorizeUrl,
   homeAction,
   homeAlerts,
+  nextPictureMode,
   oauthTokens,
+  pictureScene,
   type RawDevice,
+  resolvePictureMode,
   roomLux,
   smartThings,
   type StDevice,
@@ -93,6 +96,51 @@ test("prompts that name a scene, a light, the lights or the vacuum", () => {
   assert.equal(act("play something on the big screen"), null);
   assert.equal(act("remind me to water the plants"), null);
   assert.equal(act("the couch light"), null);
+});
+
+test("the TV's picture mode: read, set by prompt, and flipped between two favourites", () => {
+  const tvRaw = (cap: string): RawDevice => ({
+    deviceId: "dev-tv2",
+    label: "Living room TV",
+    type: "OCF",
+    ocf: { ocfDeviceType: "oic.d.tv" },
+    components: [{ id: "main", capabilities: status({ [cap]: { pictureMode: "Dynamic", supportedPictureModes: ["Dynamic", "Standard", "Natural", "Eco"] } }) }],
+  });
+  const tv = toDevice(tvRaw("custom.picturemode"))!;
+  assert.deepEqual([tv.pictureMode, tv.pictureCap, tv.pictureModes], ["Dynamic", "custom.picturemode", ["Dynamic", "Standard", "Natural", "Eco"]]);
+  assert.equal(toDevice(tvRaw("samsungvd.pictureMode"))!.pictureCap, "samsungvd.pictureMode");
+  assert.equal(DEVICES.find((d) => d.kind === "tv")!.pictureMode, undefined);
+
+  const act = (p: string) => homeAction(p, [...DEVICES, tv], SCENES);
+  const eco = act("switch to echo mode");
+  assert.ok(eco?.kind === "devices");
+  assert.deepEqual(eco.targets.map((t) => [t.device.id, t.commands]), [["dev-tv2", [{ capability: "custom.picturemode", command: "setPictureMode", arguments: ["Eco"] }]]]);
+  assert.equal(eco.reply, "Switching the picture to Eco.");
+  assert.ok(act("picture mode standard")?.kind === "devices");
+  // Without a TV that reports a picture mode, or without the words, nothing happens.
+  assert.equal(homeAction("eco mode", DEVICES, SCENES), null);
+  assert.equal(act("play something on the big screen"), null);
+
+  // A scene named for the TV and the mode wins over the command: this TV obeys scenes but not the cloud command.
+  const withScenes = [...SCENES, { id: "scene-eco", name: "TV Eco" }, { id: "scene-dyn", name: "TV Dynamic" }];
+  assert.equal(pictureScene("Eco", withScenes)?.id, "scene-eco");
+  assert.equal(pictureScene("Standard", withScenes), undefined);
+  assert.equal(pictureScene("Eco", [{ id: "x", name: "Eco lights" }]), undefined);
+  const viaScene = homeAction("echo mode", [...DEVICES, tv], withScenes);
+  assert.ok(viaScene?.kind === "scene");
+  assert.deepEqual([viaScene.scene.id, viaScene.picture, viaScene.reply], ["scene-eco", "Eco", "Switching the picture to Eco."]);
+  // Even without a TV that reports the mode, a scene is enough.
+  assert.equal(homeAction("dynamic picture", DEVICES, withScenes)?.kind, "scene");
+  assert.equal(eco.picture, "Eco");
+
+  assert.equal(resolvePictureMode("echo", tv.pictureModes), "Eco");
+  assert.equal(resolvePictureMode("echo"), "Eco");
+  assert.equal(resolvePictureMode("energy saving"), "Energy saving");
+  assert.equal(nextPictureMode("Dynamic", ["Dynamic", "Eco"], tv.pictureModes), "Eco");
+  assert.equal(nextPictureMode("Eco", ["Dynamic", "Eco"], tv.pictureModes), "Dynamic");
+  // Any other mode, or an unknown one, goes to the first favourite.
+  assert.equal(nextPictureMode("Standard", ["Dynamic", "Eco"], tv.pictureModes), "Dynamic");
+  assert.equal(nextPictureMode(undefined, ["Dynamic", "Eco"]), "Dynamic");
 });
 
 test("the client sends commands, runs scenes, and refreshes once on a 401", async () => {

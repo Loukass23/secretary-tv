@@ -11,7 +11,19 @@ any of it. The server's `/domotics` stays as a fallback for builds without Smart
 | Movie lights | Catalog apps, Settings → Lights → Movie lights | On Play the app runs the scene marked 🎬 in the Lights panel (Red on a scene); when the player closes, the scene marked ↩ (Green). |
 | Home status | Nest's home screen | A toast when the phone leaves or comes home, when the vacuum starts, finishes or gets stuck. |
 | Daylight | Nest, theme Automatic | Follows the TV's light sensor when the room is clearly bright (150 lux or more) or dark (under 60 lux), and the clock in between. |
-| By name | Ask Nest, typed or spoken | "turn off the couch light", "couch light to 30%", "dim the lights to 20%", "lights off", "run energetic lights", "start the vacuum", "send the robot home". It is matched on the TV against your device and scene names; anything else goes to the assistant as before. |
+| By name | Ask Nest, typed or spoken | "turn off the couch light", "couch light to 30%", "dim the lights to 20%", "lights off", "run energetic lights", "start the vacuum", "send the robot home", "eco mode", "picture mode dynamic". It is matched on the TV against your device and scene names; anything else goes to the assistant as before. |
+| Picture mode | Nest: Red on the remote, or the Picture button in the top bar | Flips the TV between two favourite picture modes (Dynamic and Eco by default, `nest.pictureModes` in local storage to change them) through SmartThings, since a Tizen web app has no picture-setting API of its own. The button's icon is a sun on Dynamic, a moon on Eco. |
+
+**Make two scenes in the SmartThings app first**, named for the TV and the mode: "TV Eco" and "TV Dynamic" (manual
+routines whose one action sets the TV's picture mode). Nest runs the scene named for the mode (`pictureScene`).
+
+Why scenes (tested 2026-11-20 on the reference "43" Crystal UHD", firmware 3.5.1): the TV reports `samsungvd.pictureMode`
+(modes Dynamic, Eco, FILMMAKER MODE, Movie, Standard; command `setPictureMode(mode)`), and the cloud API accepts that
+command with `COMPLETED`, but the TV answers "this function is not available" and the picture does not change, by name
+or by internal id, from Nest's home screen. The SmartThings app and a scene running the same mode do change it. The
+attribute is stale too (its timestamp never moves), so Nest remembers the mode it last set (`nest.pictureLast`) and
+toggles from that, not from SmartThings' status. Without the scenes Nest still sends the command, which may do nothing
+on a TV like this one. Another TV may take the command directly.
 
 ## Set it up (once)
 

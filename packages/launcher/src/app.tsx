@@ -58,19 +58,20 @@ import {
   HEADER_BELL,
   HEADER_LIGHTS,
   HEADER_PARTY,
+  HEADER_PICTURE,
   HEADER_PROFILE,
   HEADER_SEARCH,
   type Layout,
   leave,
   step,
 } from "./nest-nav.ts";
-import { home, homeConfigured, runLights } from "./home-control.ts";
+import { home, homeConfigured, lastPictureMode, rememberPictureMode, runLights, togglePictureMode } from "./home-control.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
-import { homeAction, homeAlerts, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
+import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
 import { AssistantUnavailable, discoverCatalog, searchCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
@@ -266,6 +267,8 @@ export function App() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /** The picture mode Nest last set (kept across restarts): SmartThings' own status for it is stale on this TV. */
+  const [pictureSet, setPictureSet] = useState<string | null>(() => lastPictureMode() ?? null);
   const [time, setTime] = useState(clock);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
   const [asking, setAsking] = useState(false);
@@ -438,6 +441,10 @@ export function App() {
     const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes) : null;
     if (act) {
       flash(act.reply);
+      if (act.picture) {
+        rememberPictureMode(act.picture);
+        setPictureSet(act.picture);
+      }
       showLocal(brain.note(prompt, act.reply, "domotics_updated"));
       const done =
         act.kind === "scene"
@@ -579,6 +586,18 @@ export function App() {
     } else {
       flash("🎤 Speak or type, then OK");
     }
+  };
+
+  /** Red and the Picture button: flips the TV between its two favourite picture modes through SmartThings. */
+  const togglePicture = () => {
+    togglePictureMode(devices, scenes).then(
+      (mode) => {
+        setPictureSet(mode);
+        flash(`Picture mode: ${mode}`);
+        pollHomeSoon();
+      },
+      (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the TV's picture mode"),
+    );
   };
 
   const nextScene = () => {
@@ -1182,6 +1201,7 @@ export function App() {
       if (i === HEADER_PARTY) return void setView("party");
       if (i === HEADER_SEARCH) return openSearch();
       if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
+      if (i === HEADER_PICTURE) return togglePicture();
       if (i === HEADER_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
@@ -1245,8 +1265,10 @@ export function App() {
       flash("⌕ Spotlight Search · 🎤 for TV voice");
       return;
     }
-    // The microphone key talks to Ask Nest on the home screen; Green cycles the theme, Blue mutes spoken replies.
+    // The microphone key talks to Ask Nest on the home screen; Red flips the picture mode, Green cycles the theme, Blue
+    // mutes spoken replies.
     if (key === "SearchVoice") return void listen();
+    if (key === "Red") return togglePicture();
     if (key === "Blue") return toggleSpeech();
     if (key === "Green") return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
     if (key === "ChannelUp") {
@@ -1429,6 +1451,7 @@ export function App() {
           me={me}
           styleMenu={styleMenu}
           removeMenu={removeMenu}
+          pictureMode={pictureSet ?? pictureTv(devices)?.pictureMode}
         />
       )}
       {toast && (
