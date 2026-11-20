@@ -1,5 +1,6 @@
 import { exitApp, type Focus, isTvImeOpen, launchApp, mark, record, useKeys } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { withoutAnime } from "./lib/animeguard.ts";
 import { fetchMeta, fetchRow, getTmdbKey, rowsFor } from "./lib/cinemeta.ts";
 import {
   type SagaDef,
@@ -170,8 +171,9 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
         pluginHost.find(id, t, hint, {
           onStatus: publishStatus,
           onUpdate: (s) => s.done || onPartial(s.streams),
-          // Secretary Anime runs the scrapers made for anime, the others the general ones (manifest categories).
-          scope: activeNow.current === "anime" ? "anime" : "general",
+          // Anime runs the scrapers made for anime, the others the general ones (manifest categories). The opened
+          // title decides (a search hit can be either kind); the app only when the title does not say.
+          scope: (hint?.anime ?? activeNow.current === "anime") ? "anime" : "general",
         }),
       pluginsActive,
       server,
@@ -314,7 +316,8 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     const cached = loadHome(activeType);
     setCatalog(cached);
     setStatus(cached.length ? null : "Loading…");
-    Promise.allSettled(rowDefs.map((r) => fetchRow(r.url))).then((results) => {
+    // Shows and Cinema leave out what the Anime app lists (lib/animeguard.ts).
+    Promise.allSettled(rowDefs.map((r) => fetchRow(r.url).then((items) => withoutAnime(activeType, items)))).then((results) => {
       if (!live) return;
       const rows: HomeRow[] = results.flatMap((res, i) =>
         res.status === "fulfilled" && res.value.length
@@ -383,7 +386,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     const url = def && nextPage(def, row.items.length, focus.col);
     if (!url || paging.current.has(url)) return;
     paging.current.add(url);
-    void fetchRow(url).then(
+    void fetchRow(url).then((m) => withoutAnime(activeType, m)).then(
       (more) =>
         setCatalog((rs) =>
           rs.map((r) => {
@@ -587,6 +590,9 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     };
   }, [party]);
 
+  /** True while a title opened from Continue watching is playing, so Back returns straight to Home. */
+  const fromContinue = useRef(false);
+
   const goHome = () => {
     if (embedded && fromHost.current) return embedded.onExit();
     setFolderOpen(null);
@@ -637,14 +643,15 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
         heading={currentHeading}
         clockFormat={settings.general.clockFormat}
         onFocus={setFocus}
-        onOpen={(title, autoPlay) =>
+        onOpen={(title, autoPlay) => {
+          fromContinue.current = Boolean(autoPlay);
           setView({
             name: "detail",
             itemType: title.catalogType ?? activeType,
             title,
             autoPlay,
-          })
-        }
+          });
+        }}
         onOpenFolder={openFolder}
         look={settings.collections}
         rowStyles={rowStyles}
@@ -850,6 +857,12 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
               party?.leave();
               setParty(null);
               partyContent.current = null;
+            }
+            if (fromContinue.current && !embedded) {
+              // Resumed from Continue watching: Back returns to Home, with focus on the newest entry (the one just watched).
+              fromContinue.current = false;
+              setFocus({ row: 0, col: 0 });
+              return goHome();
             }
             setResume(loadAllResume());
             setWatchedRev((v) => v + 1);

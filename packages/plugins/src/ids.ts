@@ -17,6 +17,8 @@ export interface EpisodeNumbers {
   season?: number;
   episode?: number;
   absolute?: number;
+  /** The year the catalog gives the title: lets the mapper refuse a TMDB show that began after it (a different show). */
+  year?: number;
 }
 
 const ARM = "https://arm.haglund.dev/api/v2";
@@ -58,6 +60,38 @@ export function createIdMapper({ fetch: f = fetch, tmdbKey = "" }: IdOptions = {
     return body?.themoviedb ? String(body.themoviedb) : null;
   }
 
+  /** The year TMDB's TV show began, "none" when TMDB has no TV show with that id (a movie id), null when unknown. */
+  const tvYears = new Map<string, Promise<number | "none" | null>>();
+  function tvYear(id: string): Promise<number | "none" | null> {
+    let p = tvYears.get(id);
+    if (!p) {
+      p = f(`${TMDB}/tv/${id}?api_key=${encodeURIComponent(tmdbKey)}`)
+        .then(async (res) => {
+          if (res.status === 404) return "none" as const;
+          if (!res.ok) return null;
+          const body = (await res.json()) as { first_air_date?: string } | null;
+          const y = Number(body?.first_air_date?.slice(0, 4));
+          return y > 0 ? y : null;
+        })
+        .catch(() => null);
+      tvYears.set(id, p);
+      p.then((v) => v === null && tvYears.delete(id));
+    }
+    return p;
+  }
+
+  /**
+   * ARM maps a Kitsu entry to a TMDB number without saying movie or show. Refuse one that is no TV show, or whose show
+   * began after the title's year (a later season of the right show began earlier, never later). When TMDB cannot be
+   * asked, the mapping stands.
+   */
+  async function sameShow(tmdbId: string, year: number | undefined): Promise<boolean> {
+    if (!tmdbKey) return true;
+    const began = await tvYear(tmdbId);
+    if (began === "none") return false;
+    return began === null || year == null || began <= year + 1;
+  }
+
   function cached(key: string, load: () => Promise<string | null>): Promise<string | null> {
     let p = cache.get(key);
     if (!p) {
@@ -84,7 +118,9 @@ export function createIdMapper({ fetch: f = fetch, tmdbKey = "" }: IdOptions = {
     if (ANIME.has(parts[0])) {
       if (hint?.season != null && hint.episode != null) {
         const tmdbId = await cached(`${parts[0]}:${parts[1]}`, () => animeLookup(parts[0], parts[1])).catch(() => null);
-        if (tmdbId) return { tmdbId, mediaType: "tv", season: hint.season, episode: hint.episode };
+        if (tmdbId && (await sameShow(tmdbId, hint.year))) {
+          return { tmdbId, mediaType: "tv", season: hint.season, episode: hint.episode };
+        }
       }
       const episode = hint?.absolute ?? hint?.episode ?? num(parts[2]);
       return { tmdbId: `${parts[0]}:${parts[1]}`, mediaType, season: null, episode };

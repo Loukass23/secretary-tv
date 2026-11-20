@@ -16,7 +16,8 @@
   text-overflow: ellipsis;
 }
 .cat-info p {
-  flex: 1;
+  flex: none;
+  max-height: 65px; /* exactly two lines: the old Tizen engine shows a sliver of a third under -webkit-line-clamp */
   margin: 0;
   font-size: 23px;
   line-height: 1.4;
@@ -24,9 +25,9 @@
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
-.cat-hint { display: flex; align-items: center; gap: 22px; font-size: 18px; color: var(--sg-ink-dim); margin-top: auto; }
+.cat-hint { display: flex; align-items: center; gap: 22px; font-size: 19px; color: var(--sg-ink-dim); margin-top: auto; }
 .cat-ok {
   padding: 6px 16px;
   border-radius: 18px;
@@ -38,7 +39,7 @@
 .cat-row { position: absolute; left: 0; width: 1920px; height: 372px; }
 .cat-row-head { position: absolute; top: 0; display: flex; align-items: baseline; gap: 18px; }
 .cat-row-head h2 { margin: 0; font-size: 30px; font-weight: 600; }
-.cat-row-head span { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.cat-row-head span { font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
 .cat-home .sg-tile-progress i { background: var(--accent, #ff5a26); }
 
 /* --- collection card --- */

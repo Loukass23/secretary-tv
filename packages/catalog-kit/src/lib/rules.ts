@@ -1,5 +1,6 @@
 import { type DeviceCaps, defaultCaps, playsCodec } from "@secretary/core";
 import { parseStreamInfo, type Stream } from "./streams.ts";
+import { titleMatch, type TitleRef } from "./titlematch.ts";
 
 /**
  * What autoplay may pick (Settings › Playback and › Sources). Size limits are preferences, never filters: a source
@@ -22,6 +23,8 @@ export interface Rules {
   caps?: DeviceCaps;
   /** Settings › Playback languages: sources whose provider names their languages (`_meta`) are ranked by them. */
   langs?: { audio: readonly string[]; subs: readonly string[] };
+  /** The title being watched: a source whose release year is from before it began is another show and goes last. */
+  title?: TitleRef;
 }
 
 /**
@@ -79,6 +82,7 @@ export function sizeGb(s: Stream): number | null {
 /**
  * The order autoplay tries sources in. Each step only breaks ties left by the one before:
  * 1. real sources that match Require (provider notices never autoplay);
+ * 1b. sources whose release year is from before the title began (another show of the same name) go last;
  * 2. sources that have not failed recently;
  * 3. sources that match Prefer;
  * 4. sources their provider verified (the right title and episode, from a trusted source; `_meta`);
@@ -90,7 +94,7 @@ export function sizeGb(s: Stream): number | null {
  * The first source is what autoplay plays; the rest are the failover queue.
  */
 export function rankSources<T extends Stream>(list: readonly T[], rules: Rules = {}): T[] {
-  const { maxSizeGb, minSizeGb, prefer, providerOrder = [], isDead = () => false, caps = defaultCaps, langs } = rules;
+  const { maxSizeGb, minSizeGb, prefer, providerOrder = [], isDead = () => false, caps = defaultCaps, langs, title } = rules;
   const keyed = list.map((s, i) => {
     const p = parseStreamInfo(s);
     const inSize = inLimits(s, { maxSizeGb, minSizeGb });
@@ -99,6 +103,7 @@ export function rankSources<T extends Stream>(list: readonly T[], rules: Rules =
       s,
       keys: [
         inScope(s, rules) ? 0 : 1,
+        title && titleMatch(textOf(s), title) === "mismatch" ? 1 : 0,
         isDead(s) ? 1 : 0,
         !prefer || prefer.test(textOf(s)) ? 0 : 1,
         s.meta?.verified ? 0 : 1,

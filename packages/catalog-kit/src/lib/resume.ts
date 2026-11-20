@@ -69,7 +69,7 @@ export function badgeForResume(entry: {
 
 export function toContinueTitle(entry: UnifiedResumeEntry): Title {
   const pct =
-    entry.durSec > 0 ? Math.min(100, Math.max(4, Math.round((entry.posSec / entry.durSec) * 100))) : 0;
+    entry.durSec > 0 && entry.posSec > EDGE_SEC ? Math.min(100, Math.max(4, Math.round((entry.posSec / entry.durSec) * 100))) : 0;
   return {
     ...entry.title,
     catalogType: entry.type,
@@ -105,7 +105,9 @@ export function resumeStart(posSec: number, durSec: number): number {
   return posSec;
 }
 
-export const isFinished = (posSec: number, durSec: number) => durSec > 0 && posSec >= durSec - FINISHED_SEC;
+/** Last 30 s, or the last 4% of anything over ten minutes, so a long credits roll counts as finished. */
+export const isFinished = (posSec: number, durSec: number) =>
+  durSec > 0 && (posSec >= durSec - FINISHED_SEC || (durSec >= 600 && posSec / durSec >= 0.96));
 
 /** "16% watched · 38 min left" (or "1 h 51 min left") above a Resume button; empty when there is nothing to resume. */
 export function resumeLabel(posSec: number, durSec: number): string {
@@ -122,6 +124,14 @@ export function upsert(list: readonly ResumeEntry[], entry: ResumeEntry, drop: b
   return (drop ? rest : [entry, ...rest]).slice(0, MAX);
 }
 
+/** Cuts text at a word boundary with an ellipsis, so a stored synopsis never ends mid-word. */
+export function clipText(text: string, max: number): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max >> 1)).replace(/[\s,;:.-]+$/, "")}…`;
+}
+
 const slim = (t: Title): Title => ({
   id: t.id,
   name: t.name,
@@ -129,6 +139,9 @@ const slim = (t: Title): Title => ({
   rating: t.rating,
   poster: t.poster,
   background: t.background,
+  ...(t.description ? { description: clipText(t.description, 320) } : {}),
+  ...(t.genre?.length ? { genre: t.genre.slice(0, 3) } : {}),
+  ...(t.runtime ? { runtime: t.runtime } : {}),
 });
 const slimEpisode = (v: Video) => ({ id: v.id, season: v.season, episode: v.episode, name: v.name });
 
@@ -321,6 +334,9 @@ export function saveProgress(
   next?: Video | null,
 ): void {
   const list = loadResume(type);
+  // The player reports 0 while the duration is unknown: keep what was saved rather than losing the progress bar.
+  const prev = list.find((e) => e.title.id === title.id);
+  if (!(durSec > 0) && prev && prev.episode?.id === episode?.id && posSec > 0) durSec = prev.durSec;
   const finished = isFinished(posSec, durSec);
   let entry: ResumeEntry = {
     title: slim(title),

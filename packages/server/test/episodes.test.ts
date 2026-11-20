@@ -105,6 +105,8 @@ test("per-season anime names like 'S1 - 03' match their own season only", () => 
   assert.equal(pickFile(files, undefined, { season: 1, episode: 3, absolute: 3 })?.id, 1);
 });
 
-test("an episode no file names falls back to the old rules", () => {
-  assert.equal(pickFile(pack, undefined, { season: 2, episode: 9 })?.id, 4);
+test("an episode no file in a pack names plays nothing, so the next source is tried; a single file stays", () => {
+  assert.equal(pickFile(pack, undefined, { season: 2, episode: 9 }), undefined);
+  assert.equal(pickFile(pack, 1, { season: 2, episode: 9 })?.id, 1);
+  assert.equal(pickFile([{ id: 7, name: "Some.Release.mkv", size: 5 }], undefined, { season: 2, episode: 9 })?.id, 7);
 });

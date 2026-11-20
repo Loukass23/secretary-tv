@@ -32,7 +32,9 @@ stored in `localStorage` under the keys `sectv.plugins` and `sectv.plugin.code:*
    - IMDb ids go through TMDB's `/find` when the build has `TMDB_API_KEY`, and through Cinemeta's `moviedb_id`
      without one.
    - A Kitsu episode the catalog has placed in a season (from its IMDb numbering) goes through ARM to the show's
-     TMDB id.
+     TMDB id. With `TMDB_API_KEY` that id is checked against TMDB: a number that is no TV show (a movie's), or a show
+     that began after the title's year, is a different show of the same name and is not used; the id passes through as
+     below instead. A later season of an older show passes (its show began earlier, never later).
    - Any other anime id is passed as `kitsu:<id>` with the absolute episode, as the official apps do. Only providers
      that know anime answer those.
 2. **Every enabled provider runs.** Each is filtered by `supportedTypes` and runs in its own Worker (`?worker&inline`,
