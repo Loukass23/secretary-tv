@@ -6,6 +6,11 @@
    cover the video plane, so all of them hide, whatever they are. */
 html.avplay #root > :not(.player):not(.island-root):not(.cc-root):not(.av-plane),
 html.avplay #boot { visibility: hidden; }
+/* Embedded in Nest with its own player (option C): the player, the island and the control centre are not children of
+   #root, so their subtrees stay visible while the rest of Nest hides above. */
+html.avplay .player, html.avplay .player *,
+html.avplay .island-root, html.avplay .island-root *,
+html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-start { z-index: 1; }
 
 .ply-panel { padding: 30px 36px; display: flex; flex-direction: column; gap: 10px; }

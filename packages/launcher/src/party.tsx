@@ -23,7 +23,14 @@ const STATE_TEXT: Record<RoomSummary["state"], string> = {
   ended: "Ended",
 };
 
-export function WatchTogether({ onClose }: { onClose: () => void }) {
+export function WatchTogether({
+  onClose,
+  onJoinHere,
+}: {
+  onClose: () => void;
+  /** Built with the player inside Nest: join the room in Nest's own catalog instead of opening the catalog app. */
+  onJoinHere?: (open: { type: "movie" | "series" | "anime"; title: { id: string; name: string }; room: string }) => void;
+}) {
   const [step, setStep] = useState<Step>(() =>
     !partyApi.configured
       ? { kind: "idle", note: "Watch together is not set up in this build." }
@@ -64,6 +71,7 @@ export function WatchTogether({ onClose }: { onClose: () => void }) {
 
   const join = (room: RoomSummary) => {
     const { type: kind, titleId } = contentApp(room.contentId);
+    if (onJoinHere) return onJoinHere({ type: kind, title: { id: titleId, name: room.title }, room: room.code });
     launchCatalogApp(APP_IDS[kind], { type: kind, title: { id: titleId, name: room.title }, autoPlay: false, room: room.code }, launchApp).catch(
       () => setStep({ kind: "idle", note: "Couldn't open the app for this party." }),
     );

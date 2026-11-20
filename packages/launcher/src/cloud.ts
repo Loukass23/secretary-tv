@@ -1,6 +1,6 @@
 // Nest's Nuvio Cloud account (docs/nuvio-cloud.md): the signed-in session lives here, and each catalog app gets a
 // session of its own when Nest launches it, through the app-control payload.
-import { createClient, encodeLaunch, LAUNCH_KEY, mintAppSession, nuvioConfig, type OpenTitle } from "@secretary/nuvio";
+import { createClient, encodeLaunch, LAUNCH_KEY, mintAppSession, nuvioConfig, type OpenTitle, type PlayNow } from "@secretary/nuvio";
 import { createPartyApi } from "@secretary/party/src/client.ts";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { NUVIO_KEY, NUVIO_URL, PARTY_URL, SYNC_BACKEND } from "./config.ts";
@@ -88,6 +88,10 @@ export async function launchCatalogApp(
   id: string,
   open: OpenTitle | undefined,
   fallback: (id: string) => Promise<void>,
+  /** A folder of one of the profile's collections to open (a home card). */
+  folder?: { collectionId: string; folderId: string },
+  /** Play at once with the sources the embedded catalog already found. */
+  play?: PlayNow,
 ): Promise<void> {
   const s = cloud.session.get();
   const current = cloudEnabled && s && !s.anonymous ? grantKey(s.userId, cloud.session.profile()) : null;
@@ -103,7 +107,7 @@ export async function launchCatalogApp(
     }
   }
   const home = (await homeGrant()) ?? undefined;
-  if (!grant && !open && !home) return fallback(id);
-  await launchWithData(id, encodeLaunch({ at: Date.now(), grant, open, home }));
+  if (!grant && !open && !folder && !play && !home) return fallback(id);
+  await launchWithData(id, encodeLaunch({ at: Date.now(), grant, open, folder, play, home }));
   if (grant && current) writeJson(GRANTS, { ...grants, [id]: { owner: current, installed } satisfies Grant });
 }

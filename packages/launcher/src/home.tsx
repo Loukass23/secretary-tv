@@ -4,7 +4,7 @@
 // whole screen (the chat, opened from its card). Layout only; data and keys live in app.tsx.
 import { useRef } from "preact/hooks";
 import { Avatar, Glass, Glow, Icon, IconButton, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
-import { type CardStyle, LAYOUT_LABEL, LAYOUTS, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
+import { type CardStyle, LAYOUT_LABEL, LAYOUTS, MOVE_LINE, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SOUND } from "./nest-nav.ts";
 
@@ -63,8 +63,10 @@ interface Props {
   me: { name: string; color?: string; img?: string } | null;
   /** The card style menu (a long OK on a media card), while it is open. */
   styleMenu?: StyleMenu | null;
-  /** The remove menu (a long OK on any other card), while it is open: the card's key. */
-  removeMenu?: string | null;
+  /** The move/remove menu (a long OK on any other card), while it is open. */
+  removeMenu?: CardMenu | null;
+  /** The card being moved (Left and Right), by key. */
+  moving?: string | null;
   /** The TV's picture mode, when SmartThings reports it; the Picture button's icon follows it. */
   pictureMode?: string;
   /** Whether the sound system is on, when SmartThings shows one; the Sound button's icon follows it. */
@@ -94,7 +96,7 @@ const STYLE_LINE = 72;
 
 /** The long-OK menu beside a media card: its layouts, then its size. The card shows each choice as it is picked. */
 function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; name: string }) {
-  const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`, "Remove from home"];
+  const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`, "Move", "Remove from home"];
   return (
     <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 64} class="nest-menu nest-style">
       <span class="nest-kicker nest-style-head">{name} · card style</span>
@@ -108,31 +110,45 @@ function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; 
         </span>
       ))}
       <small class="nest-style-hint" style={{ top: `${88 + lines.length * STYLE_LINE}px` }}>
-        {m.line === REMOVE_LINE ? "OK removes · Back keeps" : "OK keeps · Back undoes"}
+        {m.line === REMOVE_LINE ? "OK removes · Back keeps" : m.line === MOVE_LINE ? "OK then ◀ ▶ moves it" : "OK keeps · Back undoes"}
       </small>
     </Glass>
   );
 }
 
-/** The long-OK menu on the other cards: the one choice, taking the card off the home screen. */
-function RemoveMenu({ x, y, name }: { x: number; y: number; name: string }) {
+/** A long-OK menu on the other cards: move the card, or take it off the home screen. */
+export interface CardMenu {
+  key: string;
+  /** 0 Move, 1 Remove from home. */
+  line: number;
+}
+
+function RemoveMenu({ m, x, y, name }: { m: CardMenu; x: number; y: number; name: string }) {
+  const lines = ["Move", "Remove from home"];
   return (
-    <Glass x={x} y={y} w={STYLE_W} h={96 + STYLE_LINE + 64} class="nest-menu nest-style">
+    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 64} class="nest-menu nest-style">
       <span class="nest-kicker nest-style-head">{name}</span>
-      <span class="nest-menu-item is-focus" style={{ top: "76px" }}>
-        Remove from home
-      </span>
-      <small class="nest-style-hint" style={{ top: `${88 + STYLE_LINE}px` }}>
-        OK removes · Back keeps
+      {lines.map((label, i) => (
+        <span key={label} class={`nest-menu-item${m.line === i ? " is-focus" : ""}`} style={{ top: `${76 + i * STYLE_LINE}px` }}>
+          {label}
+        </span>
+      ))}
+      <small class="nest-style-hint" style={{ top: `${88 + lines.length * STYLE_LINE}px` }}>
+        {m.line === 1 ? "OK removes · Back keeps" : "OK then ◀ ▶ moves it"}
       </small>
     </Glass>
   );
+}
+
+/** While a card is being moved: a hint under the row, the card lifted and the others stepped back. */
+function MoveHint() {
+  return <small class="nest-move-hint">◀ ▶ moves the card · OK keeps · Back puts it back</small>;
 }
 
 /** The style a card shows: the menu's while it is open on that card. */
 export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
-export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, pictureMode, soundOn }: Props) {
+export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, moving, pictureMode, soundOn }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
 
   // A media card is open while the remote is inside it; the row scrolls just enough to keep the focused column whole.
@@ -149,7 +165,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
   const glowAt = focusBox
     ? { x: ROW.x + layout.x[colAt] - rowScroll + focusBox.x, y: ROW.y + LABEL_H + focusBox.y, w: focusBox.w, h: focusBox.h }
     : null;
-  const menuKey = styleMenu?.key ?? removeMenu ?? null;
+  const menuKey = styleMenu?.key ?? removeMenu?.key ?? moving ?? null;
   // The wave shows only while someone speaks; the line under it says what is going on, or hints at what to do.
   const busy = ask.wave !== "idle";
   const live = busy || ask.focused;
@@ -191,6 +207,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
               x={ROW.x + layout.x[c]}
               page={[ROW.x + layout.x[c] - rowScroll, ROW.y + LABEL_H]}
               picked={focus?.area === "row" && !inside && colAt === c}
+              lifted={moving === col.key}
               focus={inside && colAt === c ? focus!.i : null}
               dim={(openCol >= 0 && openCol !== c) || (menuKey != null && menuKey !== col.key)}
             />
@@ -204,7 +221,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         <VoiceWave {...WAVE} state={ask.wave} />
       </div>
       {/* One line under it: only a hint at rest, the status or the answer while the assistant is focused or busy. */}
-      <div class={`nest-ask-dock${ask.full ? " is-gone" : ""}`} style={{ top: `${WAVE.y + WAVE.h + 8}px` }}>
+      <div class={`nest-ask-dock${ask.full || openCol >= 0 ? " is-gone" : ""}`} style={{ top: `${WAVE.y + WAVE.h + 8}px` }}>
         <span class={`nest-ask-hint${live ? " is-live" : ""}`}>{line}</span>
       </div>
 
@@ -217,7 +234,8 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         <p key={ask.turnId}>{ask.reply}</p>
       </div>
 
-      {menuKey && (() => {
+      {moving && <MoveHint />}
+      {menuKey && !moving && (() => {
         const c = columns.findIndex((k) => k.key === menuKey);
         if (c < 0) return null;
         const cardX = ROW.x + layout.x[c] - rowScroll;
@@ -225,7 +243,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         const mx = right + STYLE_W > 1920 - PAD ? cardX - STYLE_W - 28 : right;
         const k = columns[c];
         const name = k.kind === "media" ? k.name : k.label;
-        return styleMenu ? <CardStyleMenu m={styleMenu} x={mx} y={ROW.y + LABEL_H} name={name} /> : <RemoveMenu x={mx} y={ROW.y + LABEL_H} name={name} />;
+        return styleMenu ? <CardStyleMenu m={styleMenu} x={mx} y={ROW.y + LABEL_H} name={name} /> : <RemoveMenu m={removeMenu!} x={mx} y={ROW.y + LABEL_H} name={name} />;
       })()}
       {menu && (
         <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={menuTop(menuInfo) + menu.length * MENU.item + 12} class="nest-menu">

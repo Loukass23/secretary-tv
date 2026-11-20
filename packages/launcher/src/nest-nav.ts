@@ -24,6 +24,21 @@ export interface Column {
   count: number;
   across: number;
   launch?: boolean;
+  /**
+   * An opened card of several rows (Cinema, Shows, Anime: the picks and Open, then My List and the genres): how many
+   * items each row has, in order. `i` then counts across all of them; Up and Down move between rows.
+   */
+  rows?: readonly number[];
+}
+
+/** Which row item `i` is on and where in it, for a column with `rows`. */
+export function rowAt(rows: readonly number[], i: number): { r: number; x: number; start: number } {
+  let start = 0;
+  for (let r = 0; r < rows.length; r++) {
+    if (i < start + rows[r] || r === rows.length - 1) return { r, x: Math.max(0, i - start), start };
+    start += rows[r];
+  }
+  return { r: 0, x: 0, start: 0 };
 }
 
 export interface Layout {
@@ -119,6 +134,15 @@ export function step(at: Focus, key: string, len: Layout): Focus {
       if (i === LAUNCH) {
         if (key === "Down") return col.count > 0 ? { ...at, i: 0 } : toAsk;
         if (key === "Up") return card(c);
+        return at;
+      }
+      if (col.rows) {
+        const { r, x, start } = rowAt(col.rows, i);
+        const len = col.rows[r];
+        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : toAsk;
+        if (key === "Up") return r > 0 ? { ...at, i: start - col.rows[r - 1] + Math.min(x, col.rows[r - 1] - 1) } : col.launch ? { ...at, i: LAUNCH } : card(c);
+        if (key === "Right") return x < len - 1 ? { ...at, i: i + 1 } : at;
+        if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;
         return at;
       }
       const a = col.across;

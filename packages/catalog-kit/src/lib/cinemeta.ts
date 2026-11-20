@@ -31,18 +31,24 @@ export function getTmdbKey(): string {
 
 /** The home rows for a catalog type. Movies and series come from Cinemeta, anime from the Kitsu addon. */
 export function rowsFor(type: CatalogType) {
+  const genre = (id: string, name: string, title = name) => ({ id: `genre-${id}`, title, url: `${META}/catalog/${type}/top/genre=${encodeURIComponent(name)}.json` });
   if (type === "anime") {
+    const anime = (name: string) => ({ id: `genre-${name.toLowerCase()}`, title: name, url: `${KITSU}/catalog/anime/kitsu-anime-popular/genre=${encodeURIComponent(name)}.json` });
     return [
       { id: "trending", title: "Trending", url: `${KITSU}/catalog/anime/kitsu-anime-trending.json` },
       { id: "airing", title: "Airing now", url: `${KITSU}/catalog/anime/kitsu-anime-airing.json` },
       { id: "popular", title: "Popular", url: `${KITSU}/catalog/anime/kitsu-anime-popular.json` },
       { id: "rated", title: "Top rated", url: `${KITSU}/catalog/anime/kitsu-anime-rating.json` },
+      anime("Action"),
+      anime("Comedy"),
     ] as const;
   }
   return [
     { id: "top", title: "Popular", url: `${CATALOGS}/top/catalog/${type}/top.json` },
     { id: "rated", title: "Top rated", url: `${CATALOGS}/imdbRating/catalog/${type}/imdbRating.json` },
     { id: "new", title: "New releases", url: `${CATALOGS}/year/catalog/${type}/year.json` },
+    // Genre rows: reached by pressing Down through the home, like the rows above.
+    ...(type === "movie" ? [genre("action", "Action"), genre("comedy", "Comedy"), genre("scifi", "Sci-Fi"), genre("thriller", "Thriller")] : [genre("drama", "Drama"), genre("comedy", "Comedy"), genre("crime", "Crime")]),
   ] as const;
 }
 

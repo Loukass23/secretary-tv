@@ -297,6 +297,9 @@ importers:
       '@secretary/assistant':
         specifier: workspace:*
         version: link:../assistant
+      '@secretary/catalog-kit':
+        specifier: workspace:*
+        version: link:../catalog-kit
       '@secretary/nuvio':
         specifier: workspace:*
         version: link:../nuvio

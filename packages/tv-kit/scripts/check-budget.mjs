@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Fails the build when dist/ outgrows budget.json. Raise a limit only with the reason in the commit.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
 const APP = process.cwd();
 const DIST = join(APP, "dist");
-const budget = JSON.parse(readFileSync(join(APP, "budget.json"), "utf8"));
+// A build with NEST_EMBED_CATALOG=1 carries the catalog as a lazy chunk (docs/embedding-catalog.md): it is held to
+// budget.embed.json when the app has one.
+const embedFile = (process.env.NEST_EMBED_CATALOG === "1" || process.env.NEST_EMBED_PLAYER !== "0") && existsSync(join(APP, "budget.embed.json")) ? "budget.embed.json" : "budget.json";
+const budget = JSON.parse(readFileSync(join(APP, embedFile), "utf8"));
 
 let total = 0;
 let jsGzip = 0;

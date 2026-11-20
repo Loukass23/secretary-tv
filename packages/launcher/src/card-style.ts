@@ -92,6 +92,16 @@ export const EXPANDED_W = 1920 - 2 * 80;
 /** The focused title's caption under the opened row (name, line, a few lines of synopsis), fixed at its left edge. */
 export const CAPTION_W = 900;
 
+/** The rows under the picks in an opened card (My List, the genres): smaller posters, a label over each. */
+export const MORE = { w: 200, h: 300, stride: 220, labelH: 52, gap: 36 } as const;
+/** Where extra row `k` (0-based) starts in the opened card: under the picks and their caption, then a block apiece. */
+export const moreTop = (k: number): number => EXPANDED.h + 150 + k * (MORE.labelH + MORE.h + MORE.gap);
+/** How far extra row of `n` items scrolls so item `i` stays in view. */
+export function moreScroll(i: number, n: number): number {
+  const max = Math.max(0, n * MORE.stride - MORE.stride + MORE.w - EXPANDED_W);
+  return Math.max(0, Math.min(max, (i - 6) * MORE.stride));
+}
+
 /** How far the expanded row scrolls so item `i` of `n` (n includes the Open tile) stays in view. */
 export function expandedScroll(i: number, n: number): number {
   const max = Math.max(0, n * EXPANDED.stride - EXPANDED.stride + EXPANDED.w - EXPANDED_W);
@@ -128,9 +138,10 @@ export function saveCardStyles(store: { setItem(k: string, v: string): void }, s
 
 // --- the long-OK menu ---
 
-/** The size line comes after the four layouts, then "Remove from home". */
+/** The size line comes after the four layouts, then "Move", then "Remove from home". */
 export const SIZE_LINE = LAYOUTS.length;
-export const REMOVE_LINE = SIZE_LINE + 1;
+export const MOVE_LINE = SIZE_LINE + 1;
+export const REMOVE_LINE = SIZE_LINE + 2;
 
 export interface StyleMenu {
   /** The card it styles. */
@@ -147,11 +158,11 @@ export function openStyleMenu(key: string, style: CardStyle): StyleMenu {
 
 /**
  * One key in the menu. Up and Down walk the layouts (each one shows on the card at once), the size line and "Remove
- * from home"; Left and Right change the size on its line. "keep", "undo" and "remove" close it: OK keeps `style`
- * (or removes the card on the last line), Back puts `orig` back.
+ * from home"; Left and Right change the size on its line. "keep", "undo", "move" and "remove" close it: OK keeps `style`
+ * (starts moving the card on the Move line, removes it on the last), Back puts `orig` back.
  */
-export function stepStyleMenu(m: StyleMenu, key: string): StyleMenu | "keep" | "undo" | "remove" {
-  if (key === "Enter") return m.line === REMOVE_LINE ? "remove" : "keep";
+export function stepStyleMenu(m: StyleMenu, key: string): StyleMenu | "keep" | "undo" | "remove" | "move" {
+  if (key === "Enter") return m.line === REMOVE_LINE ? "remove" : m.line === MOVE_LINE ? "move" : "keep";
   if (key === "Back") return "undo";
   if (key === "Up" || key === "Down") {
     const line = Math.max(0, Math.min(REMOVE_LINE, m.line + (key === "Up" ? -1 : 1)));

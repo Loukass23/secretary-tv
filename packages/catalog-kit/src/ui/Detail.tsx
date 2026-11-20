@@ -18,6 +18,7 @@ import { ago } from "../lib/failures.ts";
 import { onPluginStatus, pluginStore, pluginsActive, shortName, statusLine } from "../lib/plugins.ts";
 import { compilePattern, pickIndex, rankSources, type Rules } from "../lib/rules.ts";
 import { matchPref } from "../lib/sourcepref.ts";
+import { type MenuLine, stepTitleMenu, type TitleAction, titleMenu } from "../lib/titlemenu.ts";
 import { deviceCapSet } from "../lib/device.ts";
 import { parseStreamInfo, type Stream, type StreamClient } from "../lib/streams.ts";
 import { type CatalogType, isSeries, streamType, type Title, type Video } from "../lib/types.ts";
@@ -180,6 +181,10 @@ export function Detail({
   /** OK pressed on a source and not yet released: released soon it plays, held it opens the details card. */
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickRef = useRef<() => void>(() => {});
+  // The context menu (a long OK on an action or an episode): its lines and the focused one.
+  const [ctx, setCtx] = useState<{ lines: MenuLine[]; at: number } | null>(null);
+  /** The press that opened the menu is still down: its keydowns are not a choice in the menu. */
+  const ctxHolding = useRef(false);
   // Play pressed (or autoplay asked) before the sources are all in: decided by lib/autoplay.ts as they arrive.
   const [pending, setPending] = useState<{ episode: Video | undefined; from: number; together?: boolean } | null>(null);
   // The Watch together card: start a party or type a code (focus 0 or 1), null when closed.
@@ -489,11 +494,36 @@ export function Detail({
     setPending({ episode, from });
   };
 
-  // OK on a source acts when released: a short press plays it; the hold timer has already opened the card otherwise.
+  /** An action, from its button or the context menu. */
+  const runAction = (id: TitleAction) => {
+    if (id === "sources") {
+      setSourceIdx(0);
+      setProviderTab(0);
+      setFilters(new Set());
+      setChipAt(null);
+      setSheetNote(null);
+      setSourcesOpen(true);
+    } else if (id === "timeline") {
+      if (sagaCol) onOpenTimeline(sagaCol, meta.id);
+    } else if (id === "watched") {
+      setWatched(toggleTitleWatched(meta.id));
+      onWatchedChange();
+    } else if (id === "mylist") {
+      setSaved(toggleLibrary(type, meta));
+      // The home rows (My List) are rebuilt on the same signal as a watched change.
+      onWatchedChange();
+    } else if (id === "restart") requestPlay(series ? target : undefined, 0);
+    else requestPlay(series ? target : undefined, startSec);
+  };
+
+  // OK on an action, an episode or a source acts when released: a short press does it; held for 600 ms the timer has
+  // already opened the context menu (actions, episodes) or the details card (sources) instead.
   useEffect(() => {
-    if (!active || !sourcesOpen) return;
+    if (!active) return;
     const onUp = (e: KeyboardEvent) => {
-      if (e.keyCode !== 13 || !holdTimer.current) return;
+      if (e.keyCode !== 13) return;
+      ctxHolding.current = false;
+      if (!holdTimer.current) return;
       clearTimeout(holdTimer.current);
       holdTimer.current = null;
       pickRef.current();
@@ -504,9 +534,21 @@ export function Detail({
       if (holdTimer.current) clearTimeout(holdTimer.current);
       holdTimer.current = null;
     };
-  }, [active, sourcesOpen]);
+  }, [active]);
 
   useKeys(active, (key) => {
+    // The context menu takes every key while it is open.
+    if (ctx) {
+      if (key === "Enter" && ctxHolding.current) return;
+      const r = stepTitleMenu(ctx.at, ctx.lines.length, key);
+      if (r === "close") setCtx(null);
+      else if (r === "run") {
+        const line = ctx.lines[ctx.at];
+        setCtx(null);
+        if (line) runAction(line.id);
+      } else setCtx({ ...ctx, at: r });
+      return;
+    }
     if (partyCard != null && party) {
       if (key === "Left" || key === "Right") setPartyCard(key === "Left" ? 0 : 1);
       else if (key === "Back") setPartyCard(null);
@@ -615,49 +657,40 @@ export function Detail({
       return;
     }
     if (key === "Enter") {
-      if (focus.row === 0) {
-        const act = actionSpecs[focus.col];
-        if (!act) return;
-        if (act.id === "sources") {
-          setSourceIdx(0);
-          setProviderTab(0);
-          setFilters(new Set());
-          setChipAt(null);
-          setSheetNote(null);
-          setSourcesOpen(true);
-          return;
+      // What a short press does, run on release (the keyup listener above) so a long press can open the context menu.
+      const enter = () => {
+        if (focus.row === 0) {
+          const act = actionSpecs[focus.col];
+          if (!act) return;
+          if (act.id === "together") return void setPartyCard(0);
+          return runAction(act.id);
         }
-        if (act.id === "together") return void setPartyCard(0);
-        if (act.id === "timeline" && sagaCol) {
-          onOpenTimeline(sagaCol, meta.id);
-          return;
+        if (series && focus.row === 2) {
+          const ep = episodes[focus.col];
+          if (ep) requestPlay(ep, startSec);
+        } else if (series) {
+          requestPlay(target, startSec);
         }
-        if (act.id === "watched") {
-          const nextW = toggleTitleWatched(meta.id);
-          setWatched(nextW);
-          onWatchedChange();
-          return;
-        }
-        if (act.id === "mylist") {
-          setSaved(toggleLibrary(type, meta));
-          // The home rows (My List) are rebuilt on the same signal as a watched change.
-          onWatchedChange();
-          return;
-        }
-        if (act.id === "restart") {
-          requestPlay(series ? target : undefined, 0);
-          return;
-        }
-        // act.id === "play"
-        requestPlay(series ? target : undefined, startSec);
-        return;
-      }
-      if (series && focus.row === 2) {
-        const ep = episodes[focus.col];
-        if (ep) requestPlay(ep, startSec);
-      } else if (series) {
-        requestPlay(target, startSec);
-      }
+      };
+      if (holdTimer.current || ctxHolding.current) return;
+      pickRef.current = enter;
+      // Seasons just act; actions and episodes wait for the release: held for 600 ms they open their menu.
+      if (focus.row === 1 || (focus.row === 0 && actionSpecs[focus.col]?.id === "together")) return void enter();
+      holdTimer.current = setTimeout(() => {
+        holdTimer.current = null;
+        ctxHolding.current = true;
+        setCtx({
+          at: 0,
+          lines: titleMenu({
+            series,
+            episode: series && focus.row === 2 && target ? episodeLabel(target) : undefined,
+            hasProgress: startSec > 0,
+            watched,
+            saved,
+            saga: !!sagaCol,
+          }),
+        });
+      }, 600);
       return;
     }
     return false;
@@ -802,6 +835,20 @@ export function Detail({
               })}
             </div>
           </div>
+        )}
+
+        {ctx && (
+          <>
+            <div class="det-scrim" />
+            <Glass x={1180} y={300} w={640} h={96 + ctx.lines.length * 64} class="det-menu">
+              <span class="cat-kicker">{series && focus.row === 2 && target ? `${episodeLabel(target)} ${target.name}` : meta.name}</span>
+              {ctx.lines.map((l, i) => (
+                <div key={l.id} class={`cat-style-line${ctx.at === i ? " is-focus" : ""}`}>
+                  {l.label}
+                </div>
+              ))}
+            </Glass>
+          </>
         )}
 
         {sourcesOpen && (

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@secretary/assistant": "workspace:*",
+    "@secretary/catalog-kit": "workspace:*",
     "@secretary/nuvio": "workspace:*",
     "@secretary/party": "workspace:*",
     "@secretary/smartthings": "workspace:*",

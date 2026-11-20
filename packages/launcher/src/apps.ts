@@ -1,5 +1,6 @@
+import { PLAY_STREAMS_MAX, type PlayNow } from "@secretary/nuvio";
 import { launchCatalogApp } from "./cloud.ts";
-import { APP_IDS, SYNC_BACKEND } from "./config.ts";
+import { APP_IDS, SYNC_BACKEND, YOUTUBE_APP_ID } from "./config.ts";
 
 export interface RawApp {
   id: string;
@@ -127,6 +128,33 @@ export function launchApp(id: string): Promise<void> {
 export async function openApp(id: string): Promise<void> {
   await beforeLaunch();
   return (Object.values(APP_IDS) as string[]).includes(id) ? launchCatalogApp(id, undefined, launchApp) : launchApp(id);
+}
+
+/**
+ * Opens the TV's YouTube app, on a video when given one (a view app-control with its address); when the TV does not take
+ * that, or off the TV, it is a plain launch of the app.
+ */
+export function openYoutube(watch?: string): Promise<void> {
+  const t = (globalThis as { tizen?: { ApplicationControl?: new (op: string, uri: string | null, mime: null, cat: null, data: unknown[]) => unknown; application?: { launchAppControl(c: unknown, id: string, ok?: () => void, err?: (e: unknown) => void): void } } }).tizen;
+  if (!watch || !t?.ApplicationControl || !t.application) return launchApp(YOUTUBE_APP_ID);
+  const { ApplicationControl, application } = t;
+  return new Promise((resolve) => {
+    const ctl = new ApplicationControl("http://tizen.org/appcontrol/operation/view", watch, null, null, []);
+    application.launchAppControl(ctl, YOUTUBE_APP_ID, () => resolve(), () => void launchApp(YOUTUBE_APP_ID).then(resolve, resolve));
+  });
+}
+
+/** Starts playing in the catalog app at once, on the sources the embedded catalog already found (no second search). */
+export async function playInApp(play: PlayNow): Promise<void> {
+  await beforeLaunch();
+  // The first sources are the ones the player would try; the rest only grow the payload.
+  await launchCatalogApp(APP_IDS[play.type], undefined, launchApp, undefined, { ...play, streams: play.streams.slice(0, PLAY_STREAMS_MAX) });
+}
+
+/** Opens a folder of the profile's Nuvio collections in the catalog app that fits it. */
+export async function openFolderInApp(type: CatalogKind, collectionId: string, folderId: string): Promise<void> {
+  await beforeLaunch();
+  await launchCatalogApp(APP_IDS[type], undefined, launchApp, { collectionId, folderId });
 }
 
 /** Something to finish before another app opens (Nest plays the lights' ripple); none in tests, and it never blocks the launch. */

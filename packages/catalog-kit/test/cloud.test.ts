@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { encodeLaunch, decodeLaunch, kindOf, progressKey, toItems, toRow, watchedTitleIds, withMeta } from "@secretary/nuvio";
-import { cloud, takeLaunch } from "../src/lib/cloud.ts";
+import { createClient, encodeLaunch, decodeLaunch, kindOf, nuvioConfig, progressKey, toItems, toRow, watchedTitleIds, withMeta } from "@secretary/nuvio";
+import * as cloudModule from "../src/lib/cloud.ts";
+import { checkOwner, cloud, shareCloud, takeLaunch } from "../src/lib/cloud.ts";
 import {
   clearLocalResume,
   loadResume,
@@ -191,4 +192,43 @@ test("launch: a grant for another profile takes over and resets the lists; the s
   takeLaunch(() => resets++, () => decodeLaunch(again));
   assert.equal(cloud.session.get()?.access, "a", "same account and profile keeps its own session");
   assert.equal(resets, 1);
+});
+
+test("launch: a play-now payload reaches the player callback once, folders likewise", () => {
+  store.clear();
+  const play = { type: "movie" as const, title: { id: "tt7", name: "Example" }, streams: [{ url: "https://example.com/a" }], start: 30 };
+  const raw = encodeLaunch({ at: 500, play, folder: { collectionId: "c1", folderId: "f1" } });
+  const got: unknown[][] = [];
+  const open = takeLaunch(() => {}, () => decodeLaunch(raw), (f) => got.push(["folder", f]), (p) => got.push(["play", p.title.id, p.streams.length, p.start]));
+  assert.equal(open, null);
+  assert.deepEqual(got, [["folder", { collectionId: "c1", folderId: "f1" }], ["play", "tt7", 1, 30]]);
+  takeLaunch(() => {}, () => decodeLaunch(raw), () => got.push(["again"]), () => got.push(["again"]));
+  assert.equal(got.length, 2, "already applied");
+});
+
+test("embedded: the host's client replaces the catalog's, and everyone reads the same session", () => {
+  const mine = cloud;
+  const mem = new Map<string, unknown>();
+  const host = createClient({ config: nuvioConfig("https://example.com", "key"), kv: { get: (k) => mem.get(k) as never, set: (k, v) => void mem.set(k, v) } });
+  host.session.set({ access: "a", refresh: "r", exp: Date.now() + 3600_000, userId: "host-user", anonymous: false });
+  shareCloud(host);
+  // The live binding: the module's own users (the party API, the remotes) and importers see the host's client.
+  assert.equal(cloudModule.cloud, host);
+  assert.equal(cloudModule.cloud.session.get()?.userId, "host-user");
+  assert.equal(cloudModule.owner(), "host-user:1");
+  shareCloud(mine);
+});
+
+test("embedded: the lists are dropped once when the signed-in profile changed, and not again", () => {
+  store.clear();
+  cloud.session.set({ access: "a", refresh: "r", exp: Date.now() + 3600_000, userId: "u1", anonymous: false });
+  cloud.session.setProfile(1);
+  let resets = 0;
+  checkOwner(() => resets++);
+  assert.equal(resets, 1, "first sight of an owner");
+  checkOwner(() => resets++);
+  assert.equal(resets, 1, "the same owner keeps its lists");
+  cloud.session.setProfile(2);
+  checkOwner(() => resets++);
+  assert.equal(resets, 2, "another profile drops them");
 });

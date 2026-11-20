@@ -9,6 +9,7 @@ import {
   loadCardStyles,
   openStyleMenu,
   saveCardStyles,
+  MOVE_LINE,
   REMOVE_LINE,
   SIZE_LINE,
   type StyleMenu,
@@ -100,13 +101,16 @@ test("the menu previews each layout, then changes the size on its own line", () 
 test("the last line of the menu removes the card from home, and Left and Right leave it alone there", () => {
   let m: StyleMenu = { ...openStyleMenu("cinema", DEFAULT_STYLES.cinema), line: SIZE_LINE };
   m = stepStyleMenu(m, "Down") as StyleMenu;
+  assert.equal(m.line, MOVE_LINE);
+  assert.equal(stepStyleMenu(m, "Enter"), "move");
+  m = stepStyleMenu(m, "Down") as StyleMenu;
   assert.equal(m.line, REMOVE_LINE);
   assert.deepEqual(m.style, DEFAULT_STYLES.cinema);
   assert.equal(stepStyleMenu(m, "Down"), m);
   assert.equal(stepStyleMenu(m, "Right"), m);
   assert.equal(stepStyleMenu(m, "Enter"), "remove");
   assert.equal(stepStyleMenu(m, "Back"), "undo");
-  assert.equal((stepStyleMenu(m, "Up") as StyleMenu).line, SIZE_LINE);
+  assert.equal((stepStyleMenu(m, "Up") as StyleMenu).line, MOVE_LINE);
 });
 
 test("an opened media card is one row: OK lands on the first title, the Open tile is last, Up and Back fold it", () => {

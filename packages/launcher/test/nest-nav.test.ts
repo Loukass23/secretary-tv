@@ -11,8 +11,10 @@ import {
   HEADER_SEARCH,
   HEADER_SOUND,
   LAUNCH,
+  type Column,
   type Layout,
   leave,
+  rowAt,
   step,
 } from "../src/nest-nav.ts";
 
@@ -121,4 +123,24 @@ test("clamp follows a shrinking card and leaves an empty one", () => {
   const launchOnly: Layout = { ...full, cols: full.cols.map((c, k) => (k === 1 ? { count: 0, across: 1, launch: true } : c)) };
   assert.deepEqual(clamp(inside(1, 1), launchOnly), inside(1, LAUNCH));
   assert.deepEqual(clamp({ area: "menu", i: 2 }, full), card(0));
+});
+
+test("an opened card of several rows: Down and Up move between rows, the sides stay in a row", () => {
+  // Cinema opened: 8 picks and Open (9), then My List (5) and a genre (7).
+  const cols: Column[] = [{ count: 21, across: 9, rows: [9, 5, 7] }];
+  const len: Layout = { ask: 1, cols, menu: 0 };
+  assert.deepEqual(rowAt([9, 5, 7], 0), { r: 0, x: 0, start: 0 });
+  assert.deepEqual(rowAt([9, 5, 7], 9), { r: 1, x: 0, start: 9 });
+  assert.deepEqual(rowAt([9, 5, 7], 20), { r: 2, x: 6, start: 14 });
+  assert.deepEqual(step(inside(0, 3), "Down", len), inside(0, 12), "same place in the next row");
+  assert.deepEqual(step(inside(0, 8), "Down", len), inside(0, 13), "clamped to the shorter row");
+  assert.deepEqual(step(inside(0, 12), "Down", len), inside(0, 17));
+  assert.deepEqual(step(inside(0, 19), "Down", len), { area: "ask", i: 0 }, "Down from the last row goes to the assistant");
+  assert.deepEqual(step(inside(0, 19), "Up", len), inside(0, 13), "clamped to the shorter row above");
+  assert.deepEqual(step(inside(0, 12), "Up", len), inside(0, 3));
+  assert.deepEqual(step(inside(0, 3), "Up", len), card(0), "Up from the picks folds the card");
+  assert.deepEqual(step(inside(0, 12), "Right", len), inside(0, 13));
+  assert.deepEqual(step(inside(0, 13), "Right", len), inside(0, 13), "the end of a row stays");
+  assert.deepEqual(step(inside(0, 13), "Left", len), inside(0, 12));
+  assert.deepEqual(step(inside(0, 9), "Left", len), inside(0, 9), "the sides stay in their row");
 });
