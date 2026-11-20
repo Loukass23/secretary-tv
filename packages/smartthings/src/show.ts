@@ -83,7 +83,7 @@ export function musicShow(devices: readonly StDevice[], cfg: MusicConfig = MUSIC
 /**
  * The ripple: a wave down the side lights that turns them on even when they are off, shifts them through a cool colour
  * to a warm white and up in brightness, then sets every light back exactly as it was (on or off, level, colour or white),
- * so the room is unchanged afterwards. "open" is the slow one, shown while Nest loads; "launch" is the quick one before
+ * so the room is unchanged afterwards ("splash" is the exception: it ends in a dim orange-yellow glow that stays). "open" is the slow one, shown while Nest loads; "launch" is the quick one before
  * another app opens. Both are kept soft: a light tint, and a brightness that follows the room (`rippleLevel`).
  */
 export interface RippleConfig {
@@ -92,13 +92,22 @@ export interface RippleConfig {
 
 export const RIPPLE_DEFAULT: RippleConfig = { lights: SIDE };
 
-export type RippleStyle = "open" | "launch";
+/** "splash" is the one that plays with the secretary bird: no cool wave, a slow warm swell, a slow way back. */
+export type RippleStyle = "open" | "launch" | "splash";
 
 /** Per light, in ms, for each phase: the cool wave, the warm wave, the way back. A zero skips the phase. */
-export const RIPPLE_TIMING: Record<RippleStyle, { cool: number; warm: number; back: number }> = {
+export const RIPPLE_TIMING: Record<RippleStyle, { cool: number; warm: number; back: number; settle?: number }> = {
   open: { cool: 500, warm: 400, back: 300 },
   launch: { cool: 0, warm: 200, back: 150 },
+  // The splash does not put the room back: after a slow warm swell the lights settle into a dim orange-yellow glow and stay.
+  splash: { cool: 0, warm: 900, back: 0, settle: 700 },
 };
+
+/** Where the splash leaves the side lights: orange-yellow (hue and saturation, 0-100) and a share of the ripple's brightness. */
+const GLOW = { hue: 10, saturation: 90 };
+const GLOW_SHARE = 0.45;
+/** How many steps the splash takes to fade from the swell to the glow. */
+const SETTLE_STAGES = 4;
 
 /** The wave's colours: a soft cool tint (hue and saturation, 0-100), then a warm white in kelvin. */
 const COOL = { hue: 62, saturation: 35 };
@@ -171,8 +180,143 @@ export function rippleShow(
     ...(d.dimmable ? lightCommands(true, levelFor(d, base)).slice(1) : []),
   ];
   const back = (d: StDevice): StCommand[] => restoreCommands(d);
-  const steps = [...phase(t.cool, cool, 250), ...phase(t.warm, warm, 400), ...phase(t.back, back, 0)];
+  // The glow the splash leaves, reached in stages so the lights fade down together instead of dropping: the first stage turns
+  // the colour from warm white to orange-yellow, each next one lowers the level a step, all lights in the same step.
+  const glowLevel = Math.max(8, Math.round(base * GLOW_SHARE));
+  const settleStages = (gap: number): ShowStep[] =>
+    Array.from({ length: SETTLE_STAGES }, (_, k) => {
+      const level = Math.round(base + ((glowLevel - base) * (k + 1)) / SETTLE_STAGES);
+      return {
+        targets: lights.map((d): ShowTarget => ({
+          device: d,
+          commands: [
+            { capability: "switch", command: "on" },
+            ...(k === 0 && d.colour ? colorCommands(GLOW.hue, GLOW.saturation) : []),
+            ...(d.dimmable ? lightCommands(true, level).slice(1) : []),
+          ],
+        })),
+        after: k === SETTLE_STAGES - 1 ? 0 : gap,
+      };
+    });
+  const steps = [
+    ...phase(t.cool, cool, 250),
+    ...phase(t.warm, warm, t.settle ? 900 : 400),
+    ...(t.settle ? settleStages(t.settle) : phase(t.back, back, 0)),
+  ];
   return { steps, undo: { targets: lights.map((d) => ({ device: d, commands: restoreCommands(d) })), after: 0 } };
+}
+
+/** A colour as SmartThings takes it: hue and saturation, 0-100 each, from an sRGB colour (0-255 a channel). */
+export function stColour([r, g, b]: readonly [number, number, number]): { hue: number; saturation: number } {
+  const mx = Math.max(r, g, b);
+  const c = mx - Math.min(r, g, b);
+  let h = 0;
+  if (c > 0) h = mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4;
+  h = (h * 60 + 360) % 360;
+  return { hue: Math.round((h / 360) * 100), saturation: mx === 0 ? 0 : Math.round((c / mx) * 100) };
+}
+
+/** The least saturation a mood colour is sent with: under it a light would just look white. */
+const MOOD_MIN_SATURATION = 45;
+
+/**
+ * The side lights taking a poster's colour: each light that can show colour is sent it, the others only the level. One
+ * step (the lights change together), plus `undo`, every light back as it was. Null when the home has none of them.
+ * The level follows the room like the ripple's (`rippleLevel`); a light that is on never dims for it.
+ */
+export function moodShow(
+  devices: readonly StDevice[],
+  rgb: readonly [number, number, number],
+  cfg: RippleConfig = RIPPLE_DEFAULT,
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+  lux: number | null = roomLux(devices),
+): { steps: ShowStep[]; undo: ShowStep } | null {
+  const lights = pickAll(sharedLights(devices, independent), cfg.lights);
+  if (!lights.length) return null;
+  const { hue, saturation } = stColour(rgb);
+  const level = rippleLevel(lux);
+  const targets = lights.map((d): ShowTarget => ({
+    device: d,
+    commands: [
+      { capability: "switch", command: "on" },
+      ...(d.colour ? colorCommands(hue, Math.max(saturation, MOOD_MIN_SATURATION)) : []),
+      ...(d.dimmable ? lightCommands(true, d.on && typeof d.level === "number" ? Math.max(level, d.level) : level).slice(1) : []),
+    ],
+  }));
+  return { steps: [{ targets, after: 0 }], undo: { targets: lights.map((d) => ({ device: d, commands: restoreCommands(d) })), after: 0 } };
+}
+
+/**
+ * The lights fading down together, in `stages` steps: to `target` percent (never raising a light), or, with 0, to off (the
+ * last step switches them off). Only lights that are on take part, and one that cannot dim only goes off at the end.
+ * This is how the bird leaves (the glow fades out on exit) and how the room dims when something starts playing.
+ * Null when no light of the config is on.
+ */
+export function fadeShow(
+  devices: readonly StDevice[],
+  target: number,
+  cfg: RippleConfig = RIPPLE_DEFAULT,
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+  stages = 3,
+  gap = 600,
+): ShowStep[] | null {
+  const lit = pickAll(sharedLights(devices, independent), cfg.lights).filter((d) => d.on !== false);
+  if (!lit.length) return null;
+  const from = (d: StDevice) => (typeof d.level === "number" ? d.level : 50);
+  const steps: ShowStep[] = [];
+  for (let k = 1; k <= stages; k++) {
+    const last = k === stages;
+    const targets: ShowTarget[] = lit.flatMap((d): ShowTarget[] => {
+      if (target === 0 && last) return [off(d)];
+      if (!d.dimmable) return [];
+      const goal = target === 0 ? Math.min(from(d), 6) : Math.min(from(d), target);
+      const level = Math.round(from(d) + ((goal - from(d)) * k) / (target === 0 ? stages - 1 : stages));
+      return [{ device: d, commands: lightCommands(true, Math.max(1, Math.min(from(d), level))).slice(1) }];
+    });
+    if (targets.length) steps.push({ targets, after: last ? 0 : gap });
+  }
+  return steps.length ? steps : null;
+}
+
+/** The colours the lights dance through: hue and saturation, 0-100 (orange, magenta, violet, cyan, gold, green). */
+export const DANCE_COLOURS = [
+  { hue: 10, saturation: 95 },
+  { hue: 87, saturation: 90 },
+  { hue: 74, saturation: 85 },
+  { hue: 50, saturation: 85 },
+  { hue: 14, saturation: 90 },
+  { hue: 33, saturation: 80 },
+] as const;
+
+/** Between two lights changing in the dance. */
+export const DANCE_BEAT_MS = 1400;
+
+/**
+ * Music mode's dance: a chase where, each beat, the next light takes the next colour and swells while the one before
+ * eases back, so the colours travel along the lights. `beats` steps; lights that cannot show colour only pulse. Null
+ * without any of the lights.
+ */
+export function danceShow(
+  devices: readonly StDevice[],
+  fragments: readonly string[],
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+  beats = 24,
+  level = 55,
+): ShowStep[] | null {
+  const lights = pickAll(sharedLights(devices, independent), fragments);
+  if (!lights.length) return null;
+  const steps: ShowStep[] = [];
+  for (let b = 0; b < beats; b++) {
+    const lead = lights[b % lights.length];
+    const prev = lights[(b + lights.length - 1) % lights.length];
+    const c = DANCE_COLOURS[b % DANCE_COLOURS.length];
+    const targets: ShowTarget[] = [
+      { device: lead, commands: [{ capability: "switch", command: "on" }, ...(lead.colour ? colorCommands(c.hue, c.saturation) : []), ...(lead.dimmable ? lightCommands(true, level).slice(1) : [])] },
+    ];
+    if (prev.id !== lead.id && prev.dimmable) targets.push({ device: prev, commands: lightCommands(true, Math.round(level * 0.45)).slice(1) });
+    steps.push({ targets, after: DANCE_BEAT_MS });
+  }
+  return steps;
 }
 
 /** How a show is played: `send` sends one light's commands, the rest is timing and what to do when it breaks off. */

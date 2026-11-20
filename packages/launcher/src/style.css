@@ -5,7 +5,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #07080b;
+  background: #0b0807;
   color: #f4f4f6;
   font: 24px/1.35 system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -276,6 +276,7 @@ html, body {
 /* --- lights (lights.tsx): SmartThings scenes and lights --- */
 .nest-lights-head { position: absolute; left: 60px; top: 50px; }
 .nest-lights-head h1 { margin: 6px 0 0; }
+.nest-fx span { font-size: 21px; padding: 0 8px; }
 .nest-scene span { padding: 0 24px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nest-lights-status { position: absolute; left: 60px; right: 60px; bottom: 44px; font-size: 24px; font-weight: 600; color: #ffb38f; }
 .sg-glass > .nest-lights-head,
@@ -316,7 +317,7 @@ html, body {
 .nest-say-you { top: 330px; height: 150px; display: flex; flex-direction: column; justify-content: flex-end; }
 .nest-say-reply { top: 610px; }
 .nest-say small { display: block; font-size: 26px; color: var(--sg-ink-dim); }
-.nest-say b { display: block; font-size: 42px; font-weight: 500; line-height: 1.2; color: #7cc8ff; }
+.nest-say b { display: block; font-size: 42px; font-weight: 500; line-height: 1.2; color: #ff9a6b; }
 .nest-say p { margin: 0; font-size: 34px; line-height: 1.4; color: #ffd08a; animation: nestRise 420ms var(--sg-ease) both; }
 /* What the assistant has for the day, in the left column before the cards: the greeting, the reminder count, the first ones. */
 .nest-ask-dock { position: absolute; left: 0; width: 1920px; display: flex; justify-content: center; transition: opacity 300ms var(--sg-ease); }
@@ -371,7 +372,7 @@ html, body {
 .nest-cal-today { border-radius: 27px; box-shadow: inset 0 0 0 3px currentColor; font-weight: 600; }
 /* What the assistant understood, beside the label while a card holds its suggestions: your words, then what it did. */
 .nest-col-note { position: absolute; left: 380px; top: 9px; max-width: 1100px; font-size: 25px; color: #ffd08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nest-col-note b { font-weight: 500; color: #7cc8ff; }
+.nest-col-note b { font-weight: 500; color: #ff9a6b; }
 
 /* The YouTube and collection cards: small captions, two lines at most, on a flat band so they read on any picture. */
 .nest-kind-videos .sg-tile-cap,

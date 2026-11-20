@@ -30,16 +30,16 @@ export const NIGHT: ColourTokens = {
 export const DAY: ColourTokens = {
   fill: "rgba(255, 255, 255, 0.42)",
   line: "rgba(255, 255, 255, 0.8)",
-  raised: "rgba(44, 38, 110, 0.09)",
-  ink: "#1d1c2b",
-  "ink-dim": "rgba(29, 28, 43, 0.7)",
-  focus: "#5b52e6",
+  raised: "rgba(120, 50, 10, 0.09)",
+  ink: "#2a1810",
+  "ink-dim": "rgba(42, 24, 16, 0.7)",
+  focus: "#c2410c",
   "focus-ink": "#ffffff",
   "focus-ink-dim": "rgba(255, 255, 255, 0.88)",
 };
 
 /** Page colour behind the wallpaper, per theme. */
-export const PAGE_BG = { night: "#07080b", day: "#eee9f3" } as const;
+export const PAGE_BG = { night: "#0b0807", day: "#f4e9dc" } as const;
 
 /** Corner radii, as `--sg-r-<name>`. */
 export const RADII = {
@@ -66,11 +66,12 @@ export const TYPE = {
   small: { size: 19, weight: 400, use: "App name, tile subtitle" },
 } as const;
 
-/** The warm glow top right, "r,g,b": each app tints its backdrop (Nest and Cinema orange, Shows blue, Anime rose). */
+/** The warm glow top right, "r,g,b": each app tints its backdrop (Nest and Cinema orange, Shows gold, Anime clay red). */
 export const TINTS = {
   orange: "255,90,38",
-  blue: "90,140,255",
-  rose: "236,64,122",
+  // Shows and Anime keep their own tint, in the same warm family: savanna gold and clay red.
+  blue: "255,186,60",
+  rose: "226,72,72",
 } as const;
 
 export type TintName = keyof typeof TINTS;

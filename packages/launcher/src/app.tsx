@@ -1,5 +1,5 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, type IconName, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, artPalette, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, type IconName, type Palette, paletteKey, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -13,6 +13,7 @@ import {
   launchApp,
   listApps,
   onBeforeLaunch,
+  onBeforePlay,
   openApp,
   openFolderInApp,
   openTitleInApp,
@@ -85,8 +86,12 @@ import {
   independentLights,
   lastPictureMode,
   noteStatus,
+  dimForMedia,
+  playFarewell,
   playOpenRipple,
   playRippleTest,
+  playSplashRipple,
+  syncMood,
   rememberPictureMode,
   rippleBeforeLaunch,
   runLights,
@@ -94,6 +99,7 @@ import {
   togglePictureMode,
 } from "./home-control.ts";
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
+import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
@@ -189,8 +195,8 @@ type RecentCard =
   | { kind: "alert"; key: string; at: number; text: string };
 
 const SOURCE_LABEL: Record<Reminder["source"], [string, string]> = {
-  companion: ["From Secretary Desk", "#5b7cff"],
-  gemini: ["From the assistant", "#7d6bff"],
+  companion: ["From Secretary Desk", "#e0792a"],
+  gemini: ["From the assistant", "#ffb52e"],
   local: ["Added on the TV", "#3ccf6e"],
 };
 const SCENES: readonly [Scene, string][] = [
@@ -270,8 +276,14 @@ function clearRecent(): string[] {
   return [];
 }
 
+/** Backdrops already drawn, by theme and mood: going back to a colour costs nothing. */
+const backdrops = new Map<string, Backdrop>();
+
 export function App() {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
+  /** The light effects (Lights panel) and the focused poster's mood, which tints the background. */
+  const [fx, setFx] = useState<LightFx>(lightFx);
+  const [mood, setMood] = useState<Palette | null>(null);
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [continueItems, setContinueItems] = useState<UnifiedResumeEntry[]>([]);
   // The profile's My List (mylist.ts), for its card; the last pull shows at once.
@@ -799,9 +811,35 @@ export function App() {
   }, []);
 
   // The backdrop and its frost are drawn again when Daylight turns on or off.
+  useEffect(() => onLightFx(setFx), []);
+  const moodOn = effective(fx).mood;
+  const shownMood = moodOn ? mood : null;
+  const moodKey = paletteKey(shownMood);
   useEffect(() => {
-    void drawBackdrop(TINTS.orange, theme).then(setBackdrop, (e) => console.warn("[nest] backdrop failed", e));
-  }, [theme]);
+    let live = true;
+    // The mood settles first (the poster has to stay in focus), so a walk along a row draws nothing.
+    const t = setTimeout(
+      () => {
+        const key = `${theme}:${moodKey}`;
+        const hit = backdrops.get(key);
+        if (hit) return void setBackdrop(hit);
+        void drawBackdrop(TINTS.orange, theme, shownMood).then(
+          (b) => {
+            // A few kept, so going back to a poster's colour costs nothing; the oldest goes first.
+            backdrops.set(key, b);
+            if (backdrops.size > 6) backdrops.delete(backdrops.keys().next().value as string);
+            if (live) setBackdrop(b);
+          },
+          (e) => console.warn("[nest] backdrop failed", e),
+        );
+      },
+      backdrop ? 350 : 0,
+    );
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [theme, moodKey]);
 
   // What the assistant is doing, while the home screen is up: prompts from the phone show here too.
   useEffect(() => {
@@ -862,7 +900,10 @@ export function App() {
           if (news.length) setAlerts((prev) => [...news.map((a) => ({ text: a.text, at: Date.now() })), ...prev].slice(0, MAX_RECENT));
         }
         // The first status read of this run (Nest just opened): the ripple down the side lights.
-        if (lastDevices.current === null) playOpenRipple(next).catch((e) => console.warn("[nest] open ripple", e));
+        if (lastDevices.current === null) {
+          // With the splash on, the lights swell warm with the bird; otherwise the open ripple, as before.
+          (effective(lightFx()).splash ? playSplashRipple(next) : playOpenRipple(next)).catch((e) => console.warn("[nest] open ripple", e));
+        }
         noteStatus(next);
         lastDevices.current = next;
         setDevices(next);
@@ -901,6 +942,7 @@ export function App() {
   // back to the screen after a while away (the first one, at start, is in pollHome).
   useEffect(() => {
     onBeforeLaunch(rippleBeforeLaunch);
+    onBeforePlay(dimForMedia);
     let hiddenAt = 0;
     const onVisible = () => {
       if (document.visibilityState === "hidden") return void (hiddenAt = Date.now());
@@ -910,6 +952,7 @@ export function App() {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       onBeforeLaunch(null);
+      onBeforePlay(null);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
@@ -1209,18 +1252,34 @@ export function App() {
       ? rowArt
       : null;
   useEffect(() => {
-    if (!focusedArt) return;
+    if (!focusedArt) {
+      // Focus left the posters: the side lights go back, but not for a passing visit to the header.
+      const t = setTimeout(() => syncMood(null), 3000);
+      return () => clearTimeout(t);
+    }
     let live = true;
+    const url = SERVER_URL ? artProxy(SERVER_URL, focusedArt.src) : focusedArt.src;
     const t = setTimeout(() => {
-      void artColour(SERVER_URL ? artProxy(SERVER_URL, focusedArt.src) : focusedArt.src)
+      void artColour(url)
         .then((rgb) => glowImage(rgb ?? KIND_TINT[focusedArt.type]))
         .then((src) => live && setGlow(src));
+      if (effective(fx).mood || effective(fx).sync) {
+        void artPalette(url).then((p) => {
+          if (!live) return;
+          if (effective(fx).mood) setMood(p);
+          if (effective(fx).sync) syncMood(p ? p.accent : null);
+        });
+      }
     }, 120);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [focusedArt?.src]);
+  }, [focusedArt?.src, fx]);
+  // The side lights go back the moment the sync (or every effect) is switched off.
+  useEffect(() => {
+    if (!effective(fx).sync) syncMood(null);
+  }, [fx]);
 
   // Debug helpers for the CDP scripts.
   useEffect(() => {
@@ -1576,7 +1635,7 @@ export function App() {
     if (key === "Back" && focus.area === "ask") return setFocus({ area: "row", col: 0, i: 0 });
     if (key === "Back") {
       const now = performance.now();
-      if (now - lastBack.current < EXIT_WINDOW_MS) return void exitApp();
+      if (now - lastBack.current < EXIT_WINDOW_MS) return void playFarewell().finally(() => exitApp());
       lastBack.current = now;
       flash("Press Back again to leave the nest");
       return;

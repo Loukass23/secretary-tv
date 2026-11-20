@@ -2,9 +2,10 @@
 // frost the glass takes from it. Rules from the TV (docs/performance.md, glass catalog):
 //   - the art is its own layer, decoded before it is shown, and a faded-out copy is removed
 //   - the frost swap re-rasterizes every glass layer, so it waits until focus rests
-import { type Backdrop, drawBackdrop, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artPalette, type Backdrop, drawBackdrop, type Palette, paletteKey, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { frostFor, preload, shadeImage } from "../lib/hero.ts";
+import { loadSettings } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import "./art.css";
 
@@ -17,13 +18,28 @@ const FROST_REST_MS = 1200;
 /** The backdrop crossfade (art.css); the old layer is removed after it, since even at opacity 0 it costs frames. */
 const FADE_MS = 450;
 
-/** The app's tinted wallpaper (under everything) and the shade image (over the art). */
-export function useBase(type: CatalogType): { backdrop: Backdrop | null; shade: string | null } {
+/**
+ * The app's tinted wallpaper (under everything) and the shade image (over the art). With `moodSrc` (the focused item's art)
+ * and the "Poster colour" setting on, the wallpaper takes that poster's colour once focus has rested on it.
+ */
+export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdrop | null; shade: string | null } {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
   const [shade, setShade] = useState<string | null>(null);
+  const [mood, setMood] = useState<Palette | null>(null);
   useEffect(() => {
-    void drawBackdrop(TINT[type]).then(setBackdrop, (e) => console.warn("[art] backdrop failed", e));
-  }, [type]);
+    if (!moodSrc || !loadSettings().domotics.moodBackground) return;
+    let live = true;
+    const t = setTimeout(() => void artPalette(moodSrc).then((p) => live && setMood(p)), DWELL_MS);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [moodSrc]);
+  const shownMood = loadSettings().domotics.moodBackground ? mood : null;
+  const moodKey = paletteKey(shownMood);
+  useEffect(() => {
+    void drawBackdrop(TINT[type], "night", shownMood).then(setBackdrop, (e) => console.warn("[art] backdrop failed", e));
+  }, [type, moodKey]);
   useEffect(() => {
     void shadeImage().then(setShade, () => {});
   }, []);
