@@ -80,3 +80,7 @@
 .det-progress-bar { display: block; width: 180px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
 .det-progress-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; }
 
+/* The context menu (a long OK on an action or an episode): a small glass list over the scrim. */
+.det-menu { padding: 26px 30px; display: flex; flex-direction: column; gap: 4px; }
+.det-menu::after { background: rgba(10, 11, 14, 0.62); }
+.det-menu .cat-kicker { margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

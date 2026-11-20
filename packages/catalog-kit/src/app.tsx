@@ -7,7 +7,7 @@ import {
 } from "./lib/sagas.ts";
 import { contentApp, normalizeCode, partyErrorText } from "@secretary/party/src/client.ts";
 import { targetPos, type Timeline } from "@secretary/party/src/protocol.ts";
-import { cloud, cloudEnabled, nuvioCollections, nuvioLibrary, nuvioRemote, partyApi, startListSync, takeLaunch } from "./lib/cloud.ts";
+import { checkOwner, cloud, cloudEnabled, nuvioCollections, nuvioLibrary, nuvioRemote, partyApi, shareCloud, startListSync, takeLaunch } from "./lib/cloud.ts";
 import { runMovieScene } from "./lib/home.ts";
 import { createPartySession, LEAVE_TEXT, type PartySession, releaseOf, type SocketLike, streamFor } from "./lib/party.ts";
 import { clearLocalLibrary, loadLibrary, setLibraryRemote, syncLibrary } from "./lib/library.ts";
@@ -47,10 +47,10 @@ import {
 import { type AddonRowDef, addonRowDefs, nextPage } from "./lib/addons.ts";
 import { addons, addonStore, debrids, loadDebrid, playable, pluginHost, pluginsActive, pluginStore, publishStatus } from "./lib/plugins.ts";
 import { matchPref, prefOf } from "./lib/sourcepref.ts";
-import { isDead } from "./player/session.ts";
+import { isDead, setEmbeddedPlayback } from "./player/session.ts";
 import { createPluginStreamClient, createStreamClient, parseStreamInfo, type Stream } from "./lib/streams.ts";
 import { safeToCheck } from "./lib/verify.ts";
-import { type CatalogType, type HomeRow, streamType, type Title, type Video } from "./lib/types.ts";
+import { type CatalogType, type HomeRow, isSeries, streamType, type Title, type Video } from "./lib/types.ts";
 import { SagaTimeline } from "./ui/SagaTimeline.tsx";
 import { Detail } from "./ui/Detail.tsx";
 import { Home } from "./ui/Home.tsx";
@@ -68,6 +68,33 @@ export interface CatalogConfig {
   serverUrl: string;
   /** App id the root Back goes to (a launcher), or empty to just exit. */
   returnTo: string;
+  /** Run inside Secretary Nest rather than as an app of its own (docs/embedding-catalog.md). */
+  embedded?: EmbeddedHost;
+  /** Open this title's detail page first (embedded: the home's Resume and picks). */
+  open?: { type: CatalogType; title: Title; autoPlay?: boolean; room?: string };
+  /** Open this folder of the profile's collections first. */
+  folder?: { collectionId: string; folderId: string };
+}
+
+/**
+ * What a host (Secretary Nest) gives an embedded catalog. The host keeps the player: Nest cannot hold AVPlay's page, so
+ * playing a title hands it to the catalog app, which opens it there.
+ */
+export interface EmbeddedHost {
+  /**
+   * The host gives the catalog the screen for playback too (option C): AVPlay and the player run in this page, and the
+   * host hides itself while one plays. Without it, `onPlay` hands the title to the catalog app.
+   */
+  ownPlayer?: boolean;
+  /** The host's Nuvio client: the catalog uses it instead of making a second one over the same session. */
+  cloud?: import("@secretary/nuvio").NuvioClient;
+  /** The root Back, CH+ and the Nest pill: give the screen back to the host. */
+  onExit(): void;
+  /**
+   * Play: open the title in the catalog app. With `play` (the sources the embedded page already found) the app starts its
+   * player at once; without it a film plays after its own search and a series opens on its page.
+   */
+  onPlay(open: { type: CatalogType; title: Title; autoPlay: boolean; play?: { episode?: Video; streams: Stream[]; start: number; manual?: boolean } }): void;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -113,11 +140,20 @@ const HEADING_FOR: Record<CatalogType, string> = {
   anime: "Secretary Anime",
 };
 
-export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig) {
+export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open, folder }: CatalogConfig) {
+  // Embedded, the host owns the player (see EmbeddedHost); prepare-ahead would hold a decoder the app then needs.
+  const hosted = Boolean(embedded && !embedded.ownPlayer);
+  // Embedded: one Nuvio client for the page, the host's.
+  if (embedded?.cloud) shareCloud(embedded.cloud);
+  setEmbeddedPlayback(hosted);
   const [activeType, setActiveType] = useState<CatalogType>(type);
   const [settings, setSettings] = useState<DashboardSettings>(() => loadSettings());
   // Plugin and addon lists synced with the Nuvio profile (lib/listsync.ts), started with the stream setup below.
-  const lists = useRef<{ sync(): Promise<void> } | null>(null);
+  // The plugin scope follows the kind being browsed (the Hub and the home pill can switch it), not the one it opened on.
+  const activeNow = useRef(activeType);
+  activeNow.current = activeType;
+  const lists = useRef<{ sync(): Promise<void>; stop(): void } | null>(null);
+  useEffect(() => () => lists.current?.stop(), []);
   const streams = useMemo(() => {
     setResumeServer(serverUrl);
     if (cloudEnabled) {
@@ -135,7 +171,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
           onStatus: publishStatus,
           onUpdate: (s) => s.done || onPartial(s.streams),
           // Secretary Anime runs the scrapers made for anime, the others the general ones (manifest categories).
-          scope: type === "anime" ? "anime" : "general",
+          scope: activeNow.current === "anime" ? "anime" : "general",
         }),
       pluginsActive,
       server,
@@ -152,7 +188,11 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
     () => [...rowsFor(activeType), ...addonRowDefs(addons.catalogs(activeType), addons.catalogUrl)],
     [activeType, addonRev],
   );
-  const [view, setView] = useState<View>({ name: "home" });
+  const [view, setView] = useState<View>(() =>
+    open ? { name: "detail", itemType: open.type, title: { ...open.title, catalogType: open.type }, autoPlay: open.autoPlay } : { name: "home" },
+  );
+  // Opened by the host on a title or a folder: Back from there gives the screen back instead of showing the home.
+  const fromHost = useRef(Boolean(embedded && (open || folder)));
   // Watch together (lib/party.ts): one party at a time, kept across the episodes it plays.
   const [party, setParty] = useState<PartySession | null>(null);
   /** The content id the party's player has open, so a timeline for other content (a `next`) opens that. */
@@ -161,12 +201,14 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
   partyNow.current = party;
   const viewNow = useRef(view);
   viewNow.current = view;
-  const partyEnabled = cloudEnabled && partyApi.configured && cloud.session.signedIn();
+  const partyEnabled = !hosted && cloudEnabled && partyApi.configured && cloud.session.signedIn();
   // Collections from the Nuvio profile (lib/nuviocollections.ts), and the folder open over the home, kept while a
   // title of it is open so Back returns to the same place.
   const [nuvioCols, setNuvioCols] = useState(() => loadNuvioCollections());
   // Each collection row's own card style (a long OK on the row; lib/collectionlayout.ts).
   const [rowStyles, setRowStyles] = useState(() => loadRowStyles());
+  // A folder Nest asked for (a home card), opened once the collections are in.
+  const [wantFolder, setWantFolder] = useState<{ collectionId: string; folderId: string } | null>(folder ?? null);
   const [folderOpen, setFolderOpen] = useState<{ collectionId: string; folderId: string } | null>(null);
   const sourceKeys: SourceKeys = { tmdb: getTmdbKey(), trakt: typeof __TRAKT_CLIENT_ID__ !== "undefined" ? __TRAKT_CLIENT_ID__ : "" };
   const shownCols = useMemo(
@@ -199,17 +241,29 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
     return false;
   });
 
+  // Embedded: Nest's Watch together opened this on a room's title; join the room (the apps got it in the launch payload).
+  useEffect(() => {
+    if (embedded && open?.room) joinParty(open.room);
+  }, []);
+
   // Sync watch progress across all categories and check for a deep-link handoff on startup and wake.
   useEffect(() => {
     const wake = () => {
       if (document.visibilityState === "hidden") return;
       // Nest's launch payload first: it can bring another profile's session, which resets the local lists.
-      const open = cloudEnabled
-        ? takeLaunch(() => {
-            clearLocalResume();
-            clearLocalLibrary();
-            clearLocalNuvioCollections();
-            setNuvioCols([]);
+      let direct: import("@secretary/nuvio").PlayNow | null = null;
+      const resetLists = () => {
+        clearLocalResume();
+        clearLocalLibrary();
+        clearLocalNuvioCollections();
+        setNuvioCols([]);
+      };
+      // Embedded, Nest sends no payload: the catalog checks for itself that its lists are the signed-in profile's.
+      if (cloudEnabled && embedded) checkOwner(resetLists);
+      const launched = cloudEnabled && !embedded
+        ? takeLaunch(resetLists, undefined, setWantFolder, (p) => {
+            // Nest found the sources already: the player opens at once on them.
+            direct = p;
           })
         : null;
       void syncAllResume().then(setResume);
@@ -218,12 +272,26 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
         void lists.current?.sync();
         void syncNuvioCollections().then(setNuvioCols);
       }
-      if (open?.room) joinParty(open.room);
-      if (open) {
-        const title = open.title as Title;
-        return setView({ name: "detail", itemType: open.type, title: { ...title, catalogType: open.type }, autoPlay: open.autoPlay });
+      if (direct) {
+        const d = direct as import("@secretary/nuvio").PlayNow;
+        triggerCinemaAutoDim();
+        return setView({
+          name: "player",
+          itemType: d.type,
+          title: { ...(d.title as unknown as Title), catalogType: d.type },
+          episode: (d.episode ?? undefined) as unknown as Video | undefined,
+          streams: d.streams as unknown as Stream[],
+          start: d.start,
+          manual: d.manual,
+        });
       }
-      if (cloudEnabled) return;
+      if (launched?.room) joinParty(launched.room);
+      if (launched) {
+        const title = launched.title as Title;
+        return setView({ name: "detail", itemType: launched.type, title: { ...title, catalogType: launched.type }, autoPlay: launched.autoPlay });
+      }
+      // Embedded, Nest is the only caller and sends its titles directly: the server's handoff would reopen a stale one.
+      if (cloudEnabled || embedded) return;
       void consumeHandoff(activeType).then((handoff) => {
         if (handoff) {
           setView({
@@ -293,6 +361,11 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
     setFolderOpen({ collectionId, folderId });
     setView({ name: "folder" });
   };
+  useEffect(() => {
+    if (!wantFolder || !findFolder(shownCols, wantFolder.collectionId, wantFolder.folderId)) return;
+    openFolder(wantFolder.collectionId, wantFolder.folderId);
+    setWantFolder(null);
+  }, [wantFolder, shownCols]);
   const folderShown = useMemo(() => {
     const hit = folderOpen && findFolder(shownCols, folderOpen.collectionId, folderOpen.folderId);
     if (!hit) return null;
@@ -371,6 +444,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
 
   /** CH+ and the Nest pill: Secretary Nest is the dashboard (docs/launcher.md). This app stays alive behind it. */
   const openNest = () => {
+    if (embedded) return embedded.onExit();
     if (!returnTo) return flash("Secretary Nest isn't set up (SECRETARY_TV_LAUNCHER_ID)");
     launchApp(returnTo).catch(() => flash("Couldn't open Secretary Nest"));
   };
@@ -514,6 +588,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
   }, [party]);
 
   const goHome = () => {
+    if (embedded && fromHost.current) return embedded.onExit();
     setFolderOpen(null);
     setResume(loadAllResume());
     setWatchedRev((v) => v + 1);
@@ -521,6 +596,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
   };
 
   const homeBack = () => {
+    if (embedded) return embedded.onExit();
     const now = performance.now();
     if (now - lastBack.current < EXIT_WINDOW_MS) return exitApp(returnTo || undefined);
     lastBack.current = now;
@@ -551,7 +627,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
     <>
       {/* AVPlay draws the video where this element is (docs/lessons.md, AVPlay). Mounted for the app's life: the
           detail page prepares ahead before the player exists. Opaque screens above it cover it until they hide. */}
-      <object type="application/avplayer" class="av-plane" />
+      {!hosted && <object type="application/avplayer" class="av-plane" />}
       <Home
         type={activeType}
         rows={rows}
@@ -583,6 +659,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
           setView({ name: "hub", tab, autoVoice });
         }}
         onOpenNest={openNest}
+        embedded={Boolean(embedded)}
         onSwitchType={(nextType) => {
           setActiveType(nextType);
           setFocus({ row: 0, col: 0 });
@@ -669,6 +746,8 @@ export function CatalogApp({ type, heading, serverUrl, returnTo }: CatalogConfig
           remember={settings.playback.rememberSource}
           sheetOrder={settings.playback.sheetOrder}
           onPlay={(title, episode, found, start, manual) => {
+            // Embedded: the catalog app owns the player. A film plays at once there; a series opens on its page.
+            if (embedded && hosted) return embedded.onPlay({ type: shown.itemType, title, autoPlay: !isSeries(shown.itemType), play: { episode, streams: found, start, manual } });
             mark("ok");
             triggerCinemaAutoDim();
             setView({

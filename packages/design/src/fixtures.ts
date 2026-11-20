@@ -86,6 +86,12 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     style: styleFor(styles, key),
     open: { label: `Open ${name}`, run: noop },
     run: noop,
+    // Under the picks once the card is opened (Down): My List, then genre rows.
+    more: ["My List", `Action ${unit}`, `Comedy ${unit}`].map((label, r) => ({
+      label,
+      items: media(art, r * 3, 10, 0, () => "2024 · ★ 7.4"),
+      run: noop,
+    })),
   });
   return [
     {
@@ -101,6 +107,20 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 8, 2, (k) => (k < 2 ? "42 min left" : "Drama · 2019"))),
     card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 6, 2, (k) => `S0${k + 1} · E0${k + 3}`)),
     card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 1, () => "12 episodes")),
+    {
+      kind: "videos",
+      key: "youtube",
+      label: "YouTube",
+      run: noop,
+      videos: [0, 1, 2].map((k) => ({ title: ["A long walk through Example Bay", "Ten tips for tidy shelves", "Live: the evening news"][k], channel: ["Example Channel", "Home Hacks", "News Desk"][k], thumb: art.stills[k % art.stills.length] })),
+    },
+    {
+      kind: "folders",
+      key: "nuvio:example",
+      label: "Weekend marathons",
+      run: noop,
+      folders: ["Space operas", "Slow burns", "Heists", "Road trips"].map((title, k) => ({ title, cover: art.posters[k % art.posters.length] })),
+    },
     { key: "home", label: "Home", run: noop, kind: "home", title: "Living room", sub: "3 lights on · 21°", actions: [{ icon: "cinema", label: "Cinema" }, { icon: "warm", label: "Warm" }, { icon: "power", label: "Off" }, { icon: "music", label: "Music" }] },
     {
       key: "reminders",

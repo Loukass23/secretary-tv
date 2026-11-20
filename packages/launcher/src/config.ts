@@ -11,6 +11,10 @@ declare const __ST_CLIENT_SECRET__: string | undefined;
 declare const __ST_TOKEN__: string | undefined;
 declare const __GEMINI_KEY__: string | undefined;
 declare const __GROQ_KEY__: string | undefined;
+declare const __EMBED_CATALOG__: boolean | undefined;
+declare const __EMBED_PLAYER__: boolean | undefined;
+declare const __YOUTUBE_KEY__: string | undefined;
+declare const __YOUTUBE_ID__: string | undefined;
 declare const __WEATHER_LAT__: string | undefined;
 declare const __WEATHER_LON__: string | undefined;
 declare const __WEATHER_CITY__: string | undefined;
@@ -39,6 +43,16 @@ export const ST_TOKEN = typeof __ST_TOKEN__ !== "undefined" ? __ST_TOKEN__ : "";
 export const GEMINI_KEY = typeof __GEMINI_KEY__ !== "undefined" ? __GEMINI_KEY__ : "";
 /** Groq's Whisper for turning the room microphone's clip into words, ahead of Gemini; empty uses Gemini or the server. */
 export const GROQ_KEY = typeof __GROQ_KEY__ !== "undefined" ? __GROQ_KEY__ : "";
+
+/** Browsing the catalog inside Nest (docs/embedding-catalog.md, option B); off, Cinema, Shows and Anime open as apps. */
+export const EMBED_CATALOG = typeof __EMBED_CATALOG__ !== "undefined" && __EMBED_CATALOG__ === true;
+
+/** Option C: playback runs inside Nest too (AVPlay in this page), so the catalog apps are not needed to play. */
+export const EMBED_PLAYER = typeof __EMBED_PLAYER__ !== "undefined" && __EMBED_PLAYER__ === true;
+
+/** The YouTube card: a Data API key for what is popular (empty: the card is a way into the app), and the TV's YouTube app id. */
+export const YOUTUBE_API_KEY = typeof __YOUTUBE_KEY__ !== "undefined" ? __YOUTUBE_KEY__ : "";
+export const YOUTUBE_APP_ID = typeof __YOUTUBE_ID__ !== "undefined" && __YOUTUBE_ID__ ? __YOUTUBE_ID__ : "111299001912";
 
 /** Where the weather is for when SmartThings has no location: coordinates, or a city looked up once. */
 export const WEATHER_ENV = {

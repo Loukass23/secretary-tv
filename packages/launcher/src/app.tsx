@@ -1,6 +1,6 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, type Backdrop, drawBackdrop, Glass, GlassRoot, glowImage, type IconName, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
-import { avatarCatalog, avatarImage, listProfiles, type Profile, pullProgress, toItems, withMeta } from "@secretary/nuvio";
+import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Profiles, SignIn } from "./account.tsx";
@@ -14,7 +14,10 @@ import {
   listApps,
   onBeforeLaunch,
   openApp,
+  openFolderInApp,
   openTitleInApp,
+  openYoutube,
+  playInApp,
   orderReminders,
   ownId,
   posterUrl,
@@ -48,11 +51,17 @@ import {
 } from "./assistant.ts";
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
-import { APP_IDS, GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV } from "./config.ts";
+import { APP_IDS, EMBED_CATALOG, EMBED_PLAYER, GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY } from "./config.ts";
+import { applyOrder, keepOrder, loadOrder, moveKey, saveOrder } from "./card-order.ts";
 import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
+import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
+import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./discover.ts";
+import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
+import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
+import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
-import { expands, type MediaItem, type RowColumn, rowLayout } from "./cards.tsx";
-import { Home, shownStyle } from "./home.tsx";
+import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout } from "./cards.tsx";
+import { type CardMenu, Home, shownStyle } from "./home.tsx";
 import {
   clamp,
   enter,
@@ -66,11 +75,13 @@ import {
   HEADER_SOUND,
   type Layout,
   leave,
+  rowAt,
   step,
 } from "./nest-nav.ts";
 import {
   home,
   homeConfigured,
+  homeGrant,
   independentLights,
   lastPictureMode,
   noteStatus,
@@ -82,6 +93,7 @@ import {
   toggleSound,
   togglePictureMode,
 } from "./home-control.ts";
+import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
 import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
@@ -218,6 +230,12 @@ const localRem = localReminders(storage);
 
 const clock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
+/** "user:profile" of the signed-in Nuvio profile (the collections cache is kept per profile), or null. */
+function collectionOwner(): string | null {
+  const s = cloudEnabled ? cloud.session.get() : null;
+  return s && !s.anonymous ? `${s.userId}:${cloud.session.profile()}` : null;
+}
+
 function loadRecent(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_SEARCH_KEY);
@@ -256,15 +274,25 @@ export function App() {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [continueItems, setContinueItems] = useState<UnifiedResumeEntry[]>([]);
+  // The profile's My List (mylist.ts), for its card; the last pull shows at once.
+  const [myList, setMyList] = useState<LibraryItem[]>(() => loadMylist(storage, collectionOwner()));
+  // Genre rows after My List (discover.ts); the last pull shows at once.
+  const [discover, setDiscover] = useState<DiscoverData>(() => loadDiscover(storage).data);
+  // What is popular on YouTube (youtube.ts), for its card; the last pull shows at once.
+  const [youtube, setYoutube] = useState<Video[]>(() => loadVideos(storage).videos);
+  // The profile's Nuvio collections, one home card each (collections.ts); the last pull shows at once.
+  const [collectionCards, setCollectionCards] = useState<CollectionCard[]>(() => loadCards(storage, collectionOwner()));
   const [serverReminders, setReminders] = useState<Reminder[]>([]);
   const [localItems, setLocalItems] = useState<Reminder[]>(() => localRem.list());
   const reminders = useMemo(() => orderReminders([...serverReminders, ...localItems]), [serverReminders, localItems]);
   const [summary, setSummary] = useState<string | undefined>();
   const [serverOnline, setServerOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party" | "lights">(() =>
+  const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party" | "lights" | "catalog">(() =>
     cloudEnabled && !cloud.session.signedIn() && !signInSkipped() ? "signin" : "home",
   );
+  // The catalog browsed inside Nest (catalog-host.tsx) when built with NEST_EMBED_CATALOG=1: what it opened on.
+  const [catalog, setCatalog] = useState<CatalogEntry | null>(null);
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
   const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
   /** The latest focus, for callbacks that outlive a render. */
@@ -277,7 +305,10 @@ export function App() {
   /** The cards taken off the home row (a long OK, "Remove from home"); the last card puts them back. */
   const [hidden, setHidden] = useState<string[]>(() => loadHidden(storage));
   /** The remove menu on a card without a style menu: that card's key. */
-  const [removeMenu, setRemoveMenu] = useState<string | null>(null);
+  const [removeMenu, setRemoveMenu] = useState<CardMenu | null>(null);
+  // The card order the viewer set (card-order.ts), and the card being moved with the order it had, so Back can undo.
+  const [order, setOrder] = useState<string[]>(() => loadOrder(storage));
+  const [moving, setMoving] = useState<{ key: string; orig: string[] } | null>(null);
   const [trending, setTrending] = useState<Trending>(() => {
     try {
       const c = JSON.parse(storage.getItem(TRENDING_KEY) ?? "null") as { at: number; v: Trending } | null;
@@ -680,7 +711,31 @@ export function App() {
 
   /** Continue Watching from the Nuvio profile on this TV (every app's progress, and other devices'). */
   const refreshCloud = async () => {
-    if (!cloudEnabled || !cloud.session.signedIn()) return setContinueItems([]);
+    if (!cloudEnabled || !cloud.session.signedIn()) {
+      setCollectionCards([]);
+      setMyList([]);
+      return setContinueItems([]);
+    }
+    // The collections and My List come on their own: a failed pull keeps what is shown.
+    const owner = collectionOwner();
+    if (owner) {
+      void pullLibrary(cloud, cloud.session.profile()).then(
+        (list) => {
+          saveMylist(storage, owner, list);
+          setMyList(collectionOwner() === owner ? list : []);
+        },
+        () => {},
+      );
+      void pullCollections(cloud, cloud.session.profile()).then(
+        (got) => {
+          if (!got) return;
+          const cards = toCards(got.collections);
+          saveCards(storage, owner, cards);
+          setCollectionCards(collectionOwner() === owner ? cards : []);
+        },
+        () => {},
+      );
+    }
     try {
       const items = toItems(await pullProgress(cloud, cloud.session.profile())).slice(0, 20);
       setContinueItems((await withMeta(items, { get: readJson, set: writeJson })) as UnifiedResumeEntry[]);
@@ -773,6 +828,21 @@ export function App() {
     };
     void get();
     const t = setInterval(get, WEATHER_POLL_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  // Genre rows, once a day from the catalogs.
+  useEffect(() => {
+    void refreshDiscover(storage, (kind, genre) => discoverCatalog(kind, genre)).then((d) => Object.keys(d).length && setDiscover(d));
+  }, []);
+
+  // What is popular on YouTube, once an hour (a pull is good for that long); no key, no pull.
+  useEffect(() => {
+    if (!YOUTUBE_API_KEY) return;
+    const region = regionOf(typeof navigator === "undefined" ? undefined : navigator.language);
+    const get = () => void refreshVideos(storage, YOUTUBE_API_KEY, region).then((v) => v.length && setYoutube(v));
+    get();
+    const t = setInterval(get, 60 * 60_000);
     return () => clearInterval(t);
   }, []);
 
@@ -896,8 +966,52 @@ export function App() {
   // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
   const failed = (name: string) => () => flash(`Couldn't open ${name}`);
   const launch = (id: string, name: string) => void openApp(id).catch(failed(name));
-  const resume = (e: UnifiedResumeEntry) => void openTitleInApp(SERVER_URL, e.type, e.title, true).catch(failed(e.title.name));
-  const openHit = (r: SearchResult) => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name));
+  const resume = (e: UnifiedResumeEntry) =>
+    // With the player inside Nest, resuming opens the title's page and plays it here; else the catalog app does.
+    EMBED_PLAYER
+      ? browse({ type: e.type, open: { type: e.type, title: e.title, autoPlay: true } }, () => {})
+      : void openTitleInApp(SERVER_URL, e.type, e.title, true).catch(failed(e.title.name));
+  const openHit = (r: SearchResult) =>
+    browse({ type: r.type, open: { type: r.type, title: r.title } }, () => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name)));
+  /** Browses the catalog inside Nest when it is built in, else opens the catalog app (the old way). */
+  const browse = (entry: CatalogEntry, fallback: () => void) => {
+    if (!EMBED_CATALOG) return fallback();
+    setCatalog(entry);
+    setView("catalog");
+  };
+  // The catalog runs the cinema scenes from the grant it finds in `sectv.home` (catalog-kit lib/home.ts). In the apps Nest
+  // put it in the launch payload; embedded there is none, so Nest writes it as the catalog opens and keeps it fresh while
+  // it is open (a personal token lasts an hour, and the restore scene runs when the film ends).
+  useEffect(() => {
+    if (view !== "catalog") return;
+    const put = () => void homeGrant().then((g) => g && saveHomeGrant(g), () => {});
+    put();
+    const t = setInterval(put, 20 * 60_000);
+    return () => clearInterval(t);
+  }, [view]);
+  const embeddedHost = {
+    ownPlayer: EMBED_PLAYER,
+    // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
+    cloud,
+    onExit: () => {
+      setCatalog(null);
+      setView("home");
+      // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
+      void refreshCloud();
+    },
+    // Nest cannot hold AVPlay's page: the catalog app plays it.
+    onPlay: (o: {
+      type: CatalogKind;
+      title: { id: string; name: string; year?: string; rating?: string; poster?: string; background?: string; description?: string };
+      autoPlay: boolean;
+      play?: { episode?: { id: string }; streams: { url: string }[]; start: number; manual?: boolean };
+    }) =>
+      // The embedded page already found the sources: the app opens its player on them at once, else it searches itself.
+      void (o.play?.streams.length
+        ? playInApp({ type: o.type, title: o.title, episode: o.play.episode as never, streams: o.play.streams, start: o.play.start, manual: o.play.manual })
+        : openTitleInApp(SERVER_URL, o.type, { ...o.title, year: o.title.year ?? "", rating: o.title.rating ?? "" }, o.autoPlay)
+      ).catch(failed(o.title.name)),
+  };
   const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
   const byKind = (k: CatalogKind) => continueItems.filter((e) => e.type === k);
   const columns: RowColumn[] = [];
@@ -951,6 +1065,20 @@ export function App() {
       ? (mine.items.some((r) => r.title.poster) ? mine.items.filter((r) => r.title.poster) : mine.items).slice(0, MEDIA_MAX)
       : trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id)).slice(0, MEDIA_MAX - going.length);
     if (!going.length && !picks.length) continue;
+    // Under the picks (Down in the opened card): the profile's My List for this kind, then its genre rows.
+    const tile = (r: SearchResult): MediaItem => ({
+      poster: posterUrl(r.title),
+      still: r.title.background,
+      title: r.title.name,
+      sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
+      about: r.title.description,
+    });
+    const listedHere = mylistItems(myList.filter((l) => l.type === m.kind), MEDIA_MAX * 2).map((l) => ({ type: l.item.type, title: l.item.title }));
+    const rowsHere: { label: string; hits: SearchResult[] }[] = [
+      { label: "My List", hits: listedHere },
+      ...DISCOVER.filter((d) => d.kind === m.kind).map((d) => ({ label: d.label, hits: (discover[d.key] ?? []).filter((r) => r.title.poster).slice(0, MEDIA_MAX) })),
+    ].filter((r) => r.hits.length);
+    const more: MoreRow[] = rowsHere.map((r) => ({ label: r.label, items: r.hits.map(tile), run: (i) => r.hits[i] && openHit(r.hits[i]) }));
     const items: MediaItem[] = [
       ...going.map((e) => ({
         poster: posterUrl(e.title),
@@ -979,11 +1107,48 @@ export function App() {
         label: mine ? `For you · ${m.name}` : going.length ? m.going : m.picks,
         items,
         style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
-        open: { label: `Open ${m.name}`, run: () => launch(m.app, m.name) },
+        open: { label: `Open ${m.name}`, run: () => browse({ type: m.kind }, () => launch(m.app, m.name)) },
+        more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
       },
       items.map((it) => ({ src: it.poster, type: m.kind })),
+    );
+  }
+  // The YouTube card: what is popular (with a key), or one way into the app; OK opens the video there.
+  const shownVideos = youtube.slice(0, CARD_VIDEOS);
+  if (shownVideos.length) {
+    push({
+      kind: "videos",
+      key: "youtube",
+      label: "YouTube",
+      videos: shownVideos.map((v) => ({ title: v.title, channel: v.channel, thumb: v.thumb })),
+      run: (i) => void openYoutube(watchUrl(shownVideos[i].id)).catch(failed("YouTube")),
+    });
+  } else {
+    push({
+      kind: "list",
+      key: "youtube",
+      label: "YouTube",
+      items: [{ title: "YouTube", sub: "Open the app" }],
+      run: () => void openYoutube().catch(failed("YouTube")),
+    });
+  }
+  // Each Nuvio collection is a card of its folders; OK opens the folder in the app that fits it.
+  for (const c of collectionCards) {
+    const shown = c.folders.slice(0, CARD_FOLDERS);
+    push(
+      {
+        kind: "folders",
+        key: c.key,
+        label: c.title,
+        folders: shown.map((f) => ({ title: f.title, cover: f.cover })),
+        run: (i) =>
+          browse({ type: shown[i].kind, folder: { collectionId: c.id, folderId: shown[i].id } }, () =>
+            void openFolderInApp(shown[i].kind, c.id, shown[i].id).catch(failed(shown[i].title)),
+          ),
+      },
+      shown.map((f) => (f.cover ? { src: f.cover, type: f.kind } : undefined)),
     );
   }
   const lights = devices.filter((d) => d.kind === "light");
@@ -1020,7 +1185,7 @@ export function App() {
     });
   }
   // The last card puts back what was taken off the home row.
-  const gone = removed(hidden);
+  const gone = removed(hidden, [...collectionCards.map((c) => ({ key: c.key, label: c.title }))]);
   push({
     kind: "list",
     key: "add",
@@ -1029,6 +1194,14 @@ export function App() {
     add: gone.length ? undefined : "Everything is on the home screen",
     run: (i) => (i < gone.length ? restoreCard(gone[i].key) : flash("Everything is on the home screen")),
   });
+  // The viewer's order (card-order.ts): the Assistant stays first and "Add to home" last; the art follows its column.
+  {
+    const was = columns.map((c, i) => ({ key: c.key, c, a: art[i] }));
+    applyOrder(was, order).forEach((w, n) => {
+      columns[n] = w.c;
+      art[n] = w.a;
+    });
+  }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   const rowArt = colAt >= 0 && focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
@@ -1207,7 +1380,7 @@ export function App() {
     const next = [...hidden, key];
     setHidden(next);
     saveHidden(storage, next);
-    flash(`${labelOf(key)} removed · the last card adds it back`);
+    flash(`${columns.find((c) => c.key === key)?.label ?? labelOf(key)} removed · the last card adds it back`);
     // The card after it takes its place in the row.
     setFocus({ area: "row", col: Math.min(focus.col ?? 0, Math.max(0, columns.length - 2)), i: 0 });
   }
@@ -1216,7 +1389,7 @@ export function App() {
     const next = hidden.filter((k) => k !== key);
     setHidden(next);
     saveHidden(storage, next);
-    flash(`${labelOf(key)} is back on the home screen`);
+    flash(`${collectionCards.find((c) => c.key === key)?.title ?? labelOf(key)} is back on the home screen`);
     setGoto({ key, inside: false });
   }
 
@@ -1287,30 +1460,69 @@ export function App() {
       if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
       if (col?.kind === "media" && i === col.items.length) return col.open.run();
+      // A row under the picks (My List, a genre): its own item.
+      if (col?.kind === "media" && i > col.items.length) {
+        const { r, x } = rowAt(expandedRows(col), i);
+        return (col.more ?? []).filter((m) => m.items.length)[r - 1]?.run(x);
+      }
       col?.run(i);
     }
   };
 
   // On a media card as a whole, OK is split: a short press opens it, a long one opens its style menu (the remote sends
   // no repeats for a held OK). Everywhere else OK acts on the keydown as before.
-  const pickedCard = view === "home" && !styleMenu && !removeMenu && focus.area === "row" && !focus.inside;
-  const openPicked = () => (columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout)));
+  const pickedCard = view === "home" && !styleMenu && !removeMenu && !moving && focus.area === "row" && !focus.inside;
+
+  /** Starts moving a card: Left and Right slide it along the row, OK keeps it there, Back puts it back. */
+  const startMove = (key: string) => {
+    setMoving({ key, orig: order });
+    setFocus({ area: "row", col: columns.findIndex((c) => c.key === key), i: 0 });
+  };
+  /** One step of a move: the order is applied on the next render, so focus is placed where the card will be. */
+  const stepMove = (key: string, dir: -1 | 1) => {
+    const keys = columns.map((c) => c.key);
+    const next = moveKey(keys, key, dir);
+    if (next.every((k, i) => k === keys[i])) return;
+    setOrder(keepOrder(next, order));
+    setFocus({ area: "row", col: next.indexOf(key), i: 0 });
+  };
+  const openPicked = () => {
+    const c = columns[focus.col ?? 0];
+    if (c?.kind === "assistant") return setFocus({ area: "chat", i: 0 });
+    setFocus(enter(focus, layout));
+  };
   const hold = useOkHold(pickedCard, openPicked, () => {
     const c = columns[focus.col ?? 0];
     if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
-    else if (c && canRemove(c.key)) setRemoveMenu(c.key);
+    else if (c && canRemove(c.key)) setRemoveMenu({ key: c.key, line: 0 });
     else openPicked();
   });
 
   useKeys(view === "home", (key) => {
-    // The remove menu (a long OK on any other card): OK removes the card, Back keeps it.
+    // Moving a card: Left and Right slide it, OK keeps the order (saved), Back puts the old order back.
+    if (moving) {
+      if (key === "Enter" && hold.holding()) return;
+      if (key === "Left" || key === "Right") stepMove(moving.key, key === "Left" ? -1 : 1);
+      else if (key === "Enter") {
+        saveOrder(storage, order);
+        setMoving(null);
+      } else if (key === "Back") {
+        setOrder(moving.orig);
+        setMoving(null);
+        setFocus({ area: "row", col: Math.max(0, applyOrder(columns, moving.orig).findIndex((c) => c.key === moving.key)), i: 0 });
+      }
+      return;
+    }
+    // The move/remove menu (a long OK on any other card): Up and Down pick, OK does it, Back leaves it.
     if (removeMenu) {
       if (key === "Enter" && hold.holding()) return;
       if (key === "Enter") {
-        const k = removeMenu;
+        const m = removeMenu;
         setRemoveMenu(null);
-        removeCard(k);
-      } else if (key === "Back") setRemoveMenu(null);
+        if (m.line === 0) startMove(m.key);
+        else removeCard(m.key);
+      } else if (key === "Up" || key === "Down") setRemoveMenu({ ...removeMenu, line: key === "Up" ? 0 : 1 });
+      else if (key === "Back") setRemoveMenu(null);
       return;
     }
     // The card style menu takes every key while it is open. OK keeps the style, Back puts the old one back.
@@ -1323,7 +1535,14 @@ export function App() {
         saveCardStyles(storage, next);
         setStyleMenu(null);
       } else if (r === "undo") setStyleMenu(null);
-      else if (r === "remove") {
+      else if (r === "move") {
+        const k = styleMenu.key;
+        const next = { ...cardStyles, [k]: styleMenu.style };
+        setCardStyles(next);
+        saveCardStyles(storage, next);
+        setStyleMenu(null);
+        startMove(k);
+      } else if (r === "remove") {
         const k = styleMenu.key;
         setStyleMenu(null);
         removeCard(k);
@@ -1408,7 +1627,10 @@ export function App() {
       const hit = results[col];
       if (hit) {
         if (query.trim().length >= 2) setRecentSearches(saveRecent(query));
-        openTitleInApp(SERVER_URL, hit.type, hit.title).catch(() => flash(`Couldn't open ${hit.title.name}`));
+        // With the catalog inside Nest the page opens here (leaving the search for the catalog view); else in the app.
+        browse({ type: hit.type, open: { type: hit.type, title: hit.title } }, () =>
+          void openTitleInApp(SERVER_URL, hit.type, hit.title).catch(() => flash(`Couldn't open ${hit.title.name}`)),
+        );
       }
       return;
     }
@@ -1492,8 +1714,17 @@ export function App() {
           }}
           onClose={() => setView("home")}
         />
+      ) : view === "catalog" && catalog ? (
+        <CatalogHost entry={catalog} host={embeddedHost} serverUrl={SERVER_URL} />
       ) : view === "party" ? (
-        <WatchTogether onClose={() => setView("home")} />
+        <WatchTogether
+          onClose={() => setView("home")}
+          onJoinHere={
+            EMBED_PLAYER
+              ? (o) => browse({ type: o.type, open: { type: o.type, title: { ...o.title, year: "", rating: "" }, autoPlay: false, room: o.room } }, () => {})
+              : undefined
+          }
+        />
       ) : view === "lights" ? (
         <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
       ) : view === "search" ? (
@@ -1522,6 +1753,7 @@ export function App() {
           me={me}
           styleMenu={styleMenu}
           removeMenu={removeMenu}
+          moving={moving?.key ?? null}
           pictureMode={pictureSet ?? pictureTv(devices)?.pictureMode}
           soundOn={soundSet ?? devices.find((d) => d.kind === "audio")?.on}
         />

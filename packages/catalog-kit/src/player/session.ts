@@ -31,7 +31,13 @@ export function makeAvplay(events: PlayerEvents): TvPlayer | null {
  * Prepare-ahead cut OK-to-first-frame from 5.1 s to 0.8 s on the reference TV
  * (docs/performance.md), so it is on unless localStorage sectv.prepareAhead is false.
  */
-export const prepareAheadEnabled = () => readJson<boolean>("sectv.prepareAhead") !== false;
+export const prepareAheadEnabled = () => !embeddedPlayback && readJson<boolean>("sectv.prepareAhead") !== false;
+
+/** Embedded in a host (Nest): it keeps the player, so nothing here prepares a decoder ahead. */
+let embeddedPlayback = false;
+export const setEmbeddedPlayback = (on: boolean) => {
+  embeddedPlayback = on;
+};
 
 interface Preloaded {
   url: string;

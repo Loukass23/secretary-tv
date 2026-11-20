@@ -11,13 +11,15 @@ export const ELEMENTS = [
   { key: "cinema", label: "Cinema" },
   { key: "shows", label: "Shows" },
   { key: "anime", label: "Anime" },
+  { key: "youtube", label: "YouTube" },
   { key: "home", label: "Home" },
   { key: "reminders", label: "Reminders" },
   { key: "apps", label: "Apps" },
 ] as const;
 
-/** The Assistant card (the way into the chat) and the "Add to home" card (the way back for the rest) always stay. */
-export const canRemove = (key: string): boolean => ELEMENTS.some((e) => e.key === key);
+/** The Assistant card (the way into the chat) and the "Add to home" card (the way back for the rest) always stay.
+ *  A Nuvio collection card (`nuvio:<id>`, src/collections.ts) can come off too. */
+export const canRemove = (key: string): boolean => ELEMENTS.some((e) => e.key === key) || key.startsWith("nuvio:");
 
 export const labelOf = (key: string): string => ELEMENTS.find((e) => e.key === key)?.label ?? key;
 
@@ -39,5 +41,8 @@ export function saveHidden(store: { setItem(k: string, v: string): void }, hidde
   }
 }
 
-/** The elements to offer on the "Add to home" card: the removed ones, in row order. */
-export const removed = (hidden: readonly string[]): { key: string; label: string }[] => ELEMENTS.filter((e) => hidden.includes(e.key));
+/** The elements to offer on the "Add to home" card: the removed ones, in row order, then removed collections (`named`: their labels). */
+export const removed = (hidden: readonly string[], named: readonly { key: string; label: string }[] = []): { key: string; label: string }[] => [
+  ...ELEMENTS.filter((e) => hidden.includes(e.key)),
+  ...named.filter((n) => hidden.includes(n.key)),
+];

@@ -124,6 +124,9 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
 | Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
 | Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
+| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
+| YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
+| Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog app that fits it (the launch payload's `folder`; the app opens it once its collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
@@ -134,6 +137,14 @@ a card (`useOkHold`, 600 ms) opens its menu: on a media card the style menu with
 the others a menu with that one line. Removed cards are kept in `localStorage["nest.hiddenCards"]` (`src/home-cards.ts`);
 the Assistant and Add to home cards stay. A card is removed or put back without restarting. Inside,
 the arrows stay in the card, Up from the top goes back to the card, and Back leaves it.
+
+### Moving cards (long OK, "Move")
+
+Both long-OK menus have a **Move** line (before "Remove from home"). OK on it lifts the card (a small scale on its own
+layer) and the others step back; Left and Right swap it with its neighbour, and the row slides by transform as when a
+card opens. OK keeps the order, Back puts the old one back. The Assistant stays first and Add to home last. The order is
+saved in `localStorage["nest.cardOrder"]` (`src/card-order.ts`): cards it does not know keep their default place, and
+the saved keys of removed cards are kept so a card put back finds its place.
 
 ### Opening a media card
 

@@ -385,6 +385,13 @@ test("launch payload: round-trips; bad grants, kinds and versions are dropped", 
   assert.equal(readLaunch(), null, "no tizen here");
 });
 
+test("a launch payload can ask for a collection folder, and only a whole one", () => {
+  const folder = { collectionId: "c1", folderId: "f1" };
+  assert.deepEqual(decodeLaunch(JSON.stringify({ v: 1, at: 1, folder }))?.folder, folder);
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 1, folder: { collectionId: "c1" } }))?.folder, undefined);
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 1, folder: { collectionId: "", folderId: "f" } }))?.folder, undefined);
+});
+
 test("launch payload: Nest's SmartThings token and scenes travel; a malformed grant is dropped", () => {
   const home = { token: "t", exp: 5, movie: "scene-movie", restore: "scene-bright" };
   assert.deepEqual(decodeLaunch(encodeLaunch({ at: 3, home }))?.home, home);
@@ -405,4 +412,23 @@ test("launch payload: a watch-party code travels with the title; a malformed one
 test("ping: true only when the database answers", async () => {
   assert.equal(await ping(client({ "POST /rest/v1/rpc/health_ping": json(true) }).c), true);
   assert.equal(await ping(client({}).c), false);
+});
+
+test("a launch payload can carry what to play now, with the sources already found", () => {
+  const play = {
+    type: "movie",
+    title: { id: "tt1", name: "Example" },
+    streams: [{ url: "https://example.com/a", name: "A", title: "A" }, { name: "no url" }, { url: "https://example.com/b" }],
+    start: 12.5,
+    manual: true,
+  };
+  const got = decodeLaunch(JSON.stringify({ v: 1, at: 1, play }))?.play;
+  assert.equal(got?.streams.length, 2, "a source without an address is dropped");
+  assert.equal(got?.start, 12.5);
+  assert.equal(got?.manual, true);
+  assert.equal(got?.episode, null);
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 1, play: { ...play, streams: [{ name: "x" }] } }))?.play, undefined);
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 1, play: { ...play, type: "book" } }))?.play, undefined);
+  const many = { ...play, streams: Array.from({ length: 20 }, (_, i) => ({ url: `https://example.com/${i}` })) };
+  assert.equal(decodeLaunch(JSON.stringify({ v: 1, at: 1, play: many }))?.play?.streams.length, 8);
 });

@@ -7,6 +7,7 @@ import {
   listCounts,
   deleteWatched,
   type LaunchPayload,
+  type NuvioClient,
   nuvioConfig,
   progressKey,
   pullAddons,
@@ -45,13 +46,22 @@ declare const __PARTY_URL__: string | undefined;
 
 const kv = { get: readJson, set: writeJson };
 
-export const cloud = createClient({
+/**
+ * The Nuvio client. A live binding: embedded in Nest (docs/embedding-catalog.md) it is swapped for Nest's own through
+ * `shareCloud`, so the page holds one session in memory, one refresh and one profile instead of two that can disagree.
+ */
+export let cloud: NuvioClient = createClient({
   config: nuvioConfig(
     typeof __NUVIO_URL__ !== "undefined" ? __NUVIO_URL__ : "",
     typeof __NUVIO_KEY__ !== "undefined" ? __NUVIO_KEY__ : "",
   ),
   kv,
 });
+
+/** Embedded: use the host's client from now on (the party API follows, it reads `cloud` when it is called). */
+export function shareCloud(host: NuvioClient): void {
+  cloud = host;
+}
 
 /** Watch together (docs/watch-party.md): rooms on the party Worker, as the signed-in Nuvio profile. */
 export const partyApi = createPartyApi({
@@ -61,6 +71,19 @@ export const partyApi = createPartyApi({
 
 /** "secretary" builds keep the home server as the only backend (dev and tests). */
 export const cloudEnabled = !(typeof __SYNC_BACKEND__ !== "undefined" && __SYNC_BACKEND__ === "secretary");
+
+/**
+ * Whether the account and profile this page's local lists belong to are still the signed-in ones; when not, the lists of
+ * the previous one are dropped (`onOwnerChange`) so they are never pushed to the new profile. Embedded, Nest does not
+ * send a launch payload, so the catalog asks this itself each time it opens.
+ */
+export function checkOwner(onOwnerChange: () => void): void {
+  const now = owner();
+  if (now !== readJson<string>(OWNER)) {
+    writeJson(OWNER, now);
+    onOwnerChange();
+  }
+}
 
 const LAUNCH_AT = "sectv.nuvio.launchAt";
 const OWNER = "sectv.nuvio.owner";
@@ -75,7 +98,12 @@ export const owner = () => {
  * Applies Nest's launch payload once: a session for another account or profile replaces this app's, and the local
  * lists of the previous one are dropped (through `onOwnerChange`). Returns the title Nest asked to open.
  */
-export function takeLaunch(onOwnerChange: () => void, read: () => LaunchPayload | null = readLaunch): LaunchPayload["open"] | null {
+export function takeLaunch(
+  onOwnerChange: () => void,
+  read: () => LaunchPayload | null = readLaunch,
+  onFolder?: (f: NonNullable<LaunchPayload["folder"]>) => void,
+  onPlay?: (p: NonNullable<LaunchPayload["play"]>) => void,
+): LaunchPayload["open"] | null {
   const p = read();
   if (!p || p.at <= (readJson<number>(LAUNCH_AT) ?? 0)) return null;
   writeJson(LAUNCH_AT, p.at);
@@ -87,11 +115,9 @@ export function takeLaunch(onOwnerChange: () => void, read: () => LaunchPayload 
       cloud.session.setProfile(p.grant.profile);
     }
   }
-  const now = owner();
-  if (now !== readJson<string>(OWNER)) {
-    writeJson(OWNER, now);
-    onOwnerChange();
-  }
+  checkOwner(onOwnerChange);
+  if (p.folder) onFolder?.(p.folder);
+  if (p.play) onPlay?.(p.play);
   return p.open ?? null;
 }
 
@@ -218,7 +244,7 @@ export function nuvioCollections(): CollectionsRemote {
  * Plugin repositories and addons kept the same as the profile's lists on Nuvio Cloud (lib/listsync.ts). A profile
  * set to use profile 1's lists reads them and never writes them.
  */
-export function startListSync(plugins: ListSide, addons: ListSide): { sync(): Promise<void> } {
+export function startListSync(plugins: ListSide, addons: ListSide): { sync(): Promise<void>; stop(): void } {
   const live = () => cloudEnabled && cloud.session.signedIn();
   let share = { addons: false, plugins: false };
   let foreign: Awaited<ReturnType<typeof pullPlugins>>["foreign"] = [];
@@ -286,5 +312,12 @@ export function startListSync(plugins: ListSide, addons: ListSide): { sync(): Pr
     },
   });
   // Plugins first: their pull learns whether the profile shares profile 1's lists.
-  return { sync: () => pluginSync.sync().then(() => addonSync.sync()) };
+  return {
+    sync: () => pluginSync.sync().then(() => addonSync.sync()),
+    // The stores outlive the screen when the catalog runs inside Nest: unsubscribe when it closes.
+    stop: () => {
+      pluginSync.stop();
+      addonSync.stop();
+    },
+  };
 }

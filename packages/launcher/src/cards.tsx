@@ -6,8 +6,9 @@
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
 import { AppChip, Glass, Icon, type IconName, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
-import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll } from "./card-style.ts";
-import type { Column } from "./nest-nav.ts";
+import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll, MORE, moreScroll, moreTop } from "./card-style.ts";
+import { Component } from "preact";
+import { type Column, rowAt } from "./nest-nav.ts";
 
 /** A title on a media card. */
 export interface MediaItem {
@@ -25,6 +26,13 @@ export interface MediaItem {
   progress?: number;
   /** A few lines about it, shown under the title while it is focused in the opened card. */
   about?: string;
+}
+
+/** A row under the picks in an opened media card (My List, a genre): `run(i)` opens its item `i`. */
+export interface MoreRow {
+  label: string;
+  items: MediaItem[];
+  run: (i: number) => void;
 }
 
 export interface ListItem {
@@ -48,6 +56,8 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       open: { label: string; run: () => void };
       /** What the assistant understood and did, shown beside the label while the card holds its suggestions. */
       note?: { prompt: string; reply: string };
+      /** Rows under the picks once the card is opened (Down): My List, then the genres. */
+      more?: MoreRow[];
     }
   | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
@@ -57,6 +67,10 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
   | { kind: "calendar"; date: Date }
   | { kind: "list"; items: ListItem[]; add?: string }
   | { kind: "apps"; apps: { icon?: string; label: string }[] }
+  // A Nuvio collection (collections.ts): its folders as cover tiles, two across.
+  | { kind: "folders"; folders: { title: string; cover?: string }[] }
+  // The YouTube card (youtube.ts): what is popular, as wide thumbnails stacked.
+  | { kind: "videos"; videos: { title: string; channel: string; thumb: string }[] }
 );
 
 /** Card height: the tallest layout fills it, the others sit at its top. */
@@ -67,6 +81,8 @@ const GAP = 48;
 const LIST = { w: 420, h: 136 };
 const ADD_H = 76;
 const APP = { w: 176, h: 160, gap: 18, across: 2 };
+const VIDEO = { w: 420, h: 166, gap: 18 };
+const FOLDER = { w: 210, h: 250, gap: 20, across: 2 };
 const HOME_W = 380;
 /** The Home card's buttons (Cinema, Warm, Off, Music): four under its title and the bulb. */
 const ACTION_H = 60;
@@ -77,7 +93,10 @@ const PANEL_W = 460;
 export function columnShape(c: RowColumn, expanded = false): { w: number } & Column {
   switch (c.kind) {
     case "media": {
-      if (expanded) return { w: EXPANDED_W, count: c.items.length + 1, across: c.items.length + 1 };
+      if (expanded) {
+        const rows = expandedRows(c);
+        return { w: EXPANDED_W, count: rows.reduce((s, n) => s + n, 0), across: rows[0], rows };
+      }
       const s = collapsedShape(c.style);
       return { w: s.w, count: Math.min(c.items.length, s.count), across: s.across };
     }
@@ -92,8 +111,15 @@ export function columnShape(c: RowColumn, expanded = false): { w: number } & Col
       return { w: LIST.w, count: c.items.length + (c.add ? 1 : 0), across: 1 };
     case "apps":
       return { w: APP.across * APP.w + (APP.across - 1) * APP.gap, count: c.apps.length, across: APP.across };
+    case "videos":
+      return { w: VIDEO.w, count: c.videos.length, across: 1 };
+    case "folders":
+      return { w: FOLDER.across * FOLDER.w + (FOLDER.across - 1) * FOLDER.gap, count: c.folders.length, across: FOLDER.across };
   }
 }
+
+/** An opened media card's rows: the picks and the Open tile, then each extra row's items. */
+export const expandedRows = (c: Extract<RowColumn, { kind: "media" }>): number[] => [c.items.length + 1, ...(c.more ?? []).filter((m) => m.items.length).map((m) => m.items.length)];
 
 /** Where each column starts in the row, and its shape for the remote; `expanded` is the open media card, or -1. */
 export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: number[]; w: number[]; nav: Column[]; width: number } {
@@ -105,7 +131,7 @@ export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: numbe
     const s = columnShape(c, k === expanded);
     x.push(at);
     w.push(s.w);
-    nav.push({ count: s.count, across: s.across });
+    nav.push({ count: s.count, across: s.across, ...(s.rows ? { rows: s.rows } : {}) });
     at += s.w + GAP;
   });
   return { x, w, nav, width: Math.max(0, at - GAP) };
@@ -123,6 +149,10 @@ export function columnHeight(c: RowColumn): number {
       return c.items.length * (LIST.h + 18) + (c.add ? ADD_H : -18);
     case "apps":
       return Math.ceil(c.apps.length / APP.across) * (APP.h + APP.gap) - APP.gap;
+    case "videos":
+      return Math.max(1, c.videos.length) * (VIDEO.h + VIDEO.gap) - VIDEO.gap;
+    case "folders":
+      return Math.max(1, Math.ceil(c.folders.length / FOLDER.across)) * (FOLDER.h + FOLDER.gap) - FOLDER.gap;
     default:
       return CARD_H;
   }
@@ -130,11 +160,18 @@ export function columnHeight(c: RowColumn): number {
 
 /** Where item `i` of a column sits inside it, scroll included, for the glow behind a focused picture. */
 export function itemBox(c: RowColumn, i: number, expanded = false): { x: number; y: number; w: number; h: number } | null {
-  if (c.kind !== "media" || i < 0 || i >= c.items.length) return null;
+  if (c.kind !== "media" || i < 0) return null;
   if (expanded) {
-    const n = c.items.length + 1;
-    return { x: i * EXPANDED.stride - expandedScroll(i, n), y: 0, w: EXPANDED.w, h: EXPANDED.h };
+    const { r, x } = rowAt(expandedRows(c), i);
+    if (r > 0) {
+      const n = (c.more ?? []).filter((m) => m.items.length)[r - 1].items.length;
+      return { x: x * MORE.stride - moreScroll(x, n), y: MORE.labelH, w: MORE.w, h: MORE.h };
+    }
+    // The Open tile has no art to glow behind.
+    if (i >= c.items.length) return null;
+    return { x: i * EXPANDED.stride - expandedScroll(i, c.items.length + 1), y: 0, w: EXPANDED.w, h: EXPANDED.h };
   }
+  if (i >= c.items.length) return null;
   const b = collapsedShape(c.style).boxes[i];
   return b ? { x: b.x, y: b.y, w: b.w, h: b.h } : null;
 }
@@ -150,6 +187,8 @@ interface ColumnProps {
   focus: number | null;
   /** Another card is open: this one steps back. */
   dim?: boolean;
+  /** This card is being moved: lifted a little while Left and Right slide it along the row. */
+  lifted?: boolean;
 }
 
 const dayName = (iso: string, k: number) =>
@@ -256,17 +295,66 @@ function MediaSmall({ col, focus, out }: { col: Extract<RowColumn, { kind: "medi
   );
 }
 
+interface MoreBlockProps {
+  label: string;
+  items: MediaItem[];
+  top: number;
+  gone: boolean;
+  /** The focused item of this row, or -1. */
+  at: number;
+  scroll: number;
+}
+
+/**
+ * One row under the picks. Each key press re-renders the card, and with every row drawn that is dozens of tiles, so a
+ * row repaints only when its own focus, scroll, place or titles changed (docs/performance.md).
+ */
+class MoreBlock extends Component<MoreBlockProps> {
+  shouldComponentUpdate(next: MoreBlockProps): boolean {
+    const p = this.props;
+    return (
+      p.at !== next.at ||
+      p.scroll !== next.scroll ||
+      p.top !== next.top ||
+      p.gone !== next.gone ||
+      p.label !== next.label ||
+      p.items.length !== next.items.length ||
+      p.items.some((it, i) => it.poster !== next.items[i].poster || it.title !== next.items[i].title)
+    );
+  }
+  render({ label, items, top, gone, at, scroll }: MoreBlockProps) {
+    return (
+      <div class={`nest-more${gone ? " is-gone" : ""}`} style={{ top: `${top}px` }}>
+        <span class="nest-more-label">{label}</span>
+        <Scroller x={0} y={MORE.labelH} w={EXPANDED_W} h={MORE.h} axis="x" offset={scroll}>
+          {items.map((it, i) => (
+            <MediaTile key={i} x={i * MORE.stride} y={0} w={MORE.w} h={MORE.h} src={it.poster} title={it.title} sub={it.sub} focused={at === i} />
+          ))}
+        </Scroller>
+      </div>
+    );
+  }
+}
+
 /** A media card opened: every title in one row, then the app's Open tile; they rise in one after another. */
-function MediaRow({ col, focus, page }: { col: Extract<RowColumn, { kind: "media" }>; focus: number; page: [number, number] }) {
+function MediaRow({ col, focus: flat, page }: { col: Extract<RowColumn, { kind: "media" }>; focus: number; page: [number, number] }) {
   const n = col.items.length + 1;
+  const rows = expandedRows(col);
+  const { r: onRow, x: onX } = rowAt(rows, Math.max(0, flat));
+  // Down moves to the rows under the picks: the whole stack slides up by transform until that row is at the top.
+  const offY = onRow === 0 ? 0 : moreTop(onRow - 1);
+  const focus = onRow === 0 ? flat : -2;
   const at = Math.max(0, Math.min(focus, n - 1));
   const scroll = expandedScroll(at, n);
   // Everything in view, from the scroll (a row of 8 and Open is drawn whole), plus one each side.
   const from = Math.max(0, Math.floor(scroll / EXPANDED.stride) - 1);
   const to = Math.min(n, from + Math.ceil(EXPANDED_W / EXPANDED.stride) + 2);
-  const hit = col.items[at];
+  const hit = onRow === 0 ? col.items[at] : undefined;
+  const more = (col.more ?? []).filter((m) => m.items.length);
   return (
-    <>
+    <div class="nest-stack" style={{ transform: `translate3d(0,${-offY}px,0)` }}>
+      {/* The picks fade out as the stack slides up past them (opacity only). */}
+      <div class={`nest-row0${onRow > 0 ? " is-gone" : ""}`}>
       <Scroller x={0} y={0} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
         {Array.from({ length: to - from }, (_, k) => {
           const i = from + k;
@@ -298,17 +386,32 @@ function MediaRow({ col, focus, page }: { col: Extract<RowColumn, { kind: "media
           {hit.about && <p>{hit.about}</p>}
         </div>
       )}
-    </>
+      </div>
+      {more.map((m, k) => {
+        const r = k + 1;
+        return (
+          <MoreBlock
+            key={m.label}
+            label={m.label}
+            items={m.items}
+            top={moreTop(k)}
+            gone={r < onRow}
+            at={r === onRow ? onX : -1}
+            scroll={moreScroll(r === onRow ? onX : 0, m.items.length)}
+          />
+        );
+      })}
+    </div>
   );
 }
 
-export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProps) {
+export function RowCard({ col, x, page, picked, focus: inside, dim, lifted }: ColumnProps) {
   const at = (dx: number, dy: number): [number, number] => [page[0] + dx, page[1] + dy];
   const focus = inside ?? -2;
   const open = col.kind === "media" && inside !== null;
   const w = columnShape(col).w;
   return (
-    <div class={`nest-col${dim ? " is-dim" : ""}`} style={{ transform: `translate3d(${x}px,0,0)` }}>
+    <div class={`nest-col nest-kind-${col.kind}${dim ? " is-dim" : ""}${lifted ? " is-lifted" : ""}`} style={{ transform: `translate3d(${x}px,0,0)` }}>
       <span class={`nest-col-label${open ? " is-answer" : ""}`}>
         {open && col.kind === "media" ? `${col.name} · ${col.items.length} ${col.unit}` : col.label}
       </span>
@@ -383,6 +486,23 @@ export function RowCard({ col, x, page, picked, focus: inside, dim }: ColumnProp
           )}
         </>
       )}
+      {col.kind === "videos" &&
+        col.videos.map((v, i) => (
+          <MediaTile key={i} x={0} y={i * (VIDEO.h + VIDEO.gap)} w={VIDEO.w} h={VIDEO.h} src={v.thumb} title={v.title} sub={v.channel} focused={focus === i} />
+        ))}
+      {col.kind === "folders" &&
+        col.folders.map((f, i) => (
+          <MediaTile
+            key={i}
+            x={(i % FOLDER.across) * (FOLDER.w + FOLDER.gap)}
+            y={Math.floor(i / FOLDER.across) * (FOLDER.h + FOLDER.gap)}
+            w={FOLDER.w}
+            h={FOLDER.h}
+            src={f.cover ?? ""}
+            title={f.title}
+            focused={focus === i}
+          />
+        ))}
       {col.kind === "apps" &&
         col.apps.map((a, i) => {
           const ax = (i % APP.across) * (APP.w + APP.gap);

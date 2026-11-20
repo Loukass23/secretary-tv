@@ -18,6 +18,25 @@ export interface OpenTitle {
   room?: string;
 }
 
+/**
+ * Play at once (docs/embedding-catalog.md): what the embedded catalog already found (the title, the episode, the sources in
+ * the order to try them and where to start), so the app opens its player without searching again. The sources are
+ * the provider's own records and stay opaque here; the app reads what it needs.
+ */
+export interface PlayNow {
+  type: OpenKind;
+  title: { id: string; name: string } & Record<string, unknown>;
+  episode?: ({ id: string } & Record<string, unknown>) | null;
+  streams: ({ url: string } & Record<string, unknown>)[];
+  /** Seconds to start from. */
+  start: number;
+  /** The viewer picked the first source by hand. */
+  manual?: boolean;
+}
+
+/** More sources than this are not carried: the first ones are the ones that would be tried. */
+export const PLAY_STREAMS_MAX = 8;
+
 /** The room service's code alphabet (party/src/protocol.ts CODE_ALPHABET), six characters. */
 const ROOM_CODE = /^[2-9A-HJKMNP-Z]{6}$/;
 
@@ -41,6 +60,10 @@ export interface LaunchPayload {
   grant?: { session: Session; profile: number };
   /** Open this title's detail page (and play it when autoPlay). */
   open?: OpenTitle;
+  /** Play this now, with the sources already found. */
+  play?: PlayNow;
+  /** Open this folder of one of the profile's collections (a Nest home card). */
+  folder?: { collectionId: string; folderId: string };
   home?: HomeGrant;
   /** Epoch ms when Nest sent it: an app ignores a payload it has already applied. */
   at: number;
@@ -74,6 +97,29 @@ export function decodeLaunch(raw: unknown): LaunchPayload | null {
   if (o && (o.type === "movie" || o.type === "series" || o.type === "anime") && typeof o.title?.id === "string" && o.title.id) {
     out.open = { type: o.type, title: { ...o.title, name: String(o.title.name ?? "") }, autoPlay: o.autoPlay === true };
     if (typeof o.room === "string" && ROOM_CODE.test(o.room)) out.open.room = o.room;
+  }
+  const pl = p.play;
+  if (
+    pl &&
+    (pl.type === "movie" || pl.type === "series" || pl.type === "anime") &&
+    typeof pl.title?.id === "string" && pl.title.id &&
+    Array.isArray(pl.streams)
+  ) {
+    const streams = pl.streams.filter((s) => s && typeof s.url === "string" && s.url).slice(0, PLAY_STREAMS_MAX);
+    if (streams.length) {
+      out.play = {
+        type: pl.type,
+        title: { ...pl.title, name: String(pl.title.name ?? "") },
+        episode: pl.episode && typeof pl.episode.id === "string" ? pl.episode : null,
+        streams,
+        start: typeof pl.start === "number" && pl.start > 0 ? pl.start : 0,
+        manual: pl.manual === true,
+      };
+    }
+  }
+  const f = p.folder;
+  if (f && typeof f.collectionId === "string" && f.collectionId && typeof f.folderId === "string" && f.folderId) {
+    out.folder = { collectionId: f.collectionId, folderId: f.folderId };
   }
   const h = p.home;
   if (h && typeof h.token === "string" && h.token && typeof h.exp === "number") {

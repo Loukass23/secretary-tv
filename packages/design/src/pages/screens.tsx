@@ -7,6 +7,7 @@ import "@secretary/catalog-kit/src/style.css";
 import { useKeys, useOkHold, type Focus as GridFocus } from "@secretary/tv-kit";
 import { GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@secretary/launcher/src/card-style.ts";
+import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-order.ts";
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { Home as NestHome } from "@secretary/launcher/src/home.tsx";
 import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
@@ -34,7 +35,11 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   const [styles, setStyles] = useState<Record<string, CardStyle>>({});
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
   const shown = styleMenu ? { ...styles, [styleMenu.key]: styleMenu.style } : styles;
-  const columns = useMemo(() => nestColumns(art, shown), [art, JSON.stringify(shown)]);
+  // Move mode, as on the TV (long OK, then Left and Right): the order lives in this page only.
+  const [order, setOrder] = useState<string[]>([]);
+  const [moving, setMoving] = useState<{ key: string; orig: string[] } | null>(null);
+  const base = useMemo(() => nestColumns(art, shown), [art, JSON.stringify(shown)]);
+  const columns = useMemo(() => applyOrder(base, order), [base, order]);
   const [focus, setFocus] = useState<Focus>(start === "row" ? { area: "row", col: 0, i: 0 } : { area: start, i: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
   const [glow, setGlow] = useState<string | undefined>();
@@ -42,34 +47,52 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
 
   const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
   // As in Nest (app.tsx): on a media card as a whole, a short OK opens it and a long one opens its style menu.
-  const pickedMedia = !styleMenu && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
+  const pickedMedia = !styleMenu && !moving && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
+  const holdable = !styleMenu && !moving && focus.area === "row" && !focus.inside;
   const layout: Layout = {
     ask: 1,
     cols: rowLayout(columns, openCol).nav,
     menu: menuOpen ? MENU.length : 0,
   };
 
-  const hold = useOkHold(
-    pickedMedia,
-    () => setFocus(enter(focus, layout)),
-    () => {
-      const c = columns[focus.col ?? 0];
-      if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
-    },
-  );
+  const open = () => setFocus(enter(focus, layout));
+  // Any card but the assistant: a long OK lifts it to move (media cards open their style menu, whose Move line does the same).
+  const hold = useOkHold(holdable && columns[focus.col ?? 0]?.kind !== "assistant", open, () => {
+    const c = columns[focus.col ?? 0];
+    if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
+    else if (c) setMoving({ key: c.key, orig: order });
+  });
 
   useKeys(true, (key) => {
+    if (moving) {
+      if (key === "Enter" && hold.holding()) return true;
+      if (key === "Left" || key === "Right") {
+        const keys = columns.map((c) => c.key);
+        const next = moveKey(keys, moving.key, key === "Left" ? -1 : 1);
+        setOrder(keepOrder(next, order));
+        setFocus({ area: "row", col: next.indexOf(moving.key), i: 0 });
+      } else if (key === "Enter") setMoving(null);
+      else if (key === "Back") {
+        setOrder(moving.orig);
+        setMoving(null);
+      }
+      return true;
+    }
     if (styleMenu) {
       if (key === "Enter" && hold.holding()) return true;
       const r = stepStyleMenu(styleMenu, key);
       if (r === "keep") {
         setStyles({ ...styles, [styleMenu.key]: styleMenu.style });
         setStyleMenu(null);
+      } else if (r === "move") {
+        setStyles({ ...styles, [styleMenu.key]: styleMenu.style });
+        setStyleMenu(null);
+        setMoving({ key: styleMenu.key, orig: order });
       } else if (r === "undo" || r === "remove") setStyleMenu(null);
       else setStyleMenu(r);
       return true;
     }
-    if (key === "Enter" && (pickedMedia || hold.holding())) return true;
+    if (key === "Enter" && ((holdable && columns[focus.col ?? 0]?.kind !== "assistant") || hold.holding())) return true;
     if (key === "Back") {
       if (menuOpen) {
         setMenuOpen(false);
@@ -101,6 +124,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
         glow={glow}
         columns={columns}
         styleMenu={styleMenu}
+        moving={moving?.key ?? null}
         open={2}
         status=""
         links={[{ icon: "sync" }, { icon: "server", off: true }]}
