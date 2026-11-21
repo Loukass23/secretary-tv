@@ -54,6 +54,8 @@ interface Props {
   /** Settings › Playback "Pause panel" (lib/pausepanel.ts). */
   pausePanel?: boolean;
   onExit(): void;
+  /** Called when playback pauses (false) or resumes (true) after it has started: the room's lights follow it. */
+  onPlayState?(playing: boolean): void;
   /**
    * Called when the episode ends and `next` exists, with the source that played, so the next episode starts with the
    * same kind of release; resolves once its player view has been set up.
@@ -91,6 +93,7 @@ export function PlayerView({
   autoSkip = false,
   pausePanel = true,
   onExit,
+  onPlayState,
   onNext,
   onPrefetchNext,
   party,
@@ -126,6 +129,12 @@ export function PlayerView({
   const [failed, setFailed] = useState(false);
   const [time, setTime] = useState({ pos: 0, dur: 0 });
   const [playing, setPlaying] = useState(true);
+  // The first value is the start, which the app has already handled; only a change after it is a pause or a resume.
+  const playStateSeen = useRef(false);
+  useEffect(() => {
+    if (playStateSeen.current) onPlayState?.(playing);
+    playStateSeen.current = true;
+  }, [playing]);
   const [buffering, setBuffering] = useState(false);
   const [controls, setControls] = useState(false);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
