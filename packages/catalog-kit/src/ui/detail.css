@@ -88,3 +88,5 @@
 .det-menu { padding: 26px 30px; display: flex; flex-direction: column; gap: 4px; }
 .det-menu::after { background: rgba(10, 11, 14, 0.62); }
 .det-menu .cat-kicker { margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.det-hint { font-size: 18px; color: var(--sg-ink-dim); }
+.det-sim-k { position: absolute; font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }

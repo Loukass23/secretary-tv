@@ -179,6 +179,13 @@ kept per row on the TV, `src/row-look.ts`): Poster, Landscape, Square, Highlight
 `collectionlayout.ts`) and Ranking (big numerals beside the posters, the idea of Nuvio Legacy's ranking view; ideas only,
 no code from it). Landscape and 4:3 use the title's background art when it has one.
 
+### Film page
+
+A film's page (catalog-kit `Detail`) has a "More like this" row under the panel: titles of the film's first genre
+(`similarUrl`, `pickSimilar` in `cinemeta.ts`), Down from the actions, OK opens that title and Back comes back to the
+film. While plugins search, the sources line is one calm sentence ("Searching · 2 of 6 answered · 120 found so far",
+`searchsummary.ts`) instead of each provider's state, and the Sources button shows its count only once the search is done.
+
 ### Card styles (long OK)
 
 A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu

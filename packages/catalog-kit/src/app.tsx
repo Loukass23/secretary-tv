@@ -116,6 +116,8 @@ type View =
       title: Title;
       autoPlay?: boolean;
       returnToTimeline?: { collection: SagaDef; focusTitleId: string };
+      /** Opened from another title's "More like this": Back goes there. */
+      returnTo?: { itemType: CatalogType; title: Title };
     }
   | {
       name: "player";
@@ -783,9 +785,12 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
               returnToDetail: { itemType: shown.itemType, title: shown.title },
             })
           }
+          onOpenTitle={(t) => setView({ name: "detail", itemType: shown.itemType, title: t, returnTo: { itemType: shown.itemType, title: shown.title } })}
           onWatchedChange={() => setWatchedRev((v) => v + 1)}
           onBack={() => {
-            if (view.name === "detail" && view.returnToTimeline) {
+            if (view.name === "detail" && view.returnTo) {
+              setView({ name: "detail", itemType: view.returnTo.itemType, title: view.returnTo.title });
+            } else if (view.name === "detail" && view.returnToTimeline) {
               setView({
                 name: "timeline",
                 collection: view.returnToTimeline.collection,
