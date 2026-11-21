@@ -57,6 +57,8 @@ export function sideLights(now = Date.now()): LightsController | null {
     side: () => ({ lights: l.side }),
     independent: () => l.independent,
     pauseLevel: () => l.level,
+    moodStepMs: l.stepMs,
+    moodSettleMs: l.settleMs,
     warn: () => {},
   });
   if (Array.isArray(l.restore) && l.restore.length) ctl.hold(l.restore as StDevice[]);

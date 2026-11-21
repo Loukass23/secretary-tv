@@ -33,6 +33,9 @@ export interface LightsDeps {
   independent?(): readonly string[];
   /** The level the room is dimmed to when playback pauses (percent). */
   pauseLevel?(): number;
+  /** Time between the three moves of a colour change (ms, MOOD_STEP_MS by default), and how long focus must rest first (MOOD_SETTLE_MS). */
+  moodStepMs?: number;
+  moodSettleMs?: number;
   warn?(what: string, e: unknown): void;
 }
 
@@ -41,11 +44,18 @@ export interface LightsDeps {
  * and then only the last colour, so the room never flickers through every poster on the way.
  */
 export const MOOD_SETTLE_MS = 700;
+
+/** A timing from the environment: a whole number of ms within [min, max], else the default (empty, text, out of range). */
+export function moodMs(raw: string | number | undefined | null, fallback: number, min: number, max: number): number {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
+  return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : fallback;
+}
 /**
- * The glide to a new colour takes about a second and a half: three moves half a second apart (each is a cloud call, so not
- * much closer), enough that the light slides rather than snaps.
+ * The glide to a new colour is three moves, `MOOD_STEP_MS` apart (about a second and a half in all; each move is a cloud
+ * call, so not much closer), enough that the light slides rather than snaps. Nest takes both from the environment
+ * (`NEST_MOOD_STEP_MS`, `NEST_MOOD_SETTLE_MS`), through `moodMs`.
  */
-const MOOD_GLIDE_GAP_MS = 500;
+export const MOOD_STEP_MS = 500;
 const glideSteps = (_hueDistance: number) => 3;
 /** The least change of hue (0-100) that is worth a call. */
 const MOOD_MIN_STEP = 5;
@@ -56,6 +66,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function createLights(deps: LightsDeps) {
   const { home } = deps;
+  const stepMs = deps.moodStepMs ?? MOOD_STEP_MS;
+  const settleMs = deps.moodSettleMs ?? MOOD_SETTLE_MS;
   const side = () => deps.side?.() ?? RIPPLE_DEFAULT;
   const apart = () => deps.independent?.() ?? undefined;
   const warn = (what: string, e: unknown) => (deps.warn ?? ((w, x) => console.warn(`[lights] ${w}`, x)))(what, e);
@@ -153,13 +165,13 @@ export function createLights(deps: LightsDeps) {
     // From the colour the lights are showing: part-way along a glide still playing, else the last one sent, else what a light has now.
     const g = moodGlideNow;
     const from: MoodTint = g
-      ? glideTint(g.from, g.to, Math.min(1, (Date.now() - g.at) / (g.steps * MOOD_GLIDE_GAP_MS)))
+      ? glideTint(g.from, g.to, Math.min(1, (Date.now() - g.at) / (g.steps * stepMs)))
       : moodSent
         ? stColour(moodSent.rgb)
         : startTint(moodLights);
     // From a white there is no hue to turn: a middling glide fades the colour in.
     const near = from.saturation < 20 ? 15 : Math.min(Math.abs(from.hue - to.hue), 100 - Math.abs(from.hue - to.hue));
-    const glide = moodGlide(moodLights, from, to, glideSteps(near), MOOD_GLIDE_GAP_MS, side(), apart());
+    const glide = moodGlide(moodLights, from, to, glideSteps(near), stepMs, side(), apart());
     if (!glide) return;
     moodSent = { hue: to.hue, rgb };
     moodGlideNow = { from, to, at: Date.now(), steps: glide.steps.length };
@@ -181,7 +193,7 @@ export function createLights(deps: LightsDeps) {
     moodWanted = rgb;
     clearTimeout(moodTimer);
     // Each call restarts the wait, so only the colour focus rests on is sent; going back to normal is not held up.
-    const wait = rgb ? MOOD_SETTLE_MS : 0;
+    const wait = rgb ? settleMs : 0;
     moodTimer = setTimeout(() => {
       moodTimer = undefined;
       void applyMood(moodWanted).catch((e) => warn("mood", e));

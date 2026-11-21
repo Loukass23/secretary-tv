@@ -66,6 +66,9 @@ export interface HomeLights {
   independent: string[];
   /** The level the room softens to when playback pauses (percent). */
   level: number;
+  /** Colour changes: ms between the three moves, and ms focus must rest first (Nest's NEST_MOOD_* settings). */
+  stepMs?: number;
+  settleMs?: number;
   /** The side lights as they were before Nest dimmed them for this launch: the way back when playback ends. */
   restore?: unknown[];
 }

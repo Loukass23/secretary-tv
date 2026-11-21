@@ -32,7 +32,7 @@ import {
 } from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
 import { effective, lightFx } from "./light-fx.ts";
-import { ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
+import { MOOD_TIMING, ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
 
 /** Where the setup script (tv-kit/scripts/smartthings.mjs authorize) writes the first token pair. */
 export const TOKENS_KEY = "nest.smartthings";
@@ -108,7 +108,7 @@ export async function homeGrant(now = Date.now()): Promise<HomeGrant | null> {
       token: t,
       exp,
       ...scenes,
-      lights: { sync: fx.sync, enabled: fx.enabled, side: [...rippleConfig().lights], independent: [...independentLights()], level: cinemaConfig().level, ...(restore?.length ? { restore } : {}) },
+      lights: { sync: fx.sync, enabled: fx.enabled, side: [...rippleConfig().lights], independent: [...independentLights()], level: cinemaConfig().level, stepMs: MOOD_TIMING.stepMs, settleMs: MOOD_TIMING.settleMs, ...(restore?.length ? { restore } : {}) },
     };
   } catch {
     return null;
@@ -251,6 +251,8 @@ const lights = createLights({
   side: rippleConfig,
   independent: independentLights,
   pauseLevel: () => cinemaConfig().level,
+  moodStepMs: MOOD_TIMING.stepMs,
+  moodSettleMs: MOOD_TIMING.settleMs,
   warn: (what, e) => console.warn(`[nest] lights ${what}`, e),
 });
 

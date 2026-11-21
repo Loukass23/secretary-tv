@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLights, type StDevice } from "../src/index.ts";
+import { createLights, MOOD_SETTLE_MS, MOOD_STEP_MS, moodMs, type StDevice } from "../src/index.ts";
 
 const light = (id: string, name: string, over: Partial<StDevice> = {}): StDevice => ({ id, name, kind: "light", local: false, dimmable: true, colour: true, on: true, level: 60, ...over }) as StDevice;
 const sensor = (lux: number): StDevice => ({ id: "s", name: "TV", kind: "lightSensor", local: false, dimmable: false, lux }) as StDevice;
@@ -82,4 +82,13 @@ test("a newer colour replaces a glide still playing instead of waiting for it", 
   ctl.syncMood([30, 60, 220]);
   await new Promise((r) => setTimeout(r, 1_000));
   assert.ok(sent.length > before, "the new glide began while the old one was still playing");
+});
+
+test("the colour timings come from the environment when they are sane, else the defaults", () => {
+  assert.equal(moodMs("800", MOOD_STEP_MS, 100, 5_000), 800);
+  assert.equal(moodMs("", MOOD_STEP_MS, 100, 5_000), MOOD_STEP_MS);
+  assert.equal(moodMs("fast", MOOD_STEP_MS, 100, 5_000), MOOD_STEP_MS);
+  assert.equal(moodMs("20", MOOD_STEP_MS, 100, 5_000), MOOD_STEP_MS, "under the least is ignored");
+  assert.equal(moodMs("0", MOOD_SETTLE_MS, 0, 10_000), 0, "no wait is allowed for the rest time");
+  assert.equal(moodMs(undefined, MOOD_SETTLE_MS, 0, 10_000), MOOD_SETTLE_MS);
 });

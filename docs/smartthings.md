@@ -79,6 +79,8 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
     server's cinema preset dims as before.
   - Opening: the splash leaves a dim glow; when the sensor (read before the wave) says 150 lux or more (`BRIGHT_LUX`, the
     line Daylight uses), the glow fades out instead of staying.
+  - How it feels is set in `.env.tizen`: `NEST_MOOD_STEP_MS` (default 500) is the time between the three moves of a
+    colour change, `NEST_MOOD_SETTLE_MS` (default 700) how long focus rests before the lights start.
 - **Only Nest holds the refresh token** (`localStorage["nest.smartthings"]`).
   - A refresh token works once, and every refresh is saved before its access token is used. Refreshes run one at a
     time and start an hour before expiry.
