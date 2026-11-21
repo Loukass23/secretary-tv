@@ -389,8 +389,16 @@ html, body {
 
 /* An opened media card with rows under the picks: the stack slides up by transform when Down reaches one. */
 .nest-stack { position: absolute; left: 0; top: 0; width: 1760px; height: 0; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
-.nest-more { position: absolute; left: 0; width: 1760px; height: 710px; contain: layout paint style; }
+.nest-more { position: absolute; left: 0; width: 1760px; height: 640px; contain: layout paint style; }
 .nest-more > .sg-clip { position: absolute; }
 .nest-row0, .nest-more { transition: opacity var(--sg-fade) var(--sg-ease); }
 .nest-row0.is-gone, .nest-more.is-gone { opacity: 0; }
 .nest-more-label { position: absolute; left: 2px; top: 6px; font-size: 26px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
+.nest-more.is-peek { opacity: 0.55; }
+.nest-more-label em, .nest-col-label em { margin-left: 14px; font-size: 22px; font-style: normal; font-weight: 500; color: var(--sg-ink-dim); }
+.nest-crumb { margin: 0 14px; font-style: normal; color: var(--sg-ink-dim); }
+.nest-col-hint { position: absolute; left: 1060px; width: 700px; text-align: right; top: 12px; font-size: 22px; color: var(--sg-ink-dim); white-space: nowrap; }
+/* A ranking row: a big flat numeral beside each tile, brighter on the focused one. */
+.nest-rank { position: absolute; display: flex; align-items: flex-end; justify-content: flex-end; padding-right: 6px; box-sizing: border-box; font-size: 150px; font-weight: 700; line-height: 0.8; color: var(--sg-ink-dim); opacity: 0.5; }
+.nest-rank.is-focus { opacity: 1; color: var(--sg-ink); }
+.nest-more:not(.is-peek) .nest-more-label { visibility: hidden; }

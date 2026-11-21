@@ -86,26 +86,27 @@ export function collapsedShape(style: CardStyle): CardShape {
 
 // --- the expanded card: every item in one row, as the Ask answer row shows titles, then the app's Open tile ---
 
-export const EXPANDED = { w: 280, h: 420, stride: 308 } as const;
+export const EXPANDED = { w: 252, h: 378, stride: 278 } as const;
 /** The expanded card spans the screen between the 80px insets. */
 export const EXPANDED_W = 1920 - 2 * 80;
 /** The focused title's caption under the opened row (name, line, a few lines of synopsis), fixed at its left edge. */
 export const CAPTION_W = 900;
 
 /** The caption under a row of an opened card: its gap, and the room it keeps for a name, a line and three of synopsis. */
-export const CAPTION = { top: 34, h: 200 } as const;
+export const CAPTION = { top: 30, h: 176 } as const;
 /** The rows under the picks in an opened card (My List, the genres) are the picks row again: same tiles, a label over each, the same caption under. */
-export const MORE = { labelH: 52, gap: 40 } as const;
+export const MORE = { labelH: 52, gap: 28 } as const;
 /** Where extra row `k` (0-based) starts in the opened card: under the picks and their caption, then a block apiece. */
 export const moreTop = (k: number): number => EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap + k * (MORE.labelH + EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap);
-/** How far extra row of `n` items scrolls so item `i` stays in view. */
-export const moreScroll = (i: number, n: number): number => expandedScroll(i, n);
-
-/** How far the expanded row scrolls so item `i` of `n` (n includes the Open tile) stays in view. */
-export function expandedScroll(i: number, n: number): number {
-  const max = Math.max(0, n * EXPANDED.stride - EXPANDED.stride + EXPANDED.w - EXPANDED_W);
-  return Math.max(0, Math.min(max, (i - 3) * EXPANDED.stride));
+/** How far a row of `n` tiles (`stride` apart, `w` wide) scrolls so tile `i` stays in view, a few in from the left. */
+export function rowScroll(i: number, n: number, stride: number, w: number): number {
+  const max = Math.max(0, n * stride - stride + w - EXPANDED_W);
+  const lead = Math.max(1, Math.floor(EXPANDED_W / stride / 2));
+  return Math.max(0, Math.min(max, (i - lead) * stride));
 }
+
+/** The same for the poster row. */
+export const expandedScroll = (i: number, n: number): number => rowScroll(i, n, EXPANDED.stride, EXPANDED.w);
 
 // --- saved choices ---
 

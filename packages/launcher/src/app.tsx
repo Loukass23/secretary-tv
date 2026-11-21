@@ -62,6 +62,7 @@ import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
 import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
+import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
 import { type CardMenu, Home, shownStyle, type TileMenu } from "./home.tsx";
@@ -320,6 +321,8 @@ export function App() {
   const [hidden, setHidden] = useState<string[]>(() => loadHidden(storage));
   /** Suggestions taken off the picks (title menu, "Remove from suggestions"): the next trending title takes their place. */
   const [dismissed, setDismissed] = useState<string[]>(() => loadDismissed(storage));
+  /** How each row of an opened media card draws its tiles (title menu, "Row look"), by `<card>/<row>`. */
+  const [rowLooks, setRowLooks] = useState<Record<string, RowShape>>(() => loadRowLooks(storage));
   /** The menu on a title tile of an opened media card (a long OK), with what it acts on. */
   const [tileMenu, setTileMenu] = useState<{ menu: TileMenu; target: TileTarget } | null>(null);
   /** When OK went down on something a long press does more with; the hold pill shows from it (null: not holding). */
@@ -1124,8 +1127,9 @@ export function App() {
     const more: MoreRow[] = rowsHere.map((r) => ({
       label: r.label,
       items: r.hits.map(tile),
+      shape: rowShape(rowLooks, `${m.key}/${r.label}`),
       run: (i) => r.hits[i] && openHit(r.hits[i]),
-      target: (i) => (r.hits[i] ? { type: r.hits[i].type, title: r.hits[i].title, resume: false } : null),
+      target: (i) => (r.hits[i] ? { type: r.hits[i].type, title: r.hits[i].title, resume: false, row: `${m.key}/${r.label}` } : null),
     }));
     const items: MediaItem[] = [
       ...going.map((e) => ({
@@ -1155,15 +1159,16 @@ export function App() {
         label: mine ? `For you · ${m.name}` : going.length ? m.going : m.picks,
         items,
         style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
-        open: { label: `Open ${m.name}`, run: () => browse({ type: m.kind }, () => launch(m.app, m.name)) },
+        heading: mine ? "For you" : going.length && picks.length ? "Continue watching · Tonight's picks" : going.length ? "Continue watching" : "Tonight's picks",
+        shape: rowShape(rowLooks, `${m.key}/picks`),
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
         target: (i) =>
           i < going.length
-            ? { type: going[i].type, title: going[i].title, resume: true }
+            ? { type: going[i].type, title: going[i].title, resume: true, row: `${m.key}/picks` }
             : picks[i - going.length]
-              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false, suggestion: !mine }
+              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false, suggestion: !mine, row: `${m.key}/picks` }
               : null,
       },
       items.map((it) => ({ src: it.poster, type: m.kind })),
@@ -1539,13 +1544,12 @@ export function App() {
     }
     if (area === "ask" || area === "chat") return void listen();
     if (area === "row") {
-      // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing;
-      // the last tile of an open media card opens the app. On the Assistant card, OK opens the full chat.
+      // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing.
+      // On the Assistant card, OK opens the full chat.
       if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
-      if (col?.kind === "media" && i === col.items.length) return col.open.run();
       // A row under the picks (My List, a genre): its own item.
-      if (col?.kind === "media" && i > col.items.length) {
+      if (col?.kind === "media" && i >= col.items.length) {
         const { r, x } = rowAt(expandedRows(col), i);
         return (col.more ?? []).filter((m) => m.items.length)[r - 1]?.run(x);
       }
@@ -1598,8 +1602,18 @@ export function App() {
       details: true,
     }).filter((l) => l.id !== "restart" && l.id !== "sources" && l.id !== "timeline");
     if (target.suggestion) lines.push({ id: "dismiss", label: "✕ Remove from suggestions" });
+    lines.push(lookLine(rowShape(rowLooks, target.row)));
     setTileMenu({ menu: { name: target.title.name, lines, at: 0 }, target });
   }, undefined, setHoldSince);
+  /** The menu's "Row look" line: Left and Right (or OK) change how the whole row draws, at once. */
+  const lookLine = (shape: RowShape) => ({ id: "look", label: `▦ Row look  ‹ ${ROW_SHAPE_LABEL[shape]} ›` });
+  const stepLook = (m: { menu: TileMenu; target: TileTarget }, dir: 1 | -1) => {
+    const next = stepShape(rowShape(rowLooks, m.target.row), dir);
+    const looks = { ...rowLooks, [m.target.row]: next };
+    setRowLooks(looks);
+    saveRowLooks(storage, looks);
+    setTileMenu({ ...m, menu: { ...m.menu, lines: m.menu.lines.map((l) => (l.id === "look" ? lookLine(next) : l)) } });
+  };
   /** One line of the tile menu. */
   const runTileLine = (id: string, t: TileTarget) => {
     if (id === "dismiss") {
@@ -1618,6 +1632,7 @@ export function App() {
     // The tile menu takes every key while it is open: Up and Down pick, OK does it, Back leaves it.
     if (tileMenu) {
       if (key === "Enter" && tileHold.holding()) return;
+      if (tileMenu.menu.lines[tileMenu.menu.at]?.id === "look" && (key === "Left" || key === "Right" || key === "Enter")) return stepLook(tileMenu, key === "Left" ? -1 : 1);
       const r = stepTitleMenu(tileMenu.menu.at, tileMenu.menu.lines.length, key);
       if (r === "close") setTileMenu(null);
       else if (r === "run") {
