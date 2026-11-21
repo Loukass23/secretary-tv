@@ -854,7 +854,7 @@ export function Detail({
               </>
             )}
           </div>
-          <div class="det-hint">Hold OK for options · Back to return</div>
+          {!series && <div class="det-hint">Hold OK for options · Back to return</div>}
         </Glass>
 
         {!series && similar.length > 0 && (
