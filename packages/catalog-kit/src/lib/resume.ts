@@ -364,3 +364,17 @@ export function saveProgress(
     if (finished) await r.finished(type, slim(title), episode);
   })();
 }
+
+/** The list without a title's entries (every episode of it is one entry per title). Pure, so it is unit tested. */
+export const withoutTitle = (list: readonly ResumeEntry[], id: string): ResumeEntry[] => list.filter((e) => e.title.id !== id);
+
+/** Takes a title off Continue Watching on this device (the catalog's own stores, and the server's when one is set). */
+export function removeResume(id: string): void {
+  for (const type of ALL_TYPES) {
+    const list = loadResume(type);
+    const next = withoutTitle(list, id);
+    if (next.length === list.length) continue;
+    writeJson(keyFor(type), next);
+    void pushResume(type, next);
+  }
+}

@@ -31,3 +31,12 @@ test("looks round-trip per row, default to poster and drop what is unknown", () 
   box.set(ROW_LOOKS_KEY, "not json");
   assert.deepEqual(loadRowLooks(store), {});
 });
+
+test("landscape and 4:3 tiles are as tall as the poster and exactly their art's shape, so the image fits whole", () => {
+  const l = tileBox("landscape");
+  const w = tileBox("wide");
+  assert.equal(l.h, EXPANDED.h);
+  assert.ok(Math.abs(l.w / l.h - 16 / 9) < 0.01);
+  assert.ok(Math.abs(w.w / w.h - 4 / 3) < 0.01);
+  assert.equal(tileBox("square").w, tileBox("square").h);
+});

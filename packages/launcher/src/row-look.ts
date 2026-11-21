@@ -32,7 +32,7 @@ export interface TileBox {
 const GAP = EXPANDED.stride - EXPANDED.w;
 const LEAD = 96;
 
-/** Every row is as tall as the poster row; shorter shapes sit on its bottom edge, so the caption stays close. */
+/** Every shape is as tall as the poster, and as wide as its art needs (16:9 stills, 4:3, square), so the image fits whole. */
 export function tileBox(shape: RowShape): TileBox {
   const H = EXPANDED.h;
   const box = (w: number, h: number, art: TileBox["art"], lead = 0): TileBox => ({ w: w + lead, h, stride: w + lead + GAP, art, lead });
@@ -40,11 +40,11 @@ export function tileBox(shape: RowShape): TileBox {
     case "poster":
       return box(EXPANDED.w, H, "poster");
     case "landscape":
-      return box(560, 315, "still");
+      return box(Math.round((EXPANDED.h * 16) / 9), EXPANDED.h, "still");
     case "square":
-      return box(340, 340, "poster");
+      return box(EXPANDED.h, EXPANDED.h, "poster");
     case "wide":
-      return box(450, 338, "still");
+      return box(Math.round((EXPANDED.h * 4) / 3), EXPANDED.h, "still");
     case "ranking":
       return box(EXPANDED.w, H, "poster", LEAD);
   }

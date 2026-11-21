@@ -19,3 +19,9 @@ test("more like this skips the page's own title and puts posters first", () => {
   assert.equal(similarUrl("movie", "Sci-Fi").endsWith("/catalog/movie/top/genre=Sci-Fi.json"), true);
   assert.equal(similarUrl("anime", "Action").includes("kitsu"), true);
 });
+
+test("taking a title off Continue Watching drops every entry of it", async () => {
+  const { withoutTitle } = await import("../src/lib/resume.ts");
+  const e = (id: string) => ({ title: t(id), posSec: 10, durSec: 100, updated: 1 });
+  assert.deepEqual(withoutTitle([e("a"), e("b"), e("a")], "a").map((x) => x.title.id), ["b"]);
+});

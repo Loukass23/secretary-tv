@@ -1,6 +1,6 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
-import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, pullProgress, toItems, withMeta } from "@secretary/nuvio";
+import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Profiles, SignIn } from "./account.tsx";
@@ -103,7 +103,7 @@ import {
 } from "./home-control.ts";
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
-import { isTitleWatched, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
 import { LightsPanel } from "./lights.tsx";
@@ -767,6 +767,27 @@ export function App() {
     }
   };
 
+  /** Takes a title off Continue watching everywhere it is kept: this TV, the Nuvio profile, the home server. */
+  const forgetProgress = async (kind: CatalogKind, id: string) => {
+    removeResume(id);
+    try {
+      if (cloudEnabled && cloud.session.signedIn()) {
+        const profile = cloud.session.profile();
+        const rows = (await pullProgress(cloud, profile)).filter((r) => r.content_id === id);
+        await deleteProgress(cloud, profile, rows.map((r) => progressKey(r.content_id, r.season, r.episode)));
+      } else if (SERVER_URL) {
+        const got = (await (await fetch(`${SERVER_URL}/resume/${kind}`)).json()) as { items?: { title: { id: string } }[] };
+        await fetch(`${SERVER_URL}/resume/${kind}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify((got.items ?? []).filter((e) => e.title.id !== id)),
+        });
+      }
+    } catch {
+      flash("Couldn't remove it everywhere; it may come back");
+    }
+  };
+
   const refreshServer = async () => {
     if (cloudEnabled) void refreshCloud();
     if (!SERVER_URL) return;
@@ -1114,7 +1135,7 @@ export function App() {
     // Under the picks (Down in the opened card): the profile's My List for this kind, then its genre rows.
     const tile = (r: SearchResult): MediaItem => ({
       poster: posterUrl(r.title),
-      still: r.title.background,
+      still: backdropUrl(r),
       title: r.title.name,
       sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
       about: r.title.description,
@@ -1143,7 +1164,7 @@ export function App() {
       })),
       ...picks.map((r, k) => ({
         poster: posterUrl(r.title),
-        still: r.title.background,
+        still: backdropUrl(r),
         title: r.title.name,
         sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
         badge: k === 0 && !going.length && !mine ? m.pickBadge : undefined,
@@ -1602,6 +1623,7 @@ export function App() {
       details: true,
     }).filter((l) => l.id !== "restart" && l.id !== "sources" && l.id !== "timeline");
     if (target.suggestion) lines.push({ id: "dismiss", label: "✕ Remove from suggestions" });
+    if (target.resume) lines.push({ id: "unresume", label: "⊘ Remove from Continue" });
     lines.push(lookLine(rowShape(rowLooks, target.row)));
     setTileMenu({ menu: { name: target.title.name, lines, at: 0 }, target });
   }, undefined, setHoldSince);
@@ -1616,6 +1638,11 @@ export function App() {
   };
   /** One line of the tile menu. */
   const runTileLine = (id: string, t: TileTarget) => {
+    if (id === "unresume") {
+      setContinueItems((l) => l.filter((e) => e.title.id !== t.title.id));
+      void forgetProgress(t.type, t.title.id);
+      return flash(`${t.title.name} removed from Continue watching`);
+    }
     if (id === "dismiss") {
       const next = dismiss(dismissed, t.title.id);
       setDismissed(next);

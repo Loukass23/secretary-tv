@@ -174,10 +174,15 @@ beat apart when the row is reached, and the focused title's caption (name, line,
 room of its own. The row under the focused one is drawn dimmed, its label and the top of its tiles showing under the
 caption, so Down has something to go to.
 
+On a title in progress the menu also holds "Remove from Continue": it takes the title off Continue watching on this TV,
+in the Nuvio profile (every episode's progress row) and on the home server (`forgetProgress` in `app.tsx`,
+`removeResume` in catalog-kit).
+
 Each row has its own look, set from the title menu's last line ("Row look", Left and Right or OK change it at once,
 kept per row on the TV, `src/row-look.ts`): Poster, Landscape, Square, Highlight 4:3 (the catalog apps' card shapes,
 `collectionlayout.ts`) and Ranking (big numerals beside the posters, the idea of Nuvio Legacy's ranking view; ideas only,
-no code from it). Landscape and 4:3 use the title's background art when it has one.
+no code from it). Landscape and 4:3 tiles are as tall as the poster and as wide as their art (16:9, 4:3), so a still fits whole; they use
+the title's background art (the artwork service's when the catalog has none).
 
 ### Film page
 
