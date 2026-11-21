@@ -17,7 +17,17 @@ export interface OkHold {
   cancel(): void;
 }
 
-export function createOkHold(onShort: () => void, onLong: () => void, holdMs = HOLD_MS, timers: Timers = realTimers): OkHold {
+/**
+ * `onChange` hears the hold begin (the time it began) and end (null: released, cancelled or it fired), so a hold
+ * indicator can show while OK is down (HoldPill in tv-kit/glass).
+ */
+export function createOkHold(
+  onShort: () => void,
+  onLong: () => void,
+  holdMs = HOLD_MS,
+  timers: Timers = realTimers,
+  onChange?: (since: number | null) => void,
+): OkHold {
   let timer: unknown = null;
   let held = false;
   return {
@@ -28,19 +38,25 @@ export function createOkHold(onShort: () => void, onLong: () => void, holdMs = H
         held = true;
         onLong();
       }, holdMs);
+      onChange?.(Date.now());
     },
     up() {
       if (timer !== null) {
         timers.clear(timer);
         timer = null;
+        onChange?.(null);
         onShort();
         return;
       }
+      if (held) onChange?.(null);
       held = false;
     },
     holding: () => held || timer !== null,
     cancel() {
-      if (timer !== null) timers.clear(timer);
+      if (timer !== null) {
+        timers.clear(timer);
+      }
+      if (timer !== null || held) onChange?.(null);
       timer = null;
       held = false;
     },
@@ -52,11 +68,17 @@ export function createOkHold(onShort: () => void, onLong: () => void, holdMs = H
  * useKeys must ignore Enter while `active`. The keyup is always watched, so a hold that outlives `active`
  * (it opened a menu) still ends.
  */
-export function useOkHold(active: boolean, onShort: () => void, onLong: () => void, holdMs = HOLD_MS): OkHold {
-  const cb = useRef({ onShort, onLong });
-  cb.current = { onShort, onLong };
+export function useOkHold(
+  active: boolean,
+  onShort: () => void,
+  onLong: () => void,
+  holdMs = HOLD_MS,
+  onChange?: (since: number | null) => void,
+): OkHold {
+  const cb = useRef({ onShort, onLong, onChange });
+  cb.current = { onShort, onLong, onChange };
   const hold = useRef<OkHold | null>(null);
-  hold.current ??= createOkHold(() => cb.current.onShort(), () => cb.current.onLong(), holdMs);
+  hold.current ??= createOkHold(() => cb.current.onShort(), () => cb.current.onLong(), holdMs, realTimers, (s) => cb.current.onChange?.(s));
   const on = useRef(active);
   on.current = active;
   useEffect(() => {

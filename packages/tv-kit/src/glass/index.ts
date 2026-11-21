@@ -3,6 +3,7 @@
 export * from "./backdrop.ts";
 export * from "./controls.tsx";
 export * from "./Glass.tsx";
+export * from "./HoldPill.tsx";
 export * from "./glow.tsx";
 export * from "./icons.ts";
 export * from "./palette.ts";

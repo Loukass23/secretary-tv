@@ -155,6 +155,16 @@ tiles fade out and the titles rise in a beat apart (opacity and transform only, 
 first title. The focused title's name, its line (episode or year) and up to three lines of its synopsis sit in a fixed
 panel at the left under the row (from the catalog, or Cinemeta and Kitsu for titles in progress). Up or Back folds the card again.
 
+### Title menu (long OK on a tile)
+
+Inside an opened Cinema, Shows or Anime card, a short OK on a title acts on the keyup (resumes it, or opens its page) and a
+held one (600 ms) opens the title's menu: Open details, Play or Resume, Mark watched, Add to or Remove from My List (the
+lines are catalog-kit's `titleMenu`, minus the ones that need the page). While OK is held a pill at the top right
+(`HoldPill` in tv-kit glass) shows after 150 ms with a bar that fills, "Hold for options", then "Release for options";
+a tap never shows it. The closed cards' long OK (below) shows it too. The Open tile and the rows under the picks stay
+immediate. Watched and My List are written through catalog-kit's local stores; they reach the Nuvio account the next
+time the catalog runs.
+
 ### Card styles (long OK)
 
 A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu

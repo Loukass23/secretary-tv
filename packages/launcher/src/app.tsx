@@ -1,5 +1,5 @@
 import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -25,6 +25,7 @@ import {
   type Reminder,
   type Scene,
   type SearchResult,
+  type SlimTitle,
   setScene,
   toggleReminder,
   type UnifiedResumeEntry,
@@ -61,8 +62,8 @@ import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
-import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout } from "./cards.tsx";
-import { type CardMenu, Home, shownStyle } from "./home.tsx";
+import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget } from "./cards.tsx";
+import { type CardMenu, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
   clamp,
   enter,
@@ -99,6 +100,9 @@ import {
   togglePictureMode,
 } from "./home-control.ts";
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
+import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
+import { isTitleWatched, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
@@ -313,6 +317,10 @@ export function App() {
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
   /** The cards taken off the home row (a long OK, "Remove from home"); the last card puts them back. */
   const [hidden, setHidden] = useState<string[]>(() => loadHidden(storage));
+  /** The menu on a title tile of an opened media card (a long OK), with what it acts on. */
+  const [tileMenu, setTileMenu] = useState<{ menu: TileMenu; target: TileTarget } | null>(null);
+  /** When OK went down on something a long press does more with; the hold pill shows from it (null: not holding). */
+  const [holdSince, setHoldSince] = useState<number | null>(null);
   /** The remove menu on a card without a style menu: that card's key. */
   const [removeMenu, setRemoveMenu] = useState<CardMenu | null>(null);
   // The card order the viewer set (card-order.ts), and the card being moved with the order it had, so Back can undo.
@@ -997,11 +1005,12 @@ export function App() {
   // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
   const failed = (name: string) => () => flash(`Couldn't open ${name}`);
   const launch = (id: string, name: string) => void openApp(id).catch(failed(name));
-  const resume = (e: UnifiedResumeEntry) =>
+  const playTitle = (type: CatalogKind, title: SlimTitle) =>
     // With the player inside Nest, resuming opens the title's page and plays it here; else the catalog app does.
     EMBED_PLAYER
-      ? browse({ type: e.type, open: { type: e.type, title: e.title, autoPlay: true } }, () => {})
-      : void openTitleInApp(SERVER_URL, e.type, e.title, true).catch(failed(e.title.name));
+      ? browse({ type, open: { type, title, autoPlay: true } }, () => {})
+      : void openTitleInApp(SERVER_URL, type, title, true).catch(failed(title.name));
+  const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title);
   const openHit = (r: SearchResult) =>
     browse({ type: r.type, open: { type: r.type, title: r.title } }, () => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name)));
   /** Browses the catalog inside Nest when it is built in, else opens the catalog app (the old way). */
@@ -1142,6 +1151,12 @@ export function App() {
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
+        target: (i) =>
+          i < going.length
+            ? { type: going[i].type, title: going[i].title, resume: true }
+            : picks[i - going.length]
+              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false }
+              : null,
       },
       items.map((it) => ({ src: it.poster, type: m.kind })),
     );
@@ -1557,9 +1572,47 @@ export function App() {
     if (c?.kind === "media") setStyleMenu(openStyleMenu(c.key, c.style));
     else if (c && canRemove(c.key)) setRemoveMenu({ key: c.key, line: 0 });
     else openPicked();
-  });
+  }, undefined, setHoldSince);
+
+  // On a title tile inside an opened media card the same split: a short OK does what it did (plays or opens), a long
+  // one opens the title's menu (details, play, watched, My List). The Open tile and the rows under it stay immediate.
+  const tileCol = view === "home" && focus.area === "row" && focus.inside ? columns[focus.col ?? 0] : undefined;
+  const tilePicked = !styleMenu && !removeMenu && !moving && !tileMenu && tileCol?.kind === "media" && !!tileCol.target?.(focus.i);
+  const tileHold = useOkHold(tilePicked, activate, () => {
+    const target = tileCol?.kind === "media" ? tileCol.target?.(focus.i) : null;
+    if (!target || tileCol?.kind !== "media") return;
+    const lines = titleMenu({
+      series: target.type !== "movie",
+      hasProgress: target.resume,
+      watched: isTitleWatched(target.title.id),
+      saved: inLibrary(target.type, target.title.id),
+      saga: false,
+      details: true,
+    }).filter((l) => l.id !== "restart" && l.id !== "sources" && l.id !== "timeline");
+    setTileMenu({ menu: { name: target.title.name, lines, at: 0 }, target });
+  }, undefined, setHoldSince);
+  /** One line of the tile menu. */
+  const runTileLine = (id: string, t: TileTarget) => {
+    if (id === "details") return openHit({ type: t.type, title: t.title });
+    if (id === "play") return playTitle(t.type, t.title);
+    if (id === "watched") return flash(toggleTitleWatched(t.title.id) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);
+    if (id === "mylist") return flash(toggleLibrary(t.type, t.title) ? `${t.title.name} added to My List` : `${t.title.name} removed from My List`);
+  };
 
   useKeys(view === "home", (key) => {
+    // The tile menu takes every key while it is open: Up and Down pick, OK does it, Back leaves it.
+    if (tileMenu) {
+      if (key === "Enter" && tileHold.holding()) return;
+      const r = stepTitleMenu(tileMenu.menu.at, tileMenu.menu.lines.length, key);
+      if (r === "close") setTileMenu(null);
+      else if (r === "run") {
+        const line = tileMenu.menu.lines[tileMenu.menu.at];
+        const t = tileMenu.target;
+        setTileMenu(null);
+        if (line) runTileLine(line.id, t);
+      } else if (r !== tileMenu.menu.at) setTileMenu({ ...tileMenu, menu: { ...tileMenu.menu, at: r } });
+      return;
+    }
     // Moving a card: Left and Right slide it, OK keeps the order (saved), Back puts the old order back.
     if (moving) {
       if (key === "Enter" && hold.holding()) return;
@@ -1628,7 +1681,7 @@ export function App() {
       setFocus({ area: "header", i: HEADER_SEARCH });
       return;
     }
-    if (key === "Enter") return pickedCard || hold.holding() ? undefined : void activate();
+    if (key === "Enter") return pickedCard || hold.holding() || tilePicked || tileHold.holding() ? undefined : void activate();
     if (menuOpen && key === "Back") return closeMenu();
     if (menuOpen && (key === "Left" || key === "Right")) return;
     if (key === "Back" && focus.area === "row" && focus.inside) return setFocus(leave(focus));
@@ -1821,11 +1874,13 @@ export function App() {
           me={me}
           styleMenu={styleMenu}
           removeMenu={removeMenu}
+          tileMenu={tileMenu?.menu ?? null}
           moving={moving?.key ?? null}
           pictureMode={pictureSet ?? pictureTv(devices)?.pictureMode}
           soundOn={soundSet ?? devices.find((d) => d.kind === "audio")?.on}
         />
       )}
+      <HoldPill since={holdSince} />
       {toast && (
         <Glass x={560} y={1000} w={800} h={60} class="nest-toast">
           <span>{toast}</span>

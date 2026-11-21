@@ -6,6 +6,7 @@
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
 import { AppChip, Glass, Icon, type IconName, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
+import type { CatalogKind, SlimTitle } from "./apps.ts";
 import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll, MORE, moreScroll, moreTop } from "./card-style.ts";
 import { Component } from "preact";
 import { type Column, rowAt } from "./nest-nav.ts";
@@ -43,6 +44,14 @@ export interface ListItem {
   done?: boolean;
 }
 
+/** A title in an opened media card: what the long-OK menu acts on. */
+export interface TileTarget {
+  type: CatalogKind;
+  title: SlimTitle;
+  /** In progress: Play resumes it. */
+  resume: boolean;
+}
+
 /** One card of the row; `run(i)` is what OK does on its item `i`. */
 export type RowColumn = { key: string; label: string; run: (i: number) => void } & (
   | {
@@ -58,6 +67,8 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       note?: { prompt: string; reply: string };
       /** Rows under the picks once the card is opened (Down): My List, then the genres. */
       more?: MoreRow[];
+      /** The title behind tile `i` of the opened card, for its long-OK menu; null for the Open tile and the rows under. */
+      target?: (i: number) => TileTarget | null;
     }
   | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.

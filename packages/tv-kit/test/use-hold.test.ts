@@ -52,3 +52,17 @@ test("cancel forgets a press", () => {
   assert.deepEqual(log, []);
   assert.equal(h.holding(), false);
 });
+
+test("onChange hears a hold begin and end", () => {
+  const t = fakeTimers();
+  const seen: (number | null)[] = [];
+  const h = createOkHold(() => {}, () => {}, 600, t, (s) => seen.push(s));
+  h.down();
+  h.up();
+  h.down();
+  t.fire();
+  h.up();
+  h.down();
+  h.cancel();
+  assert.deepEqual(seen.map((s) => s !== null), [true, false, true, false, true, false]);
+});

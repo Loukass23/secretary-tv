@@ -434,3 +434,12 @@
   line-height: 28px;
   text-align: center;
 }
+
+/* The hold pill (HoldPill.tsx): fades in once OK has been held a moment; the bar fills by transform. */
+.sg-holdpill-wrap { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+.sg-holdpill { opacity: 0; transition: opacity 160ms ease-out; will-change: opacity; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 0 28px; }
+.sg-holdpill::after { background: rgba(10, 11, 14, 0.86); }
+.sg-holdpill-wrap.is-open .sg-holdpill { opacity: 1; }
+.sg-holdpill-text { position: relative; z-index: 2; font-size: 21px; font-weight: 600; white-space: nowrap; }
+.sg-holdpill-track { position: relative; z-index: 2; display: block; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.sg-holdpill-fill { display: block; width: 100%; height: 100%; border-radius: 3px; background: var(--sg-ink); transform: scaleX(0); transform-origin: left center; will-change: transform; }
