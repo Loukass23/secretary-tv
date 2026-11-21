@@ -7,7 +7,7 @@
 import { AppChip, Glass, Icon, type IconName, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
 import type { CatalogKind, SlimTitle } from "./apps.ts";
-import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll, MORE, moreScroll, moreTop } from "./card-style.ts";
+import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll, MORE, moreScroll, moreTop } from "./card-style.ts";
 import { Component } from "preact";
 import { type Column, rowAt } from "./nest-nav.ts";
 
@@ -34,6 +34,8 @@ export interface MoreRow {
   label: string;
   items: MediaItem[];
   run: (i: number) => void;
+  /** The title behind item `i`, for its long-OK menu. */
+  target?: (i: number) => TileTarget | null;
 }
 
 export interface ListItem {
@@ -50,6 +52,8 @@ export interface TileTarget {
   title: SlimTitle;
   /** In progress: Play resumes it. */
   resume: boolean;
+  /** A suggestion of tonight's picks: the menu can remove it from the row. */
+  suggestion?: boolean;
 }
 
 /** One card of the row; `run(i)` is what OK does on its item `i`. */
@@ -132,6 +136,14 @@ export function columnShape(c: RowColumn, expanded = false): { w: number } & Col
 /** An opened media card's rows: the picks and the Open tile, then each extra row's items. */
 export const expandedRows = (c: Extract<RowColumn, { kind: "media" }>): number[] => [c.items.length + 1, ...(c.more ?? []).filter((m) => m.items.length).map((m) => m.items.length)];
 
+/** The title behind item `i` of an opened media card (a pick, or a title in a row under them); null for the Open tile. */
+export function targetAt(c: Extract<RowColumn, { kind: "media" }>, i: number): TileTarget | null {
+  if (i < c.items.length) return c.target?.(i) ?? null;
+  if (i === c.items.length) return null;
+  const { r, x } = rowAt(expandedRows(c), i);
+  return (c.more ?? []).filter((m) => m.items.length)[r - 1]?.target?.(x) ?? null;
+}
+
 /** Where each column starts in the row, and its shape for the remote; `expanded` is the open media card, or -1. */
 export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: number[]; w: number[]; nav: Column[]; width: number } {
   const x: number[] = [];
@@ -176,7 +188,7 @@ export function itemBox(c: RowColumn, i: number, expanded = false): { x: number;
     const { r, x } = rowAt(expandedRows(c), i);
     if (r > 0) {
       const n = (c.more ?? []).filter((m) => m.items.length)[r - 1].items.length;
-      return { x: x * MORE.stride - moreScroll(x, n), y: MORE.labelH, w: MORE.w, h: MORE.h };
+      return { x: x * EXPANDED.stride - moreScroll(x, n), y: MORE.labelH, w: EXPANDED.w, h: EXPANDED.h };
     }
     // The Open tile has no art to glow behind.
     if (i >= c.items.length) return null;
@@ -317,8 +329,9 @@ interface MoreBlockProps {
 }
 
 /**
- * One row under the picks. Each key press re-renders the card, and with every row drawn that is dozens of tiles, so a
- * row repaints only when its own focus, scroll, place or titles changed (docs/performance.md).
+ * One row under the picks, drawn as the picks row is: the same tiles, rising in a beat apart when the row is reached,
+ * and the focused title's caption under them. Each key press re-renders the card, so a row repaints only when its own
+ * focus, scroll, place or titles changed (docs/performance.md).
  */
 class MoreBlock extends Component<MoreBlockProps> {
   shouldComponentUpdate(next: MoreBlockProps): boolean {
@@ -334,14 +347,30 @@ class MoreBlock extends Component<MoreBlockProps> {
     );
   }
   render({ label, items, top, gone, at, scroll }: MoreBlockProps) {
+    const from = Math.max(0, Math.floor(scroll / EXPANDED.stride) - 1);
+    const to = Math.min(items.length, from + Math.ceil(EXPANDED_W / EXPANDED.stride) + 2);
+    const hit = at >= 0 ? items[at] : undefined;
     return (
       <div class={`nest-more${gone ? " is-gone" : ""}`} style={{ top: `${top}px` }}>
         <span class="nest-more-label">{label}</span>
-        <Scroller x={0} y={MORE.labelH} w={EXPANDED_W} h={MORE.h} axis="x" offset={scroll}>
-          {items.map((it, i) => (
-            <MediaTile key={i} x={i * MORE.stride} y={0} w={MORE.w} h={MORE.h} src={it.poster} title={it.title} sub={it.sub} focused={at === i} />
-          ))}
+        <Scroller x={0} y={MORE.labelH} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
+          {Array.from({ length: to - from }, (_, k) => {
+            const i = from + k;
+            const it = items[i];
+            return (
+              <div key={i} class="nest-rise" style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}>
+                <MediaTile x={i * EXPANDED.stride} y={0} w={EXPANDED.w} h={EXPANDED.h} src={it.poster} badge={badgeOf(it, false)} progress={it.progress} focused={at === i} />
+              </div>
+            );
+          })}
         </Scroller>
+        {hit && (
+          <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${MORE.labelH + EXPANDED.h + CAPTION.top}px`, width: `${CAPTION_W}px`, height: `${CAPTION.h}px` }}>
+            <b>{hit.title}</b>
+            {hit.sub && <small>{hit.sub}</small>}
+            {hit.about && <p>{hit.about}</p>}
+          </div>
+        )}
       </div>
     );
   }
@@ -391,7 +420,7 @@ function MediaRow({ col, focus: flat, page }: { col: Extract<RowColumn, { kind: 
       </Scroller>
       {hit && (
         // A fixed panel at the row's left edge, so the eye does not chase the focus across the screen.
-        <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${EXPANDED.h + 34}px`, width: `${CAPTION_W}px` }}>
+        <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${EXPANDED.h + CAPTION.top}px`, width: `${CAPTION_W}px`, height: `${CAPTION.h}px` }}>
           <b>{hit.title}</b>
           {hit.sub && <small>{hit.sub}</small>}
           {hit.about && <p>{hit.about}</p>}
@@ -400,6 +429,8 @@ function MediaRow({ col, focus: flat, page }: { col: Extract<RowColumn, { kind: 
       </div>
       {more.map((m, k) => {
         const r = k + 1;
+        // Only the row in focus and the one just left are drawn; a row is mounted as it is reached, so it rises in.
+        if (r !== onRow && r !== onRow - 1) return null;
         return (
           <MoreBlock
             key={m.label}

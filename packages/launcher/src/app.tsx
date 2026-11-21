@@ -61,8 +61,9 @@ import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./di
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
+import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
-import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget } from "./cards.tsx";
+import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
 import { type CardMenu, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
   clamp,
@@ -317,6 +318,8 @@ export function App() {
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
   /** The cards taken off the home row (a long OK, "Remove from home"); the last card puts them back. */
   const [hidden, setHidden] = useState<string[]>(() => loadHidden(storage));
+  /** Suggestions taken off the picks (title menu, "Remove from suggestions"): the next trending title takes their place. */
+  const [dismissed, setDismissed] = useState<string[]>(() => loadDismissed(storage));
   /** The menu on a title tile of an opened media card (a long OK), with what it acts on. */
   const [tileMenu, setTileMenu] = useState<{ menu: TileMenu; target: TileTarget } | null>(null);
   /** When OK went down on something a long press does more with; the hold pill shows from it (null: not holding). */
@@ -1103,7 +1106,7 @@ export function App() {
     // Titles without a poster would be blank slots, so a recommendation keeps only those that have one.
     const picks = mine
       ? (mine.items.some((r) => r.title.poster) ? mine.items.filter((r) => r.title.poster) : mine.items).slice(0, MEDIA_MAX)
-      : trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id)).slice(0, MEDIA_MAX - going.length);
+      : trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id) && !dismissed.includes(r.title.id)).slice(0, MEDIA_MAX - going.length);
     if (!going.length && !picks.length) continue;
     // Under the picks (Down in the opened card): the profile's My List for this kind, then its genre rows.
     const tile = (r: SearchResult): MediaItem => ({
@@ -1118,7 +1121,12 @@ export function App() {
       { label: "My List", hits: listedHere },
       ...DISCOVER.filter((d) => d.kind === m.kind).map((d) => ({ label: d.label, hits: (discover[d.key] ?? []).filter((r) => r.title.poster).slice(0, MEDIA_MAX) })),
     ].filter((r) => r.hits.length);
-    const more: MoreRow[] = rowsHere.map((r) => ({ label: r.label, items: r.hits.map(tile), run: (i) => r.hits[i] && openHit(r.hits[i]) }));
+    const more: MoreRow[] = rowsHere.map((r) => ({
+      label: r.label,
+      items: r.hits.map(tile),
+      run: (i) => r.hits[i] && openHit(r.hits[i]),
+      target: (i) => (r.hits[i] ? { type: r.hits[i].type, title: r.hits[i].title, resume: false } : null),
+    }));
     const items: MediaItem[] = [
       ...going.map((e) => ({
         poster: posterUrl(e.title),
@@ -1155,7 +1163,7 @@ export function App() {
           i < going.length
             ? { type: going[i].type, title: going[i].title, resume: true }
             : picks[i - going.length]
-              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false }
+              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false, suggestion: !mine }
               : null,
       },
       items.map((it) => ({ src: it.poster, type: m.kind })),
@@ -1577,11 +1585,11 @@ export function App() {
   // On a title tile inside an opened media card the same split: a short OK does what it did (plays or opens), a long
   // one opens the title's menu (details, play, watched, My List). The Open tile and the rows under it stay immediate.
   const tileCol = view === "home" && focus.area === "row" && focus.inside ? columns[focus.col ?? 0] : undefined;
-  const tilePicked = !styleMenu && !removeMenu && !moving && !tileMenu && tileCol?.kind === "media" && !!tileCol.target?.(focus.i);
+  const tilePicked = !styleMenu && !removeMenu && !moving && !tileMenu && tileCol?.kind === "media" && !!targetAt(tileCol, focus.i);
   const tileHold = useOkHold(tilePicked, activate, () => {
-    const target = tileCol?.kind === "media" ? tileCol.target?.(focus.i) : null;
+    const target = tileCol?.kind === "media" ? targetAt(tileCol, focus.i) : null;
     if (!target || tileCol?.kind !== "media") return;
-    const lines = titleMenu({
+    const lines: { id: string; label: string }[] = titleMenu({
       series: target.type !== "movie",
       hasProgress: target.resume,
       watched: isTitleWatched(target.title.id),
@@ -1589,10 +1597,17 @@ export function App() {
       saga: false,
       details: true,
     }).filter((l) => l.id !== "restart" && l.id !== "sources" && l.id !== "timeline");
+    if (target.suggestion) lines.push({ id: "dismiss", label: "✕ Remove from suggestions" });
     setTileMenu({ menu: { name: target.title.name, lines, at: 0 }, target });
   }, undefined, setHoldSince);
   /** One line of the tile menu. */
   const runTileLine = (id: string, t: TileTarget) => {
+    if (id === "dismiss") {
+      const next = dismiss(dismissed, t.title.id);
+      setDismissed(next);
+      saveDismissed(storage, next);
+      return flash(`${t.title.name} removed from suggestions`);
+    }
     if (id === "details") return openHit({ type: t.type, title: t.title });
     if (id === "play") return playTitle(t.type, t.title);
     if (id === "watched") return flash(toggleTitleWatched(t.title.id) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);

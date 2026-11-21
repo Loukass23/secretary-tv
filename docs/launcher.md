@@ -124,7 +124,7 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
 | Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
 | Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
-| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
+| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them. Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
 | YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
 | Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog app that fits it (the launch payload's `folder`; the app opens it once its collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
@@ -161,8 +161,9 @@ Inside an opened Cinema, Shows or Anime card, a short OK on a title acts on the 
 held one (600 ms) opens the title's menu: Open details, Play or Resume, Mark watched, Add to or Remove from My List (the
 lines are catalog-kit's `titleMenu`, minus the ones that need the page). While OK is held a pill at the top right
 (`HoldPill` in tv-kit glass) shows after 150 ms with a bar that fills, "Hold for options", then "Release for options";
-a tap never shows it. The closed cards' long OK (below) shows it too. The Open tile and the rows under the picks stay
-immediate. Watched and My List are written through catalog-kit's local stores; they reach the Nuvio account the next
+a tap never shows it. The closed cards' long OK (below) shows it too. Only the Open tile stays
+immediate: the rows under the picks (My List, genres) have the same menu, and on a pick it also holds "Remove from
+suggestions" (`src/dismissed.ts`; the next trending title takes its place). Watched and My List are written through catalog-kit's local stores; they reach the Nuvio account the next
 time the catalog runs.
 
 ### Card styles (long OK)
