@@ -149,7 +149,7 @@ the saved keys of removed cards are kept so a card put back finds its place.
 ### Opening a media card
 
 Cinema, Shows and Anime hold up to 8 titles each: what is in progress first, then the catalog's picks. OK opens the card
-in place into one row of all of them, at the Ask results size, (`src/cards.tsx`,
+in place into one row of all of them, at the Ask results size (`src/cards.tsx`,
 `MediaRow`). The cards after it slide right by transform and every other card steps back to 35% opacity; the folded
 tiles fade out and the titles rise in a beat apart (opacity and transform only, on their own layers). Focus lands on the
 first title. The focused title's name, its line (episode or year) and up to three lines of its synopsis sit in a fixed
