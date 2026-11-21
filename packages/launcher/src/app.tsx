@@ -61,6 +61,7 @@ import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./di
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
+import { loadSettings } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
@@ -76,6 +77,7 @@ import {
   HEADER_PICTURE,
   HEADER_PROFILE,
   HEADER_SEARCH,
+  HEADER_SETTINGS,
   HEADER_SOUND,
   type Layout,
   leave,
@@ -1032,12 +1034,13 @@ export function App() {
   // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
   const failed = (name: string) => () => flash(`Couldn't open ${name}`);
   const launch = (id: string, name: string) => void openApp(id).catch(failed(name));
-  const playTitle = (type: CatalogKind, title: SlimTitle) =>
+  const playTitle = (type: CatalogKind, title: SlimTitle, autoPlay = true) =>
     // With the player inside Nest, resuming opens the title's page and plays it here; else the catalog app does.
     EMBED_PLAYER
-      ? browse({ type, open: { type, title, autoPlay: true } }, () => {})
-      : void openTitleInApp(SERVER_URL, type, title, true).catch(failed(title.name));
-  const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title);
+      ? browse({ type, open: { type, title, autoPlay } }, () => {})
+      : void openTitleInApp(SERVER_URL, type, title, autoPlay).catch(failed(title.name));
+  // Settings › Playback › Resume from Continue watching: play at once, or open the title's page first.
+  const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title, loadSettings().playback.resumeAtOnce);
   const openHit = (r: SearchResult) =>
     browse({ type: r.type, open: { type: r.type, title: r.title } }, () => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name)));
   /** Browses the catalog inside Nest when it is built in, else opens the catalog app (the old way). */
@@ -1556,6 +1559,8 @@ export function App() {
       if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
       if (i === HEADER_PICTURE) return togglePicture();
       if (i === HEADER_SOUND) return toggleSoundButton();
+      // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
+      if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } }, () => flash("Settings open in the Cinema app"));
       if (i === HEADER_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");

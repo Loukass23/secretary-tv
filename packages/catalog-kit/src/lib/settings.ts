@@ -45,6 +45,8 @@ export interface DashboardSettings {
     tabStyle: Auto<TabStyle>;
   };
   playback: {
+    /** OK on a title in progress (Nest's Continue watching) plays it at once, or opens its page first. */
+    resumeAtOnce: boolean;
     /** How long Play waits for slower providers before starting the best source found (lib/autoplay.ts). */
     startAfter: StartAfter;
     /** Sources outside these sizes, in GB, are tried after the others (lib/rules.ts); null is no limit. */
@@ -137,6 +139,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   },
   collections: { cardShape: "auto", cardSize: "auto", folderView: "auto", tabStyle: "auto" },
   playback: {
+    resumeAtOnce: true,
     startAfter: "5",
     maxSizeGb: null,
     minSizeGb: null,
@@ -220,6 +223,7 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null): Dash
       tabStyle: pick(TAB_STYLES, c.tabStyle),
     },
     playback: {
+      resumeAtOnce: p.resumeAtOnce ?? DEFAULT_SETTINGS.playback.resumeAtOnce,
       startAfter: p.startAfter && START_AFTER.includes(p.startAfter) ? p.startAfter : DEFAULT_SETTINGS.playback.startAfter,
       maxSizeGb: SIZE_STEPS_GB.includes(p.maxSizeGb ?? null) ? (p.maxSizeGb ?? null) : null,
       minSizeGb: SIZE_STEPS_GB.includes(p.minSizeGb ?? null) ? (p.minSizeGb ?? null) : null,
@@ -266,6 +270,14 @@ function cycleOption<T>(list: readonly T[], current: T, dir: 1 | -1): T {
 }
 
 export const SETTING_ITEMS: readonly SettingItemDef[] = [
+  {
+    id: "playback.resumeAtOnce",
+    section: "Playback",
+    label: "Resume from Continue watching",
+    description: "A title in progress plays at once when you press OK on it in Nest; off, its page opens first",
+    getValue: (s) => (s.playback.resumeAtOnce ? "Plays at once" : "Opens the page"),
+    cycle: (s) => ({ ...s, playback: { ...s.playback, resumeAtOnce: !s.playback.resumeAtOnce } }),
+  },
   {
     id: "playback.startAfter",
     section: "Playback",

@@ -4,6 +4,7 @@ import {
   clamp,
   enter,
   HEADER_BELL,
+  HEADER_SETTINGS,
   HEADER_LENGTH,
   HEADER_PARTY,
   HEADER_PICTURE,
@@ -37,7 +38,8 @@ const inside = (col: number, i: number) => ({ area: "row" as const, col, i, insi
 
 test("the header runs profile, then the six buttons", () => {
   assert.deepEqual(step({ area: "header", i: HEADER_PICTURE }, "Right", full), { area: "header", i: HEADER_SOUND });
-  assert.deepEqual(step({ area: "header", i: HEADER_SOUND }, "Right", full), { area: "header", i: HEADER_BELL });
+  assert.deepEqual(step({ area: "header", i: HEADER_SOUND }, "Right", full), { area: "header", i: HEADER_SETTINGS });
+  assert.deepEqual(step({ area: "header", i: HEADER_SETTINGS }, "Right", full), { area: "header", i: HEADER_BELL });
   assert.deepEqual(step({ area: "header", i: HEADER_SOUND }, "Left", full), { area: "header", i: HEADER_PICTURE });
   assert.deepEqual(step({ area: "header", i: HEADER_PICTURE }, "Left", full), { area: "header", i: HEADER_PICTURE - 1 });
   assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Right", full), { area: "header", i: HEADER_PARTY });

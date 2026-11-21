@@ -11,6 +11,7 @@ export interface CatalogEntry {
   /** A title to open on, or a folder of the profile's collections; neither opens the home. */
   open?: CatalogConfig["open"];
   folder?: CatalogConfig["folder"];
+  hub?: CatalogConfig["hub"];
 }
 
 const HEADING = { movie: "Secretary Cinema", series: "Secretary Shows", anime: "Secretary Anime" } as const;
@@ -28,7 +29,7 @@ export function CatalogHost({ entry, host, serverUrl }: { entry: CatalogEntry; h
   // The catalog comes in by opacity, on its own layer, so it feels like the card opening rather than a new page.
   return (
     <div class="nest-catalog-in">
-      <App type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} returnTo="" embedded={host} open={entry.open} folder={entry.folder} />
+      <App type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} returnTo="" embedded={host} open={entry.open} folder={entry.folder} hub={entry.hub} />
     </div>
   );
 }

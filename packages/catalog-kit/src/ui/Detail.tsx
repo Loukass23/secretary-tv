@@ -1,8 +1,9 @@
 import { type Dir, type Focus, getTvInputBridge, move, useKeys, windowOf } from "@secretary/tv-kit";
-import { BirdLoader, Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { backgroundUrl, fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, similarUrl } from "../lib/cinemeta.ts";
 import { searchSummary } from "../lib/searchsummary.ts";
+import { LoadingScreen } from "./Loading.tsx";
 import {
   type SagaDef,
   fetchTmdbCollection,
@@ -178,7 +179,8 @@ export function Detail({
     const t = setTimeout(() => setGaveUp(true), META_WAIT_MS);
     return () => clearTimeout(t);
   }, []);
-  const waiting = metaState === "loading" && !gaveUp;
+  // Opened to play (Continue watching): the page never shows, only the loading screen until the player takes over.
+  const [autoFailed, setAutoFailed] = useState(false);
   const [found, setFound] = useState<Found | null>(null);
   // Sources found so far while plugins are still answering; `found` is the final list.
   const [partial, setPartial] = useState<{ id: string; value: Stream[] } | null>(null);
@@ -204,6 +206,7 @@ export function Detail({
   const ctxHolding = useRef(false);
   // Play pressed (or autoplay asked) before the sources are all in: decided by lib/autoplay.ts as they arrive.
   const [pending, setPending] = useState<{ episode: Video | undefined; from: number; together?: boolean } | null>(null);
+  const waiting = (metaState === "loading" && !gaveUp) || (Boolean(autoPlay) && !autoFailed && !(gaveUp && !pending));
   // The Watch together card: start a party or type a code (focus 0 or 1), null when closed.
   const [partyCard, setPartyCard] = useState<number | null>(null);
   const searchStarted = useRef(0);
@@ -420,6 +423,7 @@ export function Detail({
     }
     lastWait.current = "";
     setPending(null);
+    if ("sheet" in d || "none" in d || !listed) setAutoFailed(true);
     if ("sheet" in d && pending.together) {
       island.push({ key: "source", text: "No source to share by itself · start the party from Play's source", level: "error" });
       return;
@@ -781,7 +785,13 @@ export function Detail({
       <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="det">
         <HeroLayers hero={hero} shade={base.shade} />
         <div class="det-clock">{clockText}</div>
-        {waiting && <BirdLoader label={meta.name} />}
+        {waiting && (
+          <LoadingScreen
+            heading={series && target && autoPlay ? `${meta.name} · ${episodeLabel(target)} ${target.name}` : meta.name}
+            status={pending && pluginProgress ? pluginProgress : "Spreading wings…"}
+            bar="loading"
+          />
+        )}
 
         <Glass {...info} class="det-info">
           <span class="cat-kicker">

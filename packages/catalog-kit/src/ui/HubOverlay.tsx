@@ -44,6 +44,8 @@ const RECENT_Y = KEYS_Y + 3 * ROW_STRIDE + 4;
 const RAILS_Y = RECENT_Y + 76;
 const SETTING_H = 112;
 const SETTING_STRIDE = SETTING_H + 16;
+/** A section's heading above its lines. */
+const HEAD_H = 56;
 
 type TopBarAction =
   | { id: "search_bar"; label: string; short: string; icon: string }
@@ -133,6 +135,8 @@ export function HubOverlay({
   const [plugins, setPlugins] = useState(() => pluginStore.get());
   const [debrid, setDebrid] = useState(() => loadDebrid());
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  // "Restore default settings" asks twice: the first OK arms it, the second does it; moving away disarms it.
+  const [confirmReset, setConfirmReset] = useState(false);
   // Settings › Addons, after Sources: installed Stremio addons (lib/addons.ts).
   const [addonList, setAddonList] = useState(() => addonStore.list());
   useEffect(() => pluginStore.subscribe(() => setPlugins(pluginStore.get())), []);
@@ -306,6 +310,8 @@ export function HubOverlay({
   }, [results, continueItems]);
 
   const hasRecentChipRow = tab === "search" && !query.trim() && recentSearches.length > 0;
+
+  useEffect(() => setConfirmReset(false), [focus.row, tab]);
 
   const lengths = useMemo(() => {
     if (tab === "settings") {
@@ -493,6 +499,12 @@ export function HubOverlay({
         return;
       }
       if (!item && !source && key === "Enter") {
+        if (!confirmReset) {
+          setConfirmReset(true);
+          flash("OK again to restore every setting");
+          return;
+        }
+        setConfirmReset(false);
         applySettingChange(DEFAULT_SETTINGS);
         flash("Restored default settings");
         return;
@@ -562,7 +574,30 @@ export function HubOverlay({
   const railRow0 = hasRecentChipRow ? RECENT_ROW + 1 : RECENT_ROW;
   const railAt = focus.row >= railRow0 ? focus.row - railRow0 : 0;
   const sectionIdx = activeType === "movie" ? 0 : activeType === "series" ? 1 : 2;
-  const settingsShift = Math.max(0, focus.row - 6) * SETTING_STRIDE;
+  // The settings page in sections: a heading, then its lines (`ys` is where each focusable line sits, row 1 first).
+  const heads: { label: string; y: number }[] = [];
+  const ys: number[] = [];
+  {
+    let y = 0;
+    let last = "";
+    for (const it of SETTING_ITEMS) {
+      if (it.section !== last) {
+        heads.push({ label: it.section, y });
+        y += HEAD_H;
+        last = it.section;
+      }
+      ys.push(y);
+      y += SETTING_STRIDE;
+    }
+    if (sources.length) {
+      heads.push({ label: "Sources and addons", y });
+      y += HEAD_H;
+      for (let i = 0; i < sources.length; i++, y += SETTING_STRIDE) ys.push(y);
+    }
+    heads.push({ label: "Reset", y });
+    ys.push(y + HEAD_H);
+  }
+  const settingsShift = Math.max(0, (ys[focus.row - 1] ?? 0) - 3 * SETTING_STRIDE);
   const status = !query.trim()
     ? "Type with the remote, pick a recent search, or press 🎤 to speak"
     : searching
@@ -602,20 +637,25 @@ export function HubOverlay({
           <>
             <div class="hub-title" style={{ left: `${PAD}px`, top: "150px" }}>
               Settings
-              <small>Accent colour, clock, boot animation, cinema dimming and the sources streams come from. The dashboard lives in Secretary Nest.</small>
+              <small>Playback, appearance, collections, lights and the sources streams come from. The dashboard lives in Secretary Nest.</small>
             </div>
             <div class="sg-clip" style={{ left: `${PAD - 20}px`, top: "250px", width: "1800px", height: "830px" }}>
               <div class="sg-scroll" style={{ transform: `translate3d(20px,${20 - settingsShift}px,0)` }}>
+                {heads.map((h) => (
+                  <span key={h.label} class="hub-section" style={{ top: `${h.y}px` }}>
+                    {h.label}
+                  </span>
+                ))}
                 {SETTING_ITEMS.map((item, idx) => (
                   <ListCard
                     key={item.id}
                     x={0}
-                    y={idx * SETTING_STRIDE}
+                    y={ys[idx]}
                     w={1760}
                     h={SETTING_H}
                     frost={false}
                     title={item.label}
-                    sub={`${item.section} · ${item.description}`}
+                    sub={item.description}
                     meta={item.text ? item.getValue(settings) : `‹ ${item.getValue(settings)} ›`}
                     focused={focus.row === idx + 1}
                   />
@@ -624,7 +664,7 @@ export function HubOverlay({
                   <ListCard
                     key={row.key}
                     x={0}
-                    y={(SETTING_ITEMS.length + i) * SETTING_STRIDE}
+                    y={ys[SETTING_ITEMS.length + i]}
                     w={1760}
                     h={SETTING_H}
                     frost={false}
@@ -636,13 +676,13 @@ export function HubOverlay({
                 ))}
                 <ListCard
                   x={0}
-                  y={(SETTING_ITEMS.length + sources.length) * SETTING_STRIDE}
+                  y={ys[SETTING_ITEMS.length + sources.length]}
                   w={1760}
                   h={SETTING_H}
                   frost={false}
                   title="Restore default settings"
-                  sub="Accent, clock, boot animation and dimming go back to their defaults"
-                  meta="OK"
+                  sub="Every setting above goes back to its default; sources, keys and addons are kept"
+                  meta={confirmReset ? "OK again to confirm" : "OK"}
                   focused={focus.row === SETTING_ITEMS.length + sources.length + 1}
                 />
               </div>

@@ -75,6 +75,8 @@ export interface CatalogConfig {
   open?: { type: CatalogType; title: Title; autoPlay?: boolean; room?: string };
   /** Open this folder of the profile's collections first. */
   folder?: { collectionId: string; folderId: string };
+  /** Open the Hub first, on this tab (embedded: Nest's Settings button). */
+  hub?: { tab: OverlayTab };
 }
 
 /**
@@ -143,7 +145,7 @@ const HEADING_FOR: Record<CatalogType, string> = {
   anime: "Secretary Anime",
 };
 
-export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open, folder }: CatalogConfig) {
+export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open, folder, hub }: CatalogConfig) {
   // Embedded, the host owns the player (see EmbeddedHost); prepare-ahead would hold a decoder the app then needs.
   const hosted = Boolean(embedded && !embedded.ownPlayer);
   // Embedded: one Nuvio client for the page, the host's.
@@ -193,10 +195,10 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     [activeType, addonRev],
   );
   const [view, setView] = useState<View>(() =>
-    open ? { name: "detail", itemType: open.type, title: { ...open.title, catalogType: open.type }, autoPlay: open.autoPlay } : { name: "home" },
+    open ? { name: "detail", itemType: open.type, title: { ...open.title, catalogType: open.type }, autoPlay: open.autoPlay } : hub ? { name: "hub", tab: hub.tab } : { name: "home" },
   );
   // Opened by the host on a title or a folder: Back from there gives the screen back instead of showing the home.
-  const fromHost = useRef(Boolean(embedded && (open || folder)));
+  const fromHost = useRef(Boolean(embedded && (open || folder || hub)));
   // Watch together (lib/party.ts): one party at a time, kept across the episodes it plays.
   const [party, setParty] = useState<PartySession | null>(null);
   /** The content id the party's player has open, so a timeline for other content (a `next`) opens that. */

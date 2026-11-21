@@ -193,11 +193,22 @@ film. While plugins search, the sources line is one calm sentence ("Searching ·
 
 ### Loading screens
 
-Both loading screens (the catalog chunk opening in Nest, and a title's page waiting for its details) show the boot
+One loading screen per title (`LoadingScreen` in catalog-kit): the bird, the title, a status line, the source's badges and
+a bar. The page waiting for its details, a page opened from Continue watching finding a source, and the player preparing
+the stream all show it, so only the words change (the player's copy is `calm`, so the bird does not bloom again, and art
+already shown comes back at once). The catalog chunk opening in Nest shows the bird alone. They show the boot
 splash's secretary bird (`BirdLoader` in tv-kit glass, drawn from `bird.ts`, a copy of the drawing in `index.html`; keep
 them in step). It blooms, then breathes, and fades in only after 220 ms, so a quick load never flashes it. A page waits
 for the title's meta (seasons, episodes, runtime) before it shows anything, so it never appears at "0 seasons" and jumps;
 a catalog slower than 6 s shows what it has.
+
+### Settings
+
+Nest's header has a Settings button (sliders icon, left of the bell): it opens the catalog's Hub on its Settings tab
+(`hub: { tab: "settings" }` in `CatalogConfig`; Back returns to Nest). The page groups its lines under headings
+(Playback, Appearance, Collections, Lights, Sources and addons, Reset); "Restore default settings" needs a second OK.
+"Resume from Continue watching" (Playback) decides whether OK on a title in progress plays it at once or opens its page
+first; the Nest menu's "Play" always plays.
 
 ### Card styles (long OK)
 
