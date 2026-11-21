@@ -1,7 +1,7 @@
 // The context menu on the detail page (a long OK on an action or an episode): what it offers for what has focus. Pure,
 // so it is unit tested; ui/Detail.tsx runs the chosen line through the same code the buttons use.
 
-export type TitleAction = "play" | "restart" | "sources" | "timeline" | "watched" | "mylist";
+export type TitleAction = "details" | "play" | "restart" | "sources" | "timeline" | "watched" | "mylist";
 
 export interface MenuLine {
   id: TitleAction;
@@ -19,11 +19,14 @@ export interface TitleMenuState {
   saved: boolean;
   /** The title is in a saga (a timeline to open). */
   saga: boolean;
+  /** Nest's tile menu: the title's page is a line of its own (on the page itself it would be pointless). */
+  details?: boolean;
 }
 
 export function titleMenu(s: TitleMenuState): MenuLine[] {
   const what = s.episode ? ` ${s.episode}` : "";
-  const lines: MenuLine[] = [{ id: "play", label: `▶ ${s.hasProgress ? "Resume" : "Play"}${what}` }];
+  const lines: MenuLine[] = s.details ? [{ id: "details", label: "ⓘ Open details" }] : [];
+  lines.push({ id: "play", label: `▶ ${s.hasProgress ? "Resume" : "Play"}${what}` });
   if (s.hasProgress) lines.push({ id: "restart", label: `↺ Start over${what}` });
   lines.push({ id: "sources", label: `☰ Choose a source${what}` });
   if (s.saga) lines.push({ id: "timeline", label: "❖ Open the timeline" });

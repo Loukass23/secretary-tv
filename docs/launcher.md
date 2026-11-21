@@ -121,10 +121,10 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
 | Assistant under the cards | fixed at the bottom centre, under the orb | the **compact** mode. Down from a card or the last line inside one focuses it **and starts listening at once**; the ribbons show only while the room speaks or Nest answers, otherwise it is the orb (pulsing faster while it thinks), with a line of text under it (status, the answer, or "Press OK to talk"). Leaving it drops the clip. What it is asked moves focus to the card concerned: films open Cinema (or Shows, Anime) onto the picks, with what you asked and what the assistant did shown beside the card's label; the weather opens Weather, a reminder opens Reminders, the lights focus Home. Back returns to the first card |
 | Recent | after Today, while there is an answer | goes back to that answer (the picks, the weather, the lights, the reminder, or asks again) |
-| Continue · Cinema | a tall poster (the card's style) | opens the card: every film, then "Open Cinema"; a film resumes or opens; with nothing in progress, tonight's picks |
+| Continue · Cinema | a tall poster (the card's style) | opens the card: every film; a film resumes or opens; with nothing in progress, tonight's picks |
 | Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
 | Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
-| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
+| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them. Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
 | YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
 | Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog app that fits it (the launch payload's `folder`; the app opens it once its collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
@@ -149,11 +149,66 @@ the saved keys of removed cards are kept so a card put back finds its place.
 ### Opening a media card
 
 Cinema, Shows and Anime hold up to 8 titles each: what is in progress first, then the catalog's picks. OK opens the card
-in place into one row of all of them, at the Ask results size, with the app's "Open Cinema" tile last (`src/cards.tsx`,
+in place into one row of all of them, at the Ask results size (`src/cards.tsx`,
 `MediaRow`). The cards after it slide right by transform and every other card steps back to 35% opacity; the folded
 tiles fade out and the titles rise in a beat apart (opacity and transform only, on their own layers). Focus lands on the
 first title. The focused title's name, its line (episode or year) and up to three lines of its synopsis sit in a fixed
 panel at the left under the row (from the catalog, or Cinemeta and Kitsu for titles in progress). Up or Back folds the card again.
+
+### Title menu (long OK on a tile)
+
+Inside an opened Cinema, Shows or Anime card, a short OK on a title acts on the keyup (resumes it, or opens its page) and a
+held one (600 ms) opens the title's menu: Open details, Play or Resume, Mark watched, Add to or Remove from My List (the
+lines are catalog-kit's `titleMenu`, minus the ones that need the page). While OK is held a pill at the top right
+(`HoldPill` in tv-kit glass) shows after 150 ms with a bar that fills, "Hold for options", then "Release for options";
+a tap never shows it. The closed cards' long OK (below) shows it too. The rows under the picks (My List, genres) have the same menu, and on a pick it also holds "Remove from
+suggestions" (`src/dismissed.ts`; the next trending title takes its place). Watched and My List are written through catalog-kit's local stores; they reach the Nuvio account the next
+time the catalog runs.
+
+### Opened card: rows, headers and looks
+
+The opened card has no Open tile any more (the catalog runs inside Nest). The header names where the remote is, as a
+breadcrumb with a count ("Cinema › My List  12 films") and a hint on the right; the first row is "Continue watching",
+"Tonight's picks" or "For you". Every row below (My List, genres) is drawn like the first: the same tiles rising in a
+beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis) in a panel with
+room of its own. The row under the focused one is drawn dimmed, its label and the top of its tiles showing under the
+caption, so Down has something to go to.
+
+On a title in progress the menu also holds "Remove from Continue": it takes the title off Continue watching on this TV,
+in the Nuvio profile (every episode's progress row) and on the home server (`forgetProgress` in `app.tsx`,
+`removeResume` in catalog-kit).
+
+Each row has its own look, set from the title menu's last line ("Row look", Left and Right or OK change it at once,
+kept per row on the TV, `src/row-look.ts`): Poster, Landscape, Square, Highlight 4:3 (the catalog apps' card shapes,
+`collectionlayout.ts`) and Ranking (big numerals beside the posters, the idea of Nuvio Legacy's ranking view; ideas only,
+no code from it). Landscape and 4:3 tiles are as tall as the poster and as wide as their art (16:9, 4:3), so a still fits whole; they use
+the title's background art (the artwork service's when the catalog has none).
+
+### Film page
+
+A film's page (catalog-kit `Detail`) has a "More like this" row under the panel: titles of the film's first genre
+(`similarUrl`, `pickSimilar` in `cinemeta.ts`), Down from the actions, OK opens that title and Back comes back to the
+film. While plugins search, the sources line is one calm sentence ("Searching · 2 of 6 answered · 120 found so far",
+`searchsummary.ts`) instead of each provider's state, and the Sources button shows its count only once the search is done.
+
+### Loading screens
+
+One loading screen per title (`LoadingScreen` in catalog-kit): the bird, the title, a status line, the source's badges and
+a bar. The page waiting for its details, a page opened from Continue watching finding a source, and the player preparing
+the stream all show it, so only the words change (the player's copy is `calm`, so the bird does not bloom again, and art
+already shown comes back at once). The catalog chunk opening in Nest shows the bird alone. They show the boot
+splash's secretary bird (`BirdLoader` in tv-kit glass, drawn from `bird.ts`, a copy of the drawing in `index.html`; keep
+them in step). It blooms, then breathes, and fades in only after 220 ms, so a quick load never flashes it. A page waits
+for the title's meta (seasons, episodes, runtime) before it shows anything, so it never appears at "0 seasons" and jumps;
+a catalog slower than 6 s shows what it has.
+
+### Settings
+
+Nest's header has a Settings button (sliders icon, left of the bell): it opens the catalog's Hub on its Settings tab
+(`hub: { tab: "settings" }` in `CatalogConfig`; Back returns to Nest). The page groups its lines under headings
+(Playback, Appearance, Collections, Lights, Sources and addons, Reset); "Restore default settings" needs a second OK.
+"Resume from Continue watching" (Playback) decides whether OK on a title in progress plays it at once or opens its page
+first; the Nest menu's "Play" always plays.
 
 ### Card styles (long OK)
 

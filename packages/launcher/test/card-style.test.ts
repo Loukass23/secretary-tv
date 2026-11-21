@@ -58,12 +58,12 @@ test("smaller sizes shrink every layout, and every layout fits the card height",
   assert.deepEqual(styleFor({ cinema: { layout: "row", size: "s" } }, "cinema"), { layout: "row", size: "s" });
 });
 
-test("the opened row scrolls only once focus passes the fourth title, and stops at the Open tile", () => {
-  // 8 titles and the Open tile: 2744px, so the row moves 984px at most.
+test("the opened row scrolls only once focus passes the fourth title, and stops at the last one", () => {
+  // 9 titles: 2474px, so the row moves 716px at most.
   assert.equal(expandedScroll(0, 9), 0);
   assert.equal(expandedScroll(3, 9), 0);
   assert.equal(expandedScroll(8, 9), 8 * EXPANDED.stride + EXPANDED.w - EXPANDED_W);
-  assert.equal(expandedScroll(8, 9), 984);
+  assert.equal(expandedScroll(8, 9), 716);
   // A longer row scrolls one stride per title past the fourth.
   assert.equal(expandedScroll(4, 13), EXPANDED.stride);
   assert.equal(expandedScroll(2, 3), 0);

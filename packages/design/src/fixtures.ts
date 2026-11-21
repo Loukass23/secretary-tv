@@ -84,7 +84,6 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     label,
     items,
     style: styleFor(styles, key),
-    open: { label: `Open ${name}`, run: noop },
     run: noop,
     // Under the picks once the card is opened (Down): My List, then genre rows.
     more: ["My List", `Action ${unit}`, `Comedy ${unit}`].map((label, r) => ({

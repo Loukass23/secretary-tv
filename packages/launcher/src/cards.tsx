@@ -6,7 +6,9 @@
 // place into one row of all its titles and the app's Open tile; the cards after it slide aside by transform.
 import { AppChip, Glass, Icon, type IconName, ListCard, MediaTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
-import { CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, expandedScroll, MORE, moreScroll, moreTop } from "./card-style.ts";
+import type { CatalogKind, SlimTitle } from "./apps.ts";
+import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, MORE, moreTop, rowScroll } from "./card-style.ts";
+import { type RowShape, tileBox } from "./row-look.ts";
 import { Component } from "preact";
 import { type Column, rowAt } from "./nest-nav.ts";
 
@@ -33,6 +35,10 @@ export interface MoreRow {
   label: string;
   items: MediaItem[];
   run: (i: number) => void;
+  /** How the row draws its tiles (row-look.ts). */
+  shape?: RowShape;
+  /** The title behind item `i`, for its long-OK menu. */
+  target?: (i: number) => TileTarget | null;
 }
 
 export interface ListItem {
@@ -41,6 +47,18 @@ export interface ListItem {
   meta?: string;
   color?: string;
   done?: boolean;
+}
+
+/** A title in an opened media card: what the long-OK menu acts on. */
+export interface TileTarget {
+  type: CatalogKind;
+  title: SlimTitle;
+  /** In progress: Play resumes it. */
+  resume: boolean;
+  /** The row it sits in (`<card>/<row>`), where its look is kept. */
+  row: string;
+  /** A suggestion of tonight's picks: the menu can remove it from the row. */
+  suggestion?: boolean;
 }
 
 /** One card of the row; `run(i)` is what OK does on its item `i`. */
@@ -52,12 +70,16 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       unit: string;
       items: MediaItem[];
       style: CardStyle;
-      /** The last tile of the expanded card: opens the app itself. */
-      open: { label: string; run: () => void };
+      /** The first row's own name once the card is open ("Continue watching", "Tonight's picks"). */
+      heading?: string;
+      /** How the first row draws its tiles (row-look.ts). */
+      shape?: RowShape;
       /** What the assistant understood and did, shown beside the label while the card holds its suggestions. */
       note?: { prompt: string; reply: string };
       /** Rows under the picks once the card is opened (Down): My List, then the genres. */
       more?: MoreRow[];
+      /** The title behind tile `i` of the opened card, for its long-OK menu; null for the Open tile and the rows under. */
+      target?: (i: number) => TileTarget | null;
     }
   | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
@@ -119,7 +141,21 @@ export function columnShape(c: RowColumn, expanded = false): { w: number } & Col
 }
 
 /** An opened media card's rows: the picks and the Open tile, then each extra row's items. */
-export const expandedRows = (c: Extract<RowColumn, { kind: "media" }>): number[] => [c.items.length + 1, ...(c.more ?? []).filter((m) => m.items.length).map((m) => m.items.length)];
+export const expandedRows = (c: Extract<RowColumn, { kind: "media" }>): number[] => [c.items.length, ...(c.more ?? []).filter((m) => m.items.length).map((m) => m.items.length)];
+
+type MediaColumn = Extract<RowColumn, { kind: "media" }>;
+const rowsOf = (c: MediaColumn): MoreRow[] => (c.more ?? []).filter((m) => m.items.length);
+
+/** The title behind item `i` of an opened media card (a pick, or a title in a row under them). */
+export function targetAt(c: MediaColumn, i: number): TileTarget | null {
+  const { r, x } = rowAt(expandedRows(c), i);
+  return (r === 0 ? c.target?.(x) : rowsOf(c)[r - 1]?.target?.(x)) ?? null;
+}
+
+/** What an opened card calls the row it is on, for the header: the picks' own name, else the extra row's label. */
+export function rowTitle(c: MediaColumn, r: number): { title: string; count: number } {
+  return r === 0 ? { title: c.heading ?? c.label, count: c.items.length } : { title: rowsOf(c)[r - 1].label, count: rowsOf(c)[r - 1].items.length };
+}
 
 /** Where each column starts in the row, and its shape for the remote; `expanded` is the open media card, or -1. */
 export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: number[]; w: number[]; nav: Column[]; width: number } {
@@ -163,13 +199,9 @@ export function itemBox(c: RowColumn, i: number, expanded = false): { x: number;
   if (c.kind !== "media" || i < 0) return null;
   if (expanded) {
     const { r, x } = rowAt(expandedRows(c), i);
-    if (r > 0) {
-      const n = (c.more ?? []).filter((m) => m.items.length)[r - 1].items.length;
-      return { x: x * MORE.stride - moreScroll(x, n), y: MORE.labelH, w: MORE.w, h: MORE.h };
-    }
-    // The Open tile has no art to glow behind.
-    if (i >= c.items.length) return null;
-    return { x: i * EXPANDED.stride - expandedScroll(i, c.items.length + 1), y: 0, w: EXPANDED.w, h: EXPANDED.h };
+    const row = r === 0 ? { shape: c.shape, n: c.items.length } : { shape: rowsOf(c)[r - 1].shape, n: rowsOf(c)[r - 1].items.length };
+    const b = tileBox(row.shape ?? "poster");
+    return { x: x * b.stride + b.lead - rowScroll(x, row.n, b.stride, b.w), y: (r === 0 ? 0 : MORE.labelH) + EXPANDED.h - b.h, w: b.w - b.lead, h: b.h };
   }
   if (i >= c.items.length) return null;
   const b = collapsedShape(c.style).boxes[i];
@@ -298,16 +330,68 @@ function MediaSmall({ col, focus, out }: { col: Extract<RowColumn, { kind: "medi
 interface MoreBlockProps {
   label: string;
   items: MediaItem[];
+  shape: RowShape;
   top: number;
   gone: boolean;
+  /** The row just under the focused one: shown dimmed as a peek of what Down reaches. */
+  peek: boolean;
   /** The focused item of this row, or -1. */
   at: number;
   scroll: number;
 }
 
+/** One row's tiles in the shape it is drawn in: the window in view, each rising in a beat after the one before it. */
+function Tiles({ items, shape, scroll, at }: { items: MediaItem[]; shape: RowShape; scroll: number; at: number }) {
+  const b = tileBox(shape);
+  const from = Math.max(0, Math.floor(scroll / b.stride) - 1);
+  const to = Math.min(items.length, from + Math.ceil(EXPANDED_W / b.stride) + 2);
+  return (
+    <>
+      {Array.from({ length: to - from }, (_, k) => {
+        const i = from + k;
+        const it = items[i];
+        const x = i * b.stride;
+        const y = EXPANDED.h - b.h;
+        return (
+          <div key={i} class="nest-rise" style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}>
+            {b.lead > 0 && (
+              <span class={`nest-rank${at === i ? " is-focus" : ""}`} style={{ left: `${x}px`, top: `${y}px`, width: `${b.lead}px`, height: `${b.h}px` }}>
+                {i + 1}
+              </span>
+            )}
+            <MediaTile
+              x={x + b.lead}
+              y={y}
+              w={b.w - b.lead}
+              h={b.h}
+              src={b.art === "still" ? (it.still ?? it.poster) : it.poster}
+              badge={badgeOf(it, false)}
+              progress={it.progress}
+              focused={at === i}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** The focused title's caption, a fixed panel at the row's left edge so the eye does not chase the focus. */
+function Caption({ hit, top }: { hit: MediaItem; top: number }) {
+  return (
+    <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${top}px`, width: `${CAPTION_W}px`, height: `${CAPTION.h}px` }}>
+      <b>{hit.title}</b>
+      {hit.sub && <small>{hit.sub}</small>}
+      {hit.about && <p>{hit.about}</p>}
+    </div>
+  );
+}
+
 /**
- * One row under the picks. Each key press re-renders the card, and with every row drawn that is dozens of tiles, so a
- * row repaints only when its own focus, scroll, place or titles changed (docs/performance.md).
+ * One row under the picks, drawn as the picks row is: the same tiles, rising in when the row is reached, and the
+ * focused title's caption under them. The row below the focused one is drawn dimmed, so the top of it shows under the
+ * caption. Each key press re-renders the card, so a row repaints only when its own focus, scroll, place or titles
+ * changed (docs/performance.md).
  */
 class MoreBlock extends Component<MoreBlockProps> {
   shouldComponentUpdate(next: MoreBlockProps): boolean {
@@ -317,91 +401,87 @@ class MoreBlock extends Component<MoreBlockProps> {
       p.scroll !== next.scroll ||
       p.top !== next.top ||
       p.gone !== next.gone ||
+      p.peek !== next.peek ||
+      p.shape !== next.shape ||
       p.label !== next.label ||
       p.items.length !== next.items.length ||
       p.items.some((it, i) => it.poster !== next.items[i].poster || it.title !== next.items[i].title)
     );
   }
-  render({ label, items, top, gone, at, scroll }: MoreBlockProps) {
+  render({ label, items, shape, top, gone, peek, at, scroll }: MoreBlockProps) {
+    const hit = at >= 0 ? items[at] : undefined;
     return (
-      <div class={`nest-more${gone ? " is-gone" : ""}`} style={{ top: `${top}px` }}>
-        <span class="nest-more-label">{label}</span>
-        <Scroller x={0} y={MORE.labelH} w={EXPANDED_W} h={MORE.h} axis="x" offset={scroll}>
-          {items.map((it, i) => (
-            <MediaTile key={i} x={i * MORE.stride} y={0} w={MORE.w} h={MORE.h} src={it.poster} title={it.title} sub={it.sub} focused={at === i} />
-          ))}
+      <div class={`nest-more${gone ? " is-gone" : ""}${peek ? " is-peek" : ""}`} style={{ top: `${top}px` }}>
+        <span class="nest-more-label">
+          {label}
+          <em>{items.length}</em>
+        </span>
+        <Scroller x={0} y={MORE.labelH} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
+          <Tiles items={items} shape={shape} scroll={scroll} at={at} />
         </Scroller>
+        {hit && <Caption hit={hit} top={MORE.labelH + EXPANDED.h + CAPTION.top} />}
       </div>
     );
   }
 }
 
-/** A media card opened: every title in one row, then the app's Open tile; they rise in one after another. */
-function MediaRow({ col, focus: flat, page }: { col: Extract<RowColumn, { kind: "media" }>; focus: number; page: [number, number] }) {
-  const n = col.items.length + 1;
+/** A media card opened: every title in one row; they rise in one after another. Down reaches the rows under them. */
+function MediaRow({ col, focus: flat }: { col: Extract<RowColumn, { kind: "media" }>; focus: number }) {
   const rows = expandedRows(col);
   const { r: onRow, x: onX } = rowAt(rows, Math.max(0, flat));
   // Down moves to the rows under the picks: the whole stack slides up by transform until that row is at the top.
   const offY = onRow === 0 ? 0 : moreTop(onRow - 1);
-  const focus = onRow === 0 ? flat : -2;
-  const at = Math.max(0, Math.min(focus, n - 1));
-  const scroll = expandedScroll(at, n);
-  // Everything in view, from the scroll (a row of 8 and Open is drawn whole), plus one each side.
-  const from = Math.max(0, Math.floor(scroll / EXPANDED.stride) - 1);
-  const to = Math.min(n, from + Math.ceil(EXPANDED_W / EXPANDED.stride) + 2);
+  const b = tileBox(col.shape ?? "poster");
+  const at = onRow === 0 ? Math.max(0, Math.min(flat, col.items.length - 1)) : -2;
+  const scroll = rowScroll(Math.max(0, at), col.items.length, b.stride, b.w);
   const hit = onRow === 0 ? col.items[at] : undefined;
-  const more = (col.more ?? []).filter((m) => m.items.length);
+  const more = rowsOf(col);
   return (
     <div class="nest-stack" style={{ transform: `translate3d(0,${-offY}px,0)` }}>
       {/* The picks fade out as the stack slides up past them (opacity only). */}
       <div class={`nest-row0${onRow > 0 ? " is-gone" : ""}`}>
-      <Scroller x={0} y={0} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
-        {Array.from({ length: to - from }, (_, k) => {
-          const i = from + k;
-          const x = i * EXPANDED.stride;
-          const rise = { animationDelay: `${Math.min(i, 7) * 30}ms` };
-          if (i === col.items.length) {
-            return (
-              <div key="open" class="nest-rise" style={rise}>
-                <Glass x={x} y={0} w={EXPANDED.w} h={EXPANDED.h} page={[page[0] + x - scroll, page[1]]} focused={focus === i} class="nest-open">
-                  <b>{col.open.label}</b>
-                  <small>All {col.unit} in the app</small>
-                </Glass>
-              </div>
-            );
-          }
-          const it = col.items[i];
-          return (
-            <div key={i} class="nest-rise" style={rise}>
-              <MediaTile x={x} y={0} w={EXPANDED.w} h={EXPANDED.h} src={it.poster} badge={badgeOf(it, false)} progress={it.progress} focused={focus === i} />
-            </div>
-          );
-        })}
-      </Scroller>
-      {hit && (
-        // A fixed panel at the row's left edge, so the eye does not chase the focus across the screen.
-        <div class="nest-result-cap nest-media-cap is-on" style={{ left: 0, top: `${EXPANDED.h + 34}px`, width: `${CAPTION_W}px` }}>
-          <b>{hit.title}</b>
-          {hit.sub && <small>{hit.sub}</small>}
-          {hit.about && <p>{hit.about}</p>}
-        </div>
-      )}
+        <Scroller x={0} y={0} w={EXPANDED_W} h={EXPANDED.h} axis="x" offset={scroll}>
+          <Tiles items={col.items} shape={col.shape ?? "poster"} scroll={scroll} at={onRow === 0 ? at : -2} />
+        </Scroller>
+        {hit && <Caption hit={hit} top={EXPANDED.h + CAPTION.top} />}
       </div>
       {more.map((m, k) => {
         const r = k + 1;
+        // The focused row, the one just left and the one just below (a peek) are drawn; a row is mounted as it
+        // comes into view, so it rises in.
+        if (r < onRow - 1 || r > onRow + 1) return null;
+        const bm = tileBox(m.shape ?? "poster");
         return (
           <MoreBlock
             key={m.label}
             label={m.label}
             items={m.items}
+            shape={m.shape ?? "poster"}
             top={moreTop(k)}
             gone={r < onRow}
+            peek={r > onRow}
             at={r === onRow ? onX : -1}
-            scroll={moreScroll(r === onRow ? onX : 0, m.items.length)}
+            scroll={rowScroll(r === onRow ? onX : 0, m.items.length, bm.stride, bm.w)}
           />
         );
       })}
     </div>
+  );
+}
+
+/** An opened card's header names where the remote is: the card, the row and how many titles it holds ("Cinema › My List · 12 films"). */
+function MediaHeader({ col, flat }: { col: MediaColumn; flat: number }) {
+  const { r } = rowAt(expandedRows(col), Math.max(0, flat));
+  const { title, count } = rowTitle(col, r);
+  return (
+    <>
+      {col.name}
+      <i class="nest-crumb">›</i>
+      {title}
+      <em>
+        {count} {col.unit}
+      </em>
+    </>
   );
 }
 
@@ -413,8 +493,9 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, lifted }: Co
   return (
     <div class={`nest-col nest-kind-${col.kind}${dim ? " is-dim" : ""}${lifted ? " is-lifted" : ""}`} style={{ transform: `translate3d(${x}px,0,0)` }}>
       <span class={`nest-col-label${open ? " is-answer" : ""}`}>
-        {open && col.kind === "media" ? `${col.name} · ${col.items.length} ${col.unit}` : col.label}
+        {open && col.kind === "media" ? <MediaHeader col={col} flat={focus} /> : col.label}
       </span>
+      {open && col.kind === "media" && !col.note && <span class="nest-col-hint">Hold OK on a title for options · Back to close</span>}
       {open && col.kind === "media" && col.note && (
         <span class="nest-col-note">
           <b>“{col.note.prompt}”</b> {col.note.reply}
@@ -424,7 +505,7 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, lifted }: Co
         {/* The whole card picked: a ring faded in on its own layer, nothing moves. */}
         <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${columnHeight(col)}px` }} />
         {col.kind === "media" && <MediaSmall col={col} focus={-2} out={open} />}
-        {col.kind === "media" && open && <MediaRow col={col} focus={focus} page={page} />}
+        {col.kind === "media" && open && <MediaRow col={col} focus={focus} />}
       {col.kind === "home" && (
         <Glass x={0} y={0} w={HOME_W} h={CARD_H} page={page} class="nest-home-card">
           <i class="nest-home-bulb" />

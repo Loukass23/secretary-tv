@@ -6,13 +6,13 @@ import { useRef } from "preact/hooks";
 import { Avatar, Glass, Glow, Icon, IconButton, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, MOVE_LINE, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
-import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SOUND } from "./nest-nav.ts";
+import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SETTINGS, HEADER_SOUND } from "./nest-nav.ts";
 
 const PAD = 80;
 const HEAD_Y = 44;
-/** Party, Search, Lights, Picture, Sound and Bell, right to left from the edge. */
+/** Party, Search, Lights, Picture, Sound, Settings and Bell, right to left from the edge. */
 const ICON = { w: 88, h: 78, gap: 28 };
-const ICON_COUNT = 6;
+const ICON_COUNT = 7;
 const ICONS_X = 1920 - PAD - ICON_COUNT * ICON.w - (ICON_COUNT - 1) * ICON.gap;
 
 /** The picture button shows the mode the TV is on: a sun for Dynamic, a moon for Eco, a screen for anything else. */
@@ -65,6 +65,8 @@ interface Props {
   styleMenu?: StyleMenu | null;
   /** The move/remove menu (a long OK on any other card), while it is open. */
   removeMenu?: CardMenu | null;
+  /** The menu on a tile of an opened media card (a long OK on it), while it is open. */
+  tileMenu?: TileMenu | null;
   /** The card being moved (Left and Right), by key. */
   moving?: string | null;
   /** The TV's picture mode, when SmartThings reports it; the Picture button's icon follows it. */
@@ -123,6 +125,26 @@ export interface CardMenu {
   line: number;
 }
 
+/** A long-OK menu on a title in an opened media card: the lines (catalog-kit titleMenu) and the focused one. */
+export interface TileMenu {
+  name: string;
+  lines: { id: string; label: string }[];
+  at: number;
+}
+
+function TitleTileMenu({ m }: { m: TileMenu }) {
+  return (
+    <Glass x={1920 - PAD - STYLE_W} y={ROW.y + LABEL_H} w={STYLE_W} h={96 + m.lines.length * STYLE_LINE + 24} class="nest-menu nest-style">
+      <span class="nest-kicker nest-style-head">{m.name}</span>
+      {m.lines.map((l, i) => (
+        <span key={l.id} class={`nest-menu-item${m.at === i ? " is-focus" : ""}`} style={{ top: `${76 + i * STYLE_LINE}px` }}>
+          {l.label}
+        </span>
+      ))}
+    </Glass>
+  );
+}
+
 function RemoveMenu({ m, x, y, name }: { m: CardMenu; x: number; y: number; name: string }) {
   const lines = ["Move", "Remove from home"];
   return (
@@ -148,7 +170,7 @@ function MoveHint() {
 /** The style a card shows: the menu's while it is open on that card. */
 export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
-export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, moving, pictureMode, soundOn }: Props) {
+export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, tileMenu, moving, pictureMode, soundOn }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
 
   // A media card is open while the remote is inside it; the row scrolls just enough to keep the focused column whole.
@@ -181,7 +203,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
           <b>{time}</b>
         </div>
       </div>
-      {(["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
+      {(["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "settings", "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
         <IconButton
           key={k}
           x={ICONS_X + k * (ICON.w + ICON.gap)}
@@ -190,8 +212,8 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
           h={ICON.h}
           class="nest-quiet"
           icon={<Icon name={icon} />}
-          badge={k === 5 ? open : undefined}
-          focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_BELL][k])}
+          badge={k === 6 ? open : undefined}
+          focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL][k])}
         />
       ))}
 
@@ -235,6 +257,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
       </div>
 
       {moving && <MoveHint />}
+      {tileMenu && <TitleTileMenu m={tileMenu} />}
       {menuKey && !moving && (() => {
         const c = columns.findIndex((k) => k.key === menuKey);
         if (c < 0) return null;

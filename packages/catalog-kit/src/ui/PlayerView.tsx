@@ -1,5 +1,6 @@
 import { mark, measure, useKeys } from "@secretary/tv-kit";
 import { Glass, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
+import { LoadingScreen } from "./Loading.tsx";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { SkipSource, tryInOrder } from "../lib/autopick.ts";
 import { backgroundUrl } from "../lib/cinemeta.ts";
@@ -573,30 +574,20 @@ export function PlayerView({
         // While the stream prepares: the title's art and a frosted panel. The page is opaque until the first frame.
         <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="ply-start">
           <HeroLayers hero={hero} shade={base.shade} />
-          <Glass x={80} y={650} w={1060} h={340} class="ply-panel">
-            <span class="cat-kicker">Direct stream · AVPlay</span>
-            <h1>{heading}</h1>
-            <p>
-              {together && partyView && !failed && loaded.current
+          <LoadingScreen
+            calm
+            heading={heading}
+            status={
+              together && partyView && !failed && loaded.current
                 ? partyView.tl?.state === "paused" && party!.canControl()
                   ? "Ready · OK starts it for everyone · Up shows the code"
                   : partyLine(partyView)
-                : status}
-            </p>
-            {activeStreamInfo && (
-              <div class="ply-badges">
-                {badges.map((b) => (
-                  <span key={b} class="ply-badge">
-                    {b}
-                  </span>
-                ))}
-                {activeStreamInfo.size && <span class="ply-dim">{activeStreamInfo.size}</span>}
-              </div>
-            )}
-            <span class="ply-bar">
-              <i class={failed ? "is-failed" : "is-loading"} />
-            </span>
-          </Glass>
+                : status
+            }
+            badges={badges}
+            meta={activeStreamInfo?.size}
+            bar={failed ? "failed" : "loading"}
+          />
         </GlassRoot>
       )}
       {pill && !autoSkip && (

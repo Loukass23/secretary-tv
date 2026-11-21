@@ -53,8 +53,9 @@ export const HEADER_SEARCH = 2;
 export const HEADER_LIGHTS = 3;
 export const HEADER_PICTURE = 4;
 export const HEADER_SOUND = 5;
-export const HEADER_BELL = 6;
-export const HEADER_LENGTH = 7;
+export const HEADER_SETTINGS = 6;
+export const HEADER_BELL = 7;
+export const HEADER_LENGTH = 8;
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
 

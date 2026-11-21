@@ -434,3 +434,36 @@
   line-height: 28px;
   text-align: center;
 }
+
+/* The hold pill (HoldPill.tsx): fades in once OK has been held a moment; the bar fills by transform. */
+.sg-holdpill-wrap { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+.sg-holdpill { opacity: 0; transition: opacity 160ms ease-out; will-change: opacity; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 0 28px; }
+.sg-holdpill::after { background: rgba(10, 11, 14, 0.86); }
+.sg-holdpill-wrap.is-open .sg-holdpill { opacity: 1; }
+.sg-holdpill-text { position: relative; z-index: 2; font-size: 21px; font-weight: 600; white-space: nowrap; }
+.sg-holdpill-track { position: relative; z-index: 2; display: block; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.sg-holdpill-fill { display: block; width: 100%; height: 100%; border-radius: 3px; background: var(--sg-ink); transform: scaleX(0); transform-origin: left center; will-change: transform; }
+
+/* The bird loader (BirdLoader.tsx), the boot splash's drawing and motion in a size of its own; its parts are layers. */
+.sg-bird{position:relative;width:460px;height:460px}
+.sg-bird svg,.sg-bird .sg-b-spin{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;will-change:transform,opacity}
+.sg-bird .sg-b-spin{animation:sgBSpin 70s linear infinite}
+.sg-bird .sg-b-spikes{animation:sgBBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 0ms both}
+.sg-bird .sg-b-in{animation:sgBBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 500ms both}
+.sg-bird .sg-b-out{animation:sgBBloom 1600ms cubic-bezier(.2,.9,.25,1.1) 1000ms both}
+.sg-bird .sg-b-halo{animation:sgBHalo 3200ms ease-in-out infinite alternate}
+.sg-bird .sg-b-orbs{animation:sgBOrb 3400ms ease-in-out infinite alternate}
+.sg-bird .sg-b-core{animation:sgBCore 2200ms ease-in-out infinite alternate}
+.sg-bird .sg-b-head{animation:sgBHead 1000ms cubic-bezier(.2,.9,.3,1.2) 2000ms both}
+@keyframes sgBSpin{to{transform:rotate(360deg)}}
+@keyframes sgBBloom{from{opacity:0;transform:scale(.08) rotate(-40deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes sgBHalo{from{opacity:.25;transform:scale(.95)}to{opacity:.6;transform:scale(1.05)}}
+@keyframes sgBOrb{from{opacity:.2;transform:scale(.97)}to{opacity:.75;transform:scale(1.04)}}
+@keyframes sgBCore{from{transform:scale(.97)}to{transform:scale(1.05)}}
+@keyframes sgBHead{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.sg-bird *{animation:none!important}}
+.sg-loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 0; animation: sgLoaderIn 420ms ease-out both; pointer-events: none; z-index: 20; }
+.sg-loader-label { font-size: 30px; font-weight: 600; letter-spacing: 0.02em; color: var(--sg-ink); }
+@keyframes sgLoaderIn { to { opacity: 1; } }
+.sg-loader.is-calm { animation: none; opacity: 1; }
+.sg-loader.is-calm .sg-b-spikes, .sg-loader.is-calm .sg-b-in, .sg-loader.is-calm .sg-b-out, .sg-loader.is-calm .sg-b-head { animation: none; }

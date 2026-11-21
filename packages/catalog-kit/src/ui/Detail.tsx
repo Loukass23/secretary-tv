@@ -1,7 +1,9 @@
 import { type Dir, type Focus, getTvInputBridge, move, useKeys, windowOf } from "@secretary/tv-kit";
 import { Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { backgroundUrl, fetchMeta, mergeMeta } from "../lib/cinemeta.ts";
+import { backgroundUrl, fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, similarUrl } from "../lib/cinemeta.ts";
+import { searchSummary } from "../lib/searchsummary.ts";
+import { LoadingScreen } from "./Loading.tsx";
 import {
   type SagaDef,
   fetchTmdbCollection,
@@ -15,7 +17,7 @@ import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
 import { releaseOf } from "../lib/party.ts";
 import { ago } from "../lib/failures.ts";
-import { onPluginStatus, pluginStore, pluginsActive, shortName, statusLine } from "../lib/plugins.ts";
+import { onPluginStatus, pluginStore, pluginsActive, shortName } from "../lib/plugins.ts";
 import { compilePattern, pickIndex, rankSources, type Rules } from "../lib/rules.ts";
 import { matchPref } from "../lib/sourcepref.ts";
 import { type MenuLine, stepTitleMenu, type TitleAction, titleMenu } from "../lib/titlemenu.ts";
@@ -37,10 +39,14 @@ const EP_W = 320;
 const EP_H = 180;
 const EP_STRIDE = EP_W + 28;
 /** The info panel: taller for films, shorter for series to leave room for seasons and episodes. */
-const INFO_MOVIE = { x: PAD, y: 120, w: 1060, h: 560 };
+const INFO_MOVIE = { x: PAD, y: 120, w: 1060, h: 520 };
 const INFO_SERIES = { x: PAD, y: 110, w: 1060, h: 470 };
 const SEASONS_Y = 610;
 const EPS_Y = 706;
+/** How long the page waits for a title's details before it shows what it has. */
+const META_WAIT_MS = 6000;
+/** "More like this" under a film's panel: a label, then a row of small posters. */
+const SIM = { labelY: 668, y: 716, w: 180, h: 270, stride: 204 };
 /** The sources sheet, on the right; rows scroll inside it. */
 const SHEET = { x: 1060, y: 60, w: 800, h: 960 };
 const SOURCE_H = 112;
@@ -83,6 +89,8 @@ interface Props {
     join(code: string): void;
   };
   onOpenTimeline(collection: SagaDef, focusTitleId: string): void;
+  /** A title of "More like this": its own page opens (Back comes back here). */
+  onOpenTitle?(title: Title): void;
   onWatchedChange(): void;
   onBack(): void;
 }
@@ -158,11 +166,21 @@ export function Detail({
   onPlay,
   party,
   onOpenTimeline,
+  onOpenTitle,
   onWatchedChange,
   onBack,
 }: Props) {
   const [meta, setMeta] = useState<Title>(title);
   const [metaState, setMetaState] = useState<"loading" | "done" | "failed">("loading");
+  // The page waits for the title's own details (seasons, episodes, runtime) so it never shows them at 0 and then jumps;
+  // a slow catalog is waited for only so long.
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGaveUp(true), META_WAIT_MS);
+    return () => clearTimeout(t);
+  }, []);
+  // Opened to play (Continue watching): the page never shows, only the loading screen until the player takes over.
+  const [autoFailed, setAutoFailed] = useState(false);
   const [found, setFound] = useState<Found | null>(null);
   // Sources found so far while plugins are still answering; `found` is the final list.
   const [partial, setPartial] = useState<{ id: string; value: Stream[] } | null>(null);
@@ -171,7 +189,7 @@ export function Detail({
   useEffect(() => onPluginStatus(setPluginStatus), []);
   const pluginStatusNow = useRef<ProviderStatus[]>([]);
   pluginStatusNow.current = pluginStatus;
-  const pluginProgress = statusLine(pluginStatus);
+  const pluginProgress = searchSummary(pluginStatus);
   const [providerTab, setProviderTab] = useState(0);
   // Filter chips above the sheet's list (ui/sheet.ts), and which chip has focus (null: the list has it).
   const [filters, setFilters] = useState<ReadonlySet<Filter>>(new Set());
@@ -188,6 +206,7 @@ export function Detail({
   const ctxHolding = useRef(false);
   // Play pressed (or autoplay asked) before the sources are all in: decided by lib/autoplay.ts as they arrive.
   const [pending, setPending] = useState<{ episode: Video | undefined; from: number; together?: boolean } | null>(null);
+  const waiting = (metaState === "loading" && !gaveUp) || (Boolean(autoPlay) && !autoFailed && !(gaveUp && !pending));
   // The Watch together card: start a party or type a code (focus 0 or 1), null when closed.
   const [partyCard, setPartyCard] = useState<number | null>(null);
   const searchStarted = useRef(0);
@@ -404,6 +423,7 @@ export function Detail({
     }
     lastWait.current = "";
     setPending(null);
+    if ("sheet" in d || "none" in d || !listed) setAutoFailed(true);
     if ("sheet" in d && pending.together) {
       island.push({ key: "source", text: "No source to share by itself · start the party from Play's source", level: "error" });
       return;
@@ -460,7 +480,7 @@ export function Detail({
 
   actionSpecs.push({
     id: "sources",
-    label: listed ? `☰ Sources (${listed.length}${ready ? "" : "…"})` : "☰ Sources",
+    label: listed && ready ? `☰ Sources (${listed.length})` : "☰ Sources",
   });
 
   if (party) actionSpecs.push({ id: "together", label: "👥 Watch together" });
@@ -479,7 +499,22 @@ export function Detail({
 
   actionSpecs.push({ id: "mylist", label: saved ? "✓ My List" : "＋ My List" });
 
-  const lengths = series ? [actionSpecs.length, seasons.length, episodes.length] : [actionSpecs.length];
+  // "More like this": titles of the film's first genre, a row under the panel (Down from the actions).
+  const [similar, setSimilar] = useState<Title[]>([]);
+  const genre0 = meta.genre?.[0];
+  useEffect(() => {
+    if (series || !genre0) return setSimilar([]);
+    let live = true;
+    fetchRow(similarUrl(type, genre0)).then(
+      (l) => live && setSimilar(pickSimilar(l, meta.id)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [type, genre0, meta.id, series]);
+
+  const lengths = series ? [actionSpecs.length, seasons.length, episodes.length] : similar.length ? [actionSpecs.length, similar.length] : [actionSpecs.length];
 
   /** Plays `chosen` first (the top source when none), the rest of `list` after it for failover. */
   const play = (episode: Video | undefined, from: number, chosen?: Stream, list: Stream[] | null = ready, manual = false) => {
@@ -660,6 +695,11 @@ export function Detail({
       if (series && next.row === 1) setSeason(seasons[next.col]);
       return;
     }
+    if (key === "Enter" && !series && focus.row === 1) {
+      const t = similar[focus.col];
+      if (t) onOpenTitle?.({ ...t, catalogType: type });
+      return;
+    }
     if (key === "Enter") {
       // What a short press does, run on release (the keyup listener above) so a long press can open the context menu.
       const enter = () => {
@@ -741,10 +781,17 @@ export function Detail({
     `${shortName(p).split(/\s+/)[0]} ${p.state === "searching" ? "…" : p.state === "error" ? "failed" : p.count}`;
 
   return (
-    <div class="detail-glass" style={active ? undefined : "display:none"}>
+    <div class={`detail-glass${waiting ? " is-waiting" : ""}`} style={active ? undefined : "display:none"}>
       <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="det">
         <HeroLayers hero={hero} shade={base.shade} />
         <div class="det-clock">{clockText}</div>
+        {waiting && (
+          <LoadingScreen
+            heading={series && target && autoPlay ? `${meta.name} · ${episodeLabel(target)} ${target.name}` : meta.name}
+            status={pending && pluginProgress ? pluginProgress : "Spreading wings…"}
+            bar="loading"
+          />
+        )}
 
         <Glass {...info} class="det-info">
           <span class="cat-kicker">
@@ -752,7 +799,7 @@ export function Detail({
               ? `${type === "anime" ? "Anime" : "Series"} · ${seasons.length} season${seasons.length === 1 ? "" : "s"} · ${videos.length} episodes`
               : sagaCol
                 ? `Film · ${sagaCol.title}`
-                : "Film · Instant debrid stream"}
+                : "Film"}
           </span>
           <h1>{meta.name}</h1>
           <div class="cat-meta">
@@ -802,12 +849,39 @@ export function Detail({
               </>
             ) : (
               <>
-                <span class="det-will-k">Stream</span>
+                <span class="det-will-k">Sources</span>
                 <span class="det-will-dim">{statusText}</span>
               </>
             )}
           </div>
+          {!series && <div class="det-hint">Hold OK for options · Back to return</div>}
         </Glass>
+
+        {!series && similar.length > 0 && (
+          <>
+            <span class="det-sim-k" style={{ left: `${PAD}px`, top: `${SIM.labelY}px` }}>
+              More like this
+            </span>
+            <div class="sg-clip" style={{ left: "0px", top: `${SIM.y - 20}px`, width: "1920px", height: `${SIM.h + 40}px` }}>
+              <div class="sg-scroll" style={{ transform: `translate3d(${PAD - (focus.row === 1 ? Math.max(0, focus.col - 1) * SIM.stride : 0)}px,20px,0)` }}>
+                {(() => {
+                  const [sf, st] = windowOf(focus.row === 1 ? focus.col : 0, similar.length, 2, 8);
+                  return similar.slice(sf, st).map((t, k) => (
+                    <MediaTile
+                      key={t.id}
+                      x={(sf + k) * SIM.stride}
+                      y={0}
+                      w={SIM.w}
+                      h={SIM.h}
+                      src={posterUrl(t)}
+                      focused={focus.row === 1 && sf + k === focus.col && !sourcesOpen}
+                    />
+                  ));
+                })()}
+              </div>
+            </div>
+          </>
+        )}
 
         {series && seasons.length > 0 && (
           <Segmented

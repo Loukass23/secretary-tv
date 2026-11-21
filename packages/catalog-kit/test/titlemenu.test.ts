@@ -30,3 +30,7 @@ test("the menu walks with Up and Down, OK runs and Back closes", () => {
   assert.equal(stepTitleMenu(2, 4, "Back"), "close");
   assert.equal(stepTitleMenu(2, 4, "Left"), 2);
 });
+
+test("Nest's tile menu leads with the title's page", () => {
+  assert.deepEqual(titleMenu({ ...base, details: true }).map((l) => l.id), ["details", "play", "sources", "watched", "mylist"]);
+});

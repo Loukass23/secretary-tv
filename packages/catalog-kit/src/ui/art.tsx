@@ -64,9 +64,12 @@ export interface HeroArt {
  * A backdrop that follows focus: when `id` has held for DWELL_MS (or at once with `immediate`), `src`
  * is decoded and crossfaded in on the spare layer, and its frost follows once focus rests.
  */
+/** Art already shown on this page: a screen that takes over for the same title (the player after its page) starts with it on, not fading in from black. */
+const shownArt = new Set<string>();
+
 export function useHeroArt(id: string | undefined, src: string | undefined, active: boolean, immediate = false): HeroArt {
   // The backdrop alternates between two permanent layers; `front` is the one shown.
-  const [slots, setSlots] = useState<[Slot | null, Slot | null]>([null, null]);
+  const [slots, setSlots] = useState<[Slot | null, Slot | null]>(() => (immediate && id && src && shownArt.has(src) ? [{ id, src }, null] : [null, null]));
   const [front, setFront] = useState(0);
   const frontRef = useRef(0);
   frontRef.current = front;
@@ -82,6 +85,7 @@ export function useHeroArt(id: string | undefined, src: string | undefined, acti
           void preload(src).then(
             () => {
               if (!live) return;
+              shownArt.add(src);
               const back = 1 - front;
               setSlots((s) => (back === 0 ? [{ id, src }, s[1]] : [s[0], { id, src }]));
               setFront(back);

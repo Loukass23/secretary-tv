@@ -626,3 +626,15 @@ export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch =
   if (title && f === fetch) metaCache.set(key, title);
   return title;
 }
+
+/** The catalog that lists a genre, for "More like this" on a film's page (series and anime have their episodes there). */
+export const similarUrl = (type: CatalogType, genre: string): string =>
+  type === "anime"
+    ? `${KITSU}/catalog/anime/kitsu-anime-popular/genre=${encodeURIComponent(genre)}.json`
+    : `${META}/catalog/${type}/top/genre=${encodeURIComponent(genre)}.json`;
+
+/** Up to `max` titles of the list that are not the page's own, those with a poster first. */
+export function pickSimilar(list: readonly Title[], excludeId: string, max = 12): Title[] {
+  const rest = list.filter((t) => t.id !== excludeId);
+  return [...rest.filter((t) => t.poster), ...rest.filter((t) => !t.poster)].slice(0, max);
+}
