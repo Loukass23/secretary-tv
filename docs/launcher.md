@@ -191,6 +191,14 @@ A film's page (catalog-kit `Detail`) has a "More like this" row under the panel:
 film. While plugins search, the sources line is one calm sentence ("Searching · 2 of 6 answered · 120 found so far",
 `searchsummary.ts`) instead of each provider's state, and the Sources button shows its count only once the search is done.
 
+### Loading screens
+
+Both loading screens (the catalog chunk opening in Nest, and a title's page waiting for its details) show the boot
+splash's secretary bird (`BirdLoader` in tv-kit glass, drawn from `bird.ts`, a copy of the drawing in `index.html`; keep
+them in step). It blooms, then breathes, and fades in only after 220 ms, so a quick load never flashes it. A page waits
+for the title's meta (seasons, episodes, runtime) before it shows anything, so it never appears at "0 seasons" and jumps;
+a catalog slower than 6 s shows what it has.
+
 ### Card styles (long OK)
 
 A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu

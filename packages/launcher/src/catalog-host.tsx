@@ -3,6 +3,7 @@
 // which owns the player. Preact and plain DOM, like Nest.
 import type { CatalogConfig, EmbeddedHost } from "@secretary/catalog-kit";
 import type { ComponentType } from "preact";
+import { BirdLoader } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useState } from "preact/hooks";
 
 export interface CatalogEntry {
@@ -23,7 +24,7 @@ export function CatalogHost({ entry, host, serverUrl }: { entry: CatalogEntry; h
       live = false;
     };
   }, []);
-  if (!App) return <div class="nest-catalog-loading">Loading…</div>;
+  if (!App) return <div class="nest-catalog-loading"><BirdLoader /></div>;
   // The catalog comes in by opacity, on its own layer, so it feels like the card opening rather than a new page.
   return (
     <div class="nest-catalog-in">

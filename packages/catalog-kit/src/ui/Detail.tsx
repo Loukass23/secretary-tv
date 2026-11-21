@@ -1,5 +1,5 @@
 import { type Dir, type Focus, getTvInputBridge, move, useKeys, windowOf } from "@secretary/tv-kit";
-import { Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
+import { BirdLoader, Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { backgroundUrl, fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, similarUrl } from "../lib/cinemeta.ts";
 import { searchSummary } from "../lib/searchsummary.ts";
@@ -42,6 +42,8 @@ const INFO_MOVIE = { x: PAD, y: 120, w: 1060, h: 520 };
 const INFO_SERIES = { x: PAD, y: 110, w: 1060, h: 470 };
 const SEASONS_Y = 610;
 const EPS_Y = 706;
+/** How long the page waits for a title's details before it shows what it has. */
+const META_WAIT_MS = 6000;
 /** "More like this" under a film's panel: a label, then a row of small posters. */
 const SIM = { labelY: 668, y: 716, w: 180, h: 270, stride: 204 };
 /** The sources sheet, on the right; rows scroll inside it. */
@@ -169,6 +171,14 @@ export function Detail({
 }: Props) {
   const [meta, setMeta] = useState<Title>(title);
   const [metaState, setMetaState] = useState<"loading" | "done" | "failed">("loading");
+  // The page waits for the title's own details (seasons, episodes, runtime) so it never shows them at 0 and then jumps;
+  // a slow catalog is waited for only so long.
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGaveUp(true), META_WAIT_MS);
+    return () => clearTimeout(t);
+  }, []);
+  const waiting = metaState === "loading" && !gaveUp;
   const [found, setFound] = useState<Found | null>(null);
   // Sources found so far while plugins are still answering; `found` is the final list.
   const [partial, setPartial] = useState<{ id: string; value: Stream[] } | null>(null);
@@ -767,10 +777,11 @@ export function Detail({
     `${shortName(p).split(/\s+/)[0]} ${p.state === "searching" ? "…" : p.state === "error" ? "failed" : p.count}`;
 
   return (
-    <div class="detail-glass" style={active ? undefined : "display:none"}>
+    <div class={`detail-glass${waiting ? " is-waiting" : ""}`} style={active ? undefined : "display:none"}>
       <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="det">
         <HeroLayers hero={hero} shade={base.shade} />
         <div class="det-clock">{clockText}</div>
+        {waiting && <BirdLoader label={meta.name} />}
 
         <Glass {...info} class="det-info">
           <span class="cat-kicker">

@@ -383,7 +383,7 @@ html, body {
 .nest-kind-folders .sg-tile-cap small { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* The catalog chunk is loading (catalog-host.tsx): a quiet line until it is in. */
-.nest-catalog-loading { position: absolute; left: 0; right: 0; top: 500px; text-align: center; font-size: 28px; color: var(--sg-ink-dim); }
+.nest-catalog-loading { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
 .nest-catalog-in { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; animation: nestCatIn 260ms var(--sg-ease) backwards; }
 @keyframes nestCatIn { from { opacity: 0; } to { opacity: 1; } }
 
