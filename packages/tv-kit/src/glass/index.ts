@@ -5,6 +5,7 @@ export * from "./BirdLoader.tsx";
 export * from "./controls.tsx";
 export * from "./Glass.tsx";
 export * from "./Header.tsx";
+export * from "./header-nav.ts";
 export * from "./HoldPill.tsx";
 export * from "./glow.tsx";
 export * from "./icons.ts";

@@ -35,6 +35,10 @@ export interface Title {
   background?: string;
   /** Series only, from the meta endpoint. */
   videos?: Video[];
+  /** The cast, billing order, when the catalog has it (a film's page lists the first few). */
+  cast?: string[];
+  /** The director or directors, when the catalog has them. */
+  director?: string[];
   /** Optional catalog origin when mixed across categories (e.g. Continue watching or Search). */
   catalogType?: CatalogType;
   /** Optional badge shown on cards (e.g. "Series · S01E02" or "Next · S01E03"). */

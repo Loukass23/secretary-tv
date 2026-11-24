@@ -7,7 +7,7 @@ import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass, Header, type HeaderButton, type HeaderPerson, InfoPanel, ListCard, POSTER, PosterTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
-import { HEADER_ORDER } from "./header-buttons.ts";
+import { HEADER_ORDER } from "./home.tsx";
 import { liveSearch, type LiveSearchState } from "./live-search.ts";
 import { HEADER_PROFILE, HEADER_SEARCH } from "./nest-nav.ts";
 import { phoneUrl, typeCode, watchPhone } from "./phone-keys.ts";
@@ -57,7 +57,7 @@ const addRecent = (list: readonly string[], term: string) => {
 export interface SearchScreenProps {
   time: string;
   person: HeaderPerson;
-  /** The home screen's header buttons (header-buttons.ts), in their order. */
+  /** The home screen's header buttons (home.tsx headerButtons), in their order. */
   buttons: readonly HeaderButton[];
   /** One search request; abort it when `signal` fires. */
   find(query: string, signal: AbortSignal): Promise<readonly SearchResult[]>;

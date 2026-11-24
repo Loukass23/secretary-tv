@@ -15,3 +15,4 @@ export {
 } from "./lib/settings.ts";
 export type { CatalogType } from "./lib/types.ts";
 import "./style.css";
+export type { HostHeader } from "./host.ts";

@@ -72,6 +72,11 @@ export interface DashboardSettings {
     audioLangs: string[];
     /** Subtitle languages for a source in another language (VOSTFR-style); empty is the audio languages. */
     subLangs: string[];
+    /**
+     * Spoiler protection on a show's page: the still and the synopsis of every episode not yet watched are blurred
+     * (lib/titlepage.ts `isSpoiler`); the titles stay readable. Off by default.
+     */
+    spoilerProtection: boolean;
   };
 }
 
@@ -152,6 +157,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
     pausePanel: true,
     audioLangs: [],
     subLangs: [],
+    spoilerProtection: false,
   },
 };
 
@@ -236,6 +242,7 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null): Dash
       pausePanel: p.pausePanel ?? true,
       audioLangs: langList(p.audioLangs, []),
       subLangs: langList(p.subLangs, []),
+      spoilerProtection: p.spoilerProtection === true,
     },
   };
 }
