@@ -1,14 +1,22 @@
-// Catalog home in glass, Apple TV "top shelf" style: the focused title's art fills the top of the page,
-// a frosted panel describes it, and poster rows scroll underneath. Same rules as Secretary Nest
-// (tv-kit/src/glass, docs/performance.md): transform-only motion, no live blur, no soft shadows.
+// The catalog home in Secretary's home look: Secretary's one header (tv-kit Header) at the top, the focused title's
+// art behind the page with its name, line and synopsis in a bare info panel (tv-kit pieces, as under an opened card),
+// and rows of posters at the home row's size underneath; Continue watching is a row of landscape stills. Which kind it
+// shows (films, shows or anime) comes from the Secretary card the viewer opened it from (CatalogConfig.type); there are
+// no section tabs. Same rules as Secretary's home (tv-kit/src/glass, docs/performance.md): transform and opacity only,
+// faked blur, no soft shadows, and only the rows around focus are rendered.
 import { type Dir, type Focus, move, rowColumn, useKeys, windowOf } from "@secretary/tv-kit";
 import {
+  Button,
   Glass,
   GlassRoot,
-  Icon,
-  IconButton,
+  Header,
+  type HeaderPerson,
+  InfoPanel,
+  Kicker,
+  LANDSCAPE,
+  LandscapeTile,
   MediaTile,
-  Segmented,
+  RowLabel,
   showImg,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -34,39 +42,32 @@ const PAD = 80;
 /** The style menu of a collection row (a long OK): beside the info panel, over the art. */
 const MENU = { x: 1000, y: 150, w: 620 };
 const MENU_LINE = 58;
-/** Rows start under the info panel; the focused row is always the first one shown. */
-const ROWS_Y = 560;
-const ROW_H = 372;
-const LABEL_H = 52;
+/** The focused title's caption, over the art between the header and the rows. */
+const INFO = { x: PAD, y: 236, w: 900, h: 300 };
+/** The focused row's top: its label, then its tiles; the next row's label peeks in under it. */
+const ROWS_Y = 580;
+/** A row's label over its tiles, then the tiles, then the gap to the next row's label. */
+const LABEL_H = 50;
+const ROW_GAP = 60;
 /** Rows rendered below the focused one; the one above stays too, so a row leaving slides out instead of vanishing. */
 const ROWS_BELOW = 2;
 const ROWS_ABOVE = 1;
-/** The bar under the last row: "You're all caught up", with Back to top and Browse all. */
+/** The bar under the last row: "You're all caught up", with Back to top and Search. */
 const END_H = 120;
-const END_ACTIONS = ["↑ Back to top", "⌕ Browse all"] as const;
-const INFO = { x: PAD, y: 150, w: 880, h: 330 };
-/** Inside Secretary Nest the top bar takes Nest's header: the pill at the left, then the time and two quiet buttons at the
- *  right, at Nest's own size and height (launcher/src/home.tsx). */
-const NEST_HEAD = { y: 44, h: 78, iconW: 88, gap: 28, pad: PAD, seg: { x: PAD, w: 620 } };
-const NEST_ICONS_X = 1920 - NEST_HEAD.pad - 2 * NEST_HEAD.iconW - NEST_HEAD.gap;
-
-/** The top bar, left to right: the section pill, then Search and Settings. */
-export const SECTIONS = ["Home", "Cinema", "Shows", "Anime"] as const;
-const SECTION_TYPES: readonly (CatalogType | null)[] = [null, "movie", "series", "anime"];
-const TOP_LENGTH = SECTIONS.length + 2;
-const TOP_SEARCH = SECTIONS.length;
-const TOP_SETTINGS = SECTIONS.length + 1;
-
+const END_ACTIONS = [
+  { id: "top", label: "Back to top", icon: undefined },
+  { id: "search", label: "Search", icon: "search" },
+] as const;
+/** Secretary's header on the catalog home: the clock, then Search and Settings, as on Secretary's home. */
+const HEAD_BUTTONS = [
+  { key: "search", icon: "search" },
+  { key: "settings", icon: "settings" },
+] as const;
+/** Continue watching is a row of stills with the title on the art. */
+const CONTINUE_BOX: LookBox = { w: LANDSCAPE.w, h: LANDSCAPE.h, stride: LANDSCAPE.w + LANDSCAPE.gap, art: "still", lead: 0, caption: true };
 
 function formatClock(fmt: ClockFormat): string {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: fmt === "12h" });
-}
-
-function rowOriginLabel(row: HomeRow, type: CatalogType): string {
-  if (row.originLabel) return row.originLabel;
-  if (row.id === "continue") return "Debrid · This TV";
-  if (type === "anime") return "Kitsu · TVDB";
-  return "Cinemeta · TMDB";
 }
 
 interface Props {
@@ -75,8 +76,11 @@ interface Props {
   focus: Focus;
   active: boolean;
   status: string | null;
+  /** The kind's name (Cinema, Shows, Anime), shown before a title has focus. */
   heading: string;
   clockFormat?: ClockFormat;
+  /** The person at the top left of the header, as on Secretary's home (EmbeddedHost.person). */
+  person?: HeaderPerson;
   onFocus(f: Focus): void;
   onOpen(title: Title, autoPlay?: boolean): void;
   onOpenFolder(collectionId: string, folderId: string, rowLook?: CardShape): void;
@@ -86,8 +90,6 @@ interface Props {
   onRowStyle(rowId: string, style: RowStyle): void;
   onDwell(title: Title): void;
   onOpenHub(tab?: OverlayTab, autoVoice?: boolean): void;
-  onOpenNest(): void;
-  onSwitchType(type: CatalogType): void;
   onBack(): void;
 }
 
@@ -108,6 +110,17 @@ interface StyleMenu {
   line: number;
 }
 
+/** Each row's top from the first row's, and where the rows end: a row is its label, its tiles and the gap after. */
+export function rowTops(heights: readonly number[]): { tops: number[]; end: number } {
+  const tops: number[] = [];
+  let y = 0;
+  for (const h of heights) {
+    tops.push(y);
+    y += LABEL_H + h + ROW_GAP;
+  }
+  return { tops, end: y };
+}
+
 export function Home({
   type,
   rows,
@@ -116,6 +129,7 @@ export function Home({
   status,
   heading,
   clockFormat = "24h",
+  person,
   onFocus,
   onOpen,
   onOpenFolder,
@@ -124,30 +138,30 @@ export function Home({
   onRowStyle,
   onDwell,
   onOpenHub,
-  onOpenNest,
-  onSwitchType,
   onBack,
 }: Props) {
-  /** Focus in the top bar (0..TOP_LENGTH-1), or null when it is in the rows. */
+  /** Focus on a header button (an index into HEAD_BUTTONS), or null when it is in the rows. */
   const [topIdx, setTopIdx] = useState<number | null>(null);
   const [clockText, setClockText] = useState(() => formatClock(clockFormat));
-  // Each row's look (shared with Nest, tv-kit/src/row-look.ts): its own choice, the setting, or Automatic, which
-  // makes the page's first collection a spotlight and a chart a Top 10.
+  // Each row's look (shared with Secretary's cards, tv-kit/src/row-look.ts): its own choice, the setting, or Automatic,
+  // which makes the page's first collection a spotlight and a chart a Top 10. Continue watching is always stills.
   const looks = useMemo(() => {
     const lead = rows.find((r) => r.rowKind === "folders")?.id;
     return rows.map((r) => {
+      if (r.id === "continue") return { shape: "landscape" as CardShape, box: CONTINUE_BOX, items: r.items };
       const folders = r.rowKind === "folders";
       const style = resolveCard({ title: r.title, tileShape: folders ? (r.tileShape ?? "SQUARE") : undefined, lead: r.id === lead }, look, rowStyles[r.id]);
       return { shape: style.shape, box: cardLook(style.shape, style.size), items: itemsFor(style.shape, r.items) };
     });
   }, [rows, look, rowStyles]);
   const lengths = looks.map((l) => l.items.length);
+  const { tops, end: rowsEnd } = useMemo(() => rowTops(looks.map((l) => l.box.h)), [looks]);
   const activeRow = rows[focus.row];
   const current = looks[focus.row]?.items[focus.col];
   // Where each row was left: a row comes back scrolled as it was, and arriving on a new one keeps focus in its slot.
   const lastCol = useRef(new Map<string, number>());
   if (activeRow) lastCol.current.set(activeRow.id, focus.col);
-  /** Focus on the bar under the last row (0 Back to top, 1 Browse all), or null. */
+  /** Focus on the bar under the last row (0 Back to top, 1 Search), or null. */
   const [endIdx, setEndIdx] = useState<number | null>(null);
   useEffect(() => setEndIdx(null), [type]);
   const { backdrop, shade, sheen, mood } = useBase(type, current ? heroArt(current) : undefined);
@@ -159,15 +173,6 @@ export function Home({
     const t = setInterval(() => setClockText(formatClock(clockFormat)), 30_000);
     return () => clearInterval(t);
   }, [clockFormat]);
-
-  const activateTop = (i: number) => {
-    setTopIdx(null);
-    if (i === TOP_SEARCH) return onOpenHub("search");
-    if (i === TOP_SETTINGS) return onOpenHub("settings");
-    const t = SECTION_TYPES[i];
-    if (!t) return onOpenNest();
-    if (t !== type) onSwitchType(t);
-  };
 
   // A long OK on a collection row opens its style menu; a short one opens the folder on release. As OK on a source
   // in the sheet (Detail.tsx): the remote sends no key repeats for a held OK, so the hold is a 600 ms timer from the
@@ -198,6 +203,12 @@ export function Home({
 
   const openMenu = () => {
     if (!activeRow) return;
+    // Continue watching is always stills: it has no look menu, so a long OK on it resumes like a short one.
+    if (activeRow.id === "continue") {
+      holding.current = false;
+      if (current) onOpen(current, true);
+      return;
+    }
     const own = rowStyles[activeRow.id] ?? {};
     setMenu({ rowId: activeRow.id, title: activeRow.title, orig: own, style: own, line: MENU_SHAPES.indexOf(own.shape ?? "auto") });
   };
@@ -230,7 +241,7 @@ export function Home({
 
   useKeys(active, (key, e) => {
     if (menu) return void menuKey(menu, key);
-    // CH- or Search opens Spotlight search, CH+ opens Secretary Nest.
+    // CH- or Search opens search; CH+ back to Secretary's home is the catalog's own (app.tsx).
     if (key === "ChannelDown" || key === "Search" || key === "SearchVoice") {
       setTopIdx(null);
       onOpenHub("search", key === "SearchVoice");
@@ -240,8 +251,11 @@ export function Home({
     if (topIdx !== null) {
       if (key === "Down" || key === "Back") return void setTopIdx(null);
       if (key === "Left") return void setTopIdx(Math.max(0, topIdx - 1));
-      if (key === "Right") return void setTopIdx(Math.min(TOP_LENGTH - 1, topIdx + 1));
-      if (key === "Enter") return void activateTop(topIdx);
+      if (key === "Right") return void setTopIdx(Math.min(HEAD_BUTTONS.length - 1, topIdx + 1));
+      if (key === "Enter") {
+        setTopIdx(null);
+        return void onOpenHub(HEAD_BUTTONS[topIdx].key);
+      }
       return false;
     }
 
@@ -250,7 +264,7 @@ export function Home({
       if (key === "Left" || key === "Right") return void setEndIdx(key === "Left" ? 0 : 1);
       if (key === "Enter" && !e.repeat) {
         setEndIdx(null);
-        if (endIdx === 1) return void onOpenHub("search");
+        if (END_ACTIONS[endIdx].id === "search") return void onOpenHub("search");
         lastCol.current.clear();
         return void onFocus({ row: 0, col: 0 });
       }
@@ -269,11 +283,8 @@ export function Home({
       return;
     }
     if (key === "Back") return void onBack();
-    // Up from the first row enters the top bar on this app's own section.
-    if (key === "Up" && focus.row === 0) {
-      setTopIdx(Math.max(1, SECTION_TYPES.indexOf(type)));
-      return;
-    }
+    // Up from the first row enters the header, on Search.
+    if (key === "Up" && focus.row === 0) return void setTopIdx(0);
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       let next = move(lengths, focus, key.toLowerCase() as Dir);
       // Down past the last row: the end bar, never out of the page.
@@ -299,10 +310,10 @@ export function Home({
   const inRows = topIdx === null;
   const isContinue = activeRow?.id === "continue";
   const frost = hero.frost ?? backdrop?.frost;
-  // On the end bar the page lifts just enough to show it whole under the last row.
-  const endLift = endIdx !== null ? Math.max(0, ROW_H + END_H + 40 - (1080 - ROWS_Y)) : 0;
-  const rowScroll = focus.row * ROW_H + endLift;
-  const sectionIdx = Math.max(1, SECTION_TYPES.indexOf(type));
+  // The focused row sits at ROWS_Y; on the end bar the page lifts just enough to show the bar whole.
+  const focusTop = tops[focus.row] ?? 0;
+  const endLift = endIdx !== null ? Math.max(0, rowsEnd + END_H + 40 - focusTop - (1080 - ROWS_Y)) : 0;
+  const rowScroll = focusTop + endLift;
 
   // Entries saved without a synopsis (older Continue rows, My List) get one once focus rests on them.
   const [extra, setExtra] = useState<Record<string, string>>({});
@@ -323,84 +334,77 @@ export function Home({
   }, [needsText?.id]);
   const extraText = needsText ? extra[needsText.id] : "";
 
-  const kicker = !current
-    ? heading
-    : isContinue
-      ? `Continue watching${current?.progressPct ? ` · ${current.progressPct}% watched` : ""}`
-      : current.folder
-        ? `${activeRow?.title} · Nuvio collection`
-        : `${activeRow?.title ?? heading} · ${activeRow ? rowOriginLabel(activeRow, type) : ""}`;
+  // The kind (Cinema, Shows, Anime) over the title: the row's name is already over its tiles.
+  const kicker = current?.folder ? `${heading} · Collection` : heading;
   const meta = current
-    ? [current.badge, current.badge?.includes(current.year) ? "" : current.year, current.rating && `IMDb ${current.rating}`, current.runtime, current.genre?.slice(0, 2).join(" · ")]
-        .filter(Boolean)
-        .join("  ·  ")
-    : "";
+    ? [
+        isContinue && current.progressPct ? `${current.progressPct}% watched` : "",
+        current.badge ?? "",
+        current.badge?.includes(current.year) ? "" : current.year,
+        current.rating ? `IMDb ${current.rating}` : "",
+        current.runtime ?? "",
+        current.genre?.slice(0, 2).join(", ") ?? "",
+      ].filter(Boolean)
+    : [];
 
   return (
     <GlassRoot mode="fake" wallpaper={backdrop?.wallpaper} frost={frost} sheen={sheen} mood={mood} class="cat-home">
       <HeroLayers hero={hero} shade={shade} />
 
-      {/* Secretary's header: the section pill at the left, then the time and two quiet buttons. */}
-        <>
-          <Segmented x={NEST_HEAD.seg.x} y={NEST_HEAD.y} w={NEST_HEAD.seg.w} h={NEST_HEAD.h} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
-          <div class="nest-head" style={{ right: `${1920 - NEST_ICONS_X + 48}px`, top: `${NEST_HEAD.y}px` }}>
-            <div class="nest-time">
-              <b>{clockText}</b>
-            </div>
-          </div>
-          <IconButton x={NEST_ICONS_X} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
-          <IconButton x={NEST_ICONS_X + NEST_HEAD.iconW + NEST_HEAD.gap} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
-        </>
+      {/* Secretary's one header: the person, the clock, Search and Settings. */}
+      <Header time={clockText} person={person} buttons={HEAD_BUTTONS} focus={topIdx} />
 
-      <Glass {...INFO} class="cat-info">
-        <span class="cat-kicker">{kicker}</span>
-        <h1>{current?.name ?? status ?? heading}</h1>
-        {meta && <div class="cat-meta">{meta}</div>}
-        {(current?.description || extraText) && <p>{current?.description || extraText}</p>}
-        {current && (
-          <div class="cat-hint">
-            <span class="cat-ok">{isContinue ? "▶ OK to resume" : current.folder ? "OK to open the folder · hold OK for the row's look" : "OK for details · hold OK for the row's look"}</span>
-            <span>CH- search · CH+ home</span>
-          </div>
-        )}
-      </Glass>
+      <div class="cat-caption">
+        <InfoPanel {...INFO} kicker={kicker} title={current?.name ?? status ?? heading} meta={meta} about={current?.description || extraText || undefined} />
+      </div>
 
-      <div class="sg-clip cat-rows-clip" style={{ left: "0px", top: `${ROWS_Y - 20}px`, width: "1920px", height: `${1080 - ROWS_Y + 20}px` }}>
-        <div class="sg-scroll" style={{ transform: `translate3d(0,${20 - rowScroll}px,0)` }}>
+      <div class="sg-clip" style={{ left: "0px", top: `${ROWS_Y - 30}px`, width: "1920px", height: `${1080 - ROWS_Y + 30}px` }}>
+        <div class="sg-scroll" style={{ transform: `translate3d(0,${30 - rowScroll}px,0)` }}>
           {rows.slice(Math.max(0, focus.row - ROWS_ABOVE), focus.row + ROWS_BELOW + 1).map((row, k) => {
             const r = Math.max(0, focus.row - ROWS_ABOVE) + k;
             const { box, items } = looks[r];
+            const still = row.id === "continue";
             // Rows keep the column they were left at (lastCol), so moving between rows never sweeps one sideways.
             const col = r === focus.row ? focus.col : (lastCol.current.get(row.id) ?? 0);
             const [from, to] = windowOf(col, items.length);
             const shift = Math.max(0, col - 1) * box.stride;
             return (
-              <section key={row.id} class="cat-row" style={{ top: `${r * ROW_H}px` }}>
-                <div class="cat-row-head" style={{ left: `${PAD}px` }}>
-                  <h2>{row.title}</h2>
-                  <span>{rowOriginLabel(row, type)}</span>
-                </div>
+              <section key={row.id} class="cat-row" style={{ top: `${tops[r]}px`, height: `${LABEL_H + box.h}px` }}>
+                <RowLabel x={PAD} y={0} label={row.title} count={items.length} />
                 <div class="sg-scroll" style={{ top: `${LABEL_H}px`, transform: `translate3d(${PAD - shift}px,0,0)` }}>
                   {items.slice(from, to).map((m, j) => {
                     const c = from + j;
                     const focused = inRows && endIdx === null && !menu && r === focus.row && c === focus.col;
-                    return <RowTile key={`${row.id}:${m.catalogType ?? type}:${m.id}`} item={m} rank={c + 1} x={c * box.stride} box={box} focused={focused} />;
+                    const key = `${row.id}:${m.catalogType ?? type}:${m.id}`;
+                    return still ? (
+                      <LandscapeTile
+                        key={key}
+                        x={c * box.stride}
+                        y={0}
+                        src={backgroundUrl(m)}
+                        title={m.name}
+                        sub={m.progressPct ? `${m.progressPct}% watched` : m.year}
+                        progress={m.progressPct != null ? m.progressPct / 100 : undefined}
+                        watched={m.watched}
+                        focused={focused}
+                      />
+                    ) : (
+                      <RowTile key={key} item={m} rank={c + 1} x={c * box.stride} box={box} focused={focused} />
+                    );
                   })}
                 </div>
               </section>
             );
           })}
           {rows.length > 0 && focus.row >= rows.length - 1 - ROWS_BELOW && (
-            <Glass x={PAD} y={rows.length * ROW_H + 12} w={1920 - 2 * PAD} h={END_H} frost={false} class="cat-end">
+            <Glass x={PAD} y={rowsEnd} w={1920 - 2 * PAD} h={END_H} frost={false} class="cat-end">
               <div class="cat-end-text">
                 <b>You're all caught up</b>
                 <small>That's every row for now</small>
               </div>
               <div class="cat-end-actions">
-                {END_ACTIONS.map((label, i) => (
-                  <span key={label} class={`cat-btn${endIdx === i ? " is-focus" : ""}`}>
-                    {label}
-                  </span>
+                {END_ACTIONS.map((a, i) => (
+                  <Button key={a.id} label={a.label} icon={a.icon} focused={endIdx === i} />
                 ))}
               </div>
             </Glass>
@@ -418,7 +422,7 @@ function RowStyleMenu({ menu }: { menu: StyleMenu }) {
   const size = menu.style.size ?? "auto";
   return (
     <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={(SIZE_LINE + 1) * MENU_LINE + 110} class="cat-style">
-      <span class="cat-kicker">{menu.title} · row look</span>
+      <Kicker>{menu.title} · row look</Kicker>
       {MENU_SHAPES.map((s, i) => (
         <div key={s} class={`cat-style-line${menu.line === i ? " is-focus" : ""}${shape === s ? " is-picked" : ""}`}>
           <span>{CARD_SHAPE_LABELS[s]}</span>

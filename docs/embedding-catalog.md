@@ -20,7 +20,10 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
   - a Nuvio collection folder opens the folder (`folder`);
   - the header's Settings button opens the Hub on Settings (`hub`);
   - **Browse all** on the end bar of an opened Cinema, Shows or Anime card opens the catalog home for that kind.
-- **Ways out.** Back at the catalog's home, Back from a page that Secretary opened, CH+, and the Home pill all call
+    The kind comes only from that card (`CatalogConfig.type`): the catalog home has no section tabs.
+- **One header.** The catalog home draws Secretary's header (tv-kit `Header`) with the clock, Search and Settings,
+  and the person Secretary passes in `EmbeddedHost.person`. The catalog has no header of its own.
+- **Ways out.** Back at the catalog's home, Back from a page that Secretary opened, and CH+ all call
   `EmbeddedHost.onExit`. Secretary then shows its home again and reads Continue watching, My List and the collections
   again (`refreshCloud`).
 - **The player** runs in Secretary's page:
