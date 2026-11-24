@@ -53,6 +53,8 @@ import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_
 import { applyOrder, keepOrder, loadOrder, moveKey, saveOrder } from "./card-order.ts";
 import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
 import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
+// Types only: the catalog itself loads as its own chunk (catalog-host.tsx).
+import type { EmbeddedHost } from "@secretary/catalog-kit";
 import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./discover.ts";
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
@@ -62,7 +64,7 @@ import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
-import { type CardMenu, Home, shownStyle, type TileMenu } from "./home.tsx";
+import { type CardMenu, HEADER_ORDER, headerButtons, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
   clamp,
   enter,
@@ -1051,16 +1053,33 @@ export function App() {
     const t = setInterval(put, 20 * 60_000);
     return () => clearInterval(t);
   }, [view]);
-  const embeddedHost = {
+  const leaveCatalog = () => {
+    setCatalog(null);
+    setView("home");
+    // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
+    void refreshCloud();
+  };
+  const pictureMode = pictureSet ?? pictureTv(devices)?.pictureMode;
+  const soundOn = soundSet ?? devices.find((d) => d.kind === "audio")?.on;
+  const openReminders = reminders.filter((r) => !r.completed).length;
+  const headerPerson = { name: me?.name ?? "Secretary", color: me?.color, img: me?.img };
+  const embeddedHost: EmbeddedHost = {
     // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
     cloud,
     // The catalog home draws Secretary's header too, with the same person top left.
-    person: { name: me?.name ?? "Secretary", color: me?.color, img: me?.img },
-    onExit: () => {
-      setCatalog(null);
-      setView("home");
-      // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
-      void refreshCloud();
+    person: headerPerson,
+    onExit: leaveCatalog,
+    // Secretary's one header, which the catalog's title pages draw collapsed to the clock (catalog-kit host.ts).
+    header: {
+      time,
+      person: headerPerson,
+      buttons: headerButtons(pictureMode, soundOn, openReminders),
+      press: (at) => {
+        const i = at === "person" ? HEADER_PROFILE : HEADER_ORDER[at];
+        // Picture and sound act in place; the rest are Secretary's own screens, so the catalog gives the screen back.
+        if (i !== HEADER_PICTURE && i !== HEADER_SOUND) leaveCatalog();
+        pressHeader(i);
+      },
     },
   };
   // The anime rule (catalog-kit lib/animeguard.ts): a title the catalog knows is anime shows only on the Anime card.
@@ -1534,28 +1553,30 @@ export function App() {
     toggleSpeech();
   };
 
+  /** OK on a header button (nest-nav's numbers), from home or from a catalog title page. */
+  const pressHeader = (i: number) => {
+    if (i === HEADER_PROFILE) {
+      setMenuOpen(true);
+      return setFocus({ area: "menu", i: 0 });
+    }
+    if (i === HEADER_PARTY) return void setView("party");
+    if (i === HEADER_SEARCH) return openSearch();
+    if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
+    if (i === HEADER_PICTURE) return togglePicture();
+    if (i === HEADER_SOUND) return toggleSoundButton();
+    // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
+    if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
+    if (i === HEADER_BELL) {
+      const due = reminders.findIndex((r) => !r.completed);
+      if (due < 0) return flash("No open reminders");
+      return focusReminders(due);
+    }
+  };
+
   const activate = () => {
     const { area, i } = focus;
     if (area === "menu") return runMenu(i);
-    if (area === "header") {
-      if (i === HEADER_PROFILE) {
-        setMenuOpen(true);
-        return setFocus({ area: "menu", i: 0 });
-      }
-      if (i === HEADER_PARTY) return void setView("party");
-      if (i === HEADER_SEARCH) return openSearch();
-      if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
-      if (i === HEADER_PICTURE) return togglePicture();
-      if (i === HEADER_SOUND) return toggleSoundButton();
-      // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
-      if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
-      if (i === HEADER_BELL) {
-        const due = reminders.findIndex((r) => !r.completed);
-        if (due < 0) return flash("No open reminders");
-        return focusReminders(due);
-      }
-      return;
-    }
+    if (area === "header") return pressHeader(i);
     if (area === "ask" || area === "chat") return void listen();
     if (area === "row") {
       // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing.
@@ -1916,15 +1937,15 @@ export function App() {
           links={links}
           glow={glow}
           columns={columns}
-          open={reminders.filter((r) => !r.completed).length}
+          open={openReminders}
           status={status}
           me={me}
           styleMenu={styleMenu}
           removeMenu={removeMenu}
           tileMenu={tileMenu?.menu ?? null}
           moving={moving?.key ?? null}
-          pictureMode={pictureSet ?? pictureTv(devices)?.pictureMode}
-          soundOn={soundSet ?? devices.find((d) => d.kind === "audio")?.on}
+          pictureMode={pictureMode}
+          soundOn={soundOn}
         />
       )}
       <HoldPill since={holdSince} />

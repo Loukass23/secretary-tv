@@ -21,8 +21,13 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
   - the header's Settings button opens the Hub on Settings (`hub`);
   - **Browse all** on the end bar of an opened Cinema, Shows or Anime card opens the catalog home for that kind.
     The kind comes only from that card (`CatalogConfig.type`): the catalog home has no section tabs.
-- **One header.** The catalog home draws Secretary's header (tv-kit `Header`) with the clock, Search and Settings,
-  and the person Secretary passes in `EmbeddedHost.person`. The catalog has no header of its own.
+- **One header.** The catalog has no header of its own; it draws Secretary's (tv-kit `Header`).
+  - The catalog home draws it with the clock, Search and Settings, and the person Secretary passes in
+    `EmbeddedHost.person`.
+  - Title pages draw the whole of Secretary's header, lent in `EmbeddedHost.header` (`catalog-kit/src/host.ts`): the
+    clock, the person, the buttons and what OK on each does. It shows collapsed to the clock, top right, and Up from
+    the top of the page expands it (`tv-kit/src/glass/header-nav.ts`). Picture and Sound act in place; the other
+    buttons give the screen back to Secretary first.
 - **Ways out.** Back at the catalog's home, Back from a page that Secretary opened, and CH+ all call
   `EmbeddedHost.onExit`. Secretary then shows its home again and reads Continue watching, My List and the collections
   again (`refreshCloud`).

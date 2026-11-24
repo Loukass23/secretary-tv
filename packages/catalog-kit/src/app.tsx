@@ -85,6 +85,8 @@ export interface EmbeddedHost {
   onExit(): void;
   /** The person Secretary's header shows top left; the catalog home draws the same header (tv-kit Header). */
   person?: import("@secretary/tv-kit/src/glass/Header.tsx").HeaderPerson;
+  /** Secretary's header, which title pages draw collapsed to the clock (host.ts). Absent: the clock alone. */
+  header?: import("./host.ts").HostHeader;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -693,6 +695,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           active={view.name === "detail"}
           autoPlay={view.name === "detail" && Boolean(view.autoPlay)}
           clockFormat={settings.general.clockFormat}
+          header={embedded.header}
+          spoilerProtection={settings.playback.spoilerProtection}
           startAfter={settings.playback.startAfter}
           limits={settings.playback}
           remember={settings.playback.rememberSource}

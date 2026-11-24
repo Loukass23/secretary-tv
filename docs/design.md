@@ -25,7 +25,8 @@ same screen.
 - **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
   home showing an answer and the full chat, the Lights panel (`launcher/src/lights.tsx`: routines and lights by room,
   with a fake SmartThings that answers after a short wait and refuses "Away", to show a failed run); then the catalog pages Secretary opens inside itself: the catalog home
-  (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page and a show page (`ui/Detail.tsx`). The data is fixtures
+  (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page (with its cast) and a show page
+  (`ui/Detail.tsx`), and the show page with spoiler protection on. Up from a title page's buttons expands the header. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.
 
