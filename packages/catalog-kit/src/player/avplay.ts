@@ -217,6 +217,9 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
       if (firstFrame) {
         const f = firstFrame;
         firstFrame = null;
+        // The track is chosen once the picture runs: on the reference TV a choice made while prepared (READY) was
+        // dropped by play(), so after a seek's reopen the file's default track came back.
+        applyAudio();
         f();
       }
       trySeek();
@@ -340,7 +343,6 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
               return reject(new Error("no playable audio track"));
             }
             trackList = tracks;
-            applyAudio();
             if (silent) {
               try {
                 av.setSilentSubtitle?.(true);

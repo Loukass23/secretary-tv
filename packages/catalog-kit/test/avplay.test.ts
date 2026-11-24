@@ -154,13 +154,16 @@ test("the audio pick and the picture fit survive the reopen a seek does", async 
   const started = p.start();
   s.fire().oncurrentplaytime?.(1000);
   await started;
+  // Applied again at the first frame: the TV drops a choice made before play().
+  assert.deepEqual(picked, [2, 2]);
   p.setAspect?.("fill");
   assert.equal(methods.at(-1), "PLAYER_DISPLAY_MODE_CROPPED_FULL");
   assert.ok(s.calls.at(-1)?.endsWith("0,0,1920,1080"));
-  // A seek reopens the source: the pick is applied again once it is prepared, and the fit is kept.
+  // A seek reopens the source: the pick is applied again at its first frame, and the fit is kept.
   p.seekBy(30);
   await new Promise((r) => setTimeout(r, 450));
-  assert.deepEqual(picked, [2, 2]);
+  s.fire().oncurrentplaytime?.(31_000);
+  assert.deepEqual(picked, [2, 2, 2]);
   assert.equal(p.aspect?.(), "fill");
   assert.equal(p.audioIndex?.(), 2);
 });
