@@ -10,6 +10,7 @@
   "dependencies": {
     "@secretary/catalog-kit": "workspace:*",
     "@secretary/launcher": "workspace:*",
+    "@secretary/smartthings": "workspace:*",
     "@secretary/tv-kit": "workspace:*",
     "preact": "^10.24.0"
   },

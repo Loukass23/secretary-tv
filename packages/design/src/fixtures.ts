@@ -6,6 +6,8 @@ import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts"
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
 import type { RecState } from "@secretary/launcher/src/recommend.ts";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
+import type { LightsApi } from "@secretary/launcher/src/lights.tsx";
+import type { StDevice, StRoom, StScene } from "@secretary/smartthings";
 import { type Art, TITLES } from "./art.ts";
 
 const noop = () => {};
@@ -190,3 +192,59 @@ export function catalogRows(art: Art): HomeRow[] {
   fresh.items = fresh.items.map((t, k) => (k % 3 === 1 ? { ...t, watched: true } : t));
   return [cont, row("popular", "Popular", 4, 12), fresh, row("mylist", "My list", 6, 6)];
 }
+
+// The lights panel (launcher/src/lights.tsx): a made-up home of four rooms, a few devices in none, and enough routines
+// to scroll. Ids are invented; nothing here reaches SmartThings.
+const HOME = "loc-home";
+export const LIGHT_ROOMS: StRoom[] = [
+  { id: "room-living", name: "Living room", locationId: HOME },
+  { id: "room-kitchen", name: "Kitchen", locationId: HOME },
+  { id: "room-bed", name: "Bedroom", locationId: HOME },
+  { id: "room-study", name: "Study", locationId: HOME },
+  { id: "room-hall", name: "Hallway", locationId: HOME },
+];
+
+const lamp = (id: string, name: string, roomId: string | undefined, on: boolean, extra: Partial<StDevice> = {}): StDevice => ({
+  id,
+  name,
+  kind: "light",
+  local: false,
+  dimmable: false,
+  on,
+  locationId: HOME,
+  ...(roomId ? { roomId } : {}),
+  ...extra,
+});
+
+export const LIGHT_DEVICES: StDevice[] = [
+  lamp("d-couch", "Couch light", "room-living", true, { dimmable: true, level: 40, local: true }),
+  lamp("d-side-l", "Side light left", "room-living", true, { dimmable: true, level: 65, colour: true, local: true }),
+  lamp("d-side-r", "Side light right", "room-living", false, { colour: true, local: true }),
+  lamp("d-reading", "Reading lamp", "room-living", false),
+  { ...lamp("d-amp", "Sound system", "room-living", true), kind: "audio" },
+  lamp("d-ceiling", "Ceiling", "room-kitchen", false, { dimmable: true }),
+  lamp("d-counter", "Counter strip", "room-kitchen", true, { dimmable: true, level: 100 }),
+  lamp("d-bedside-1", "Bedside one", "room-bed", false, { dimmable: true }),
+  lamp("d-bedside-2", "Bedside two", "room-bed", false, { dimmable: true }),
+  lamp("d-desk", "Desk lamp", "room-study", true),
+  lamp("d-porch", "Porch", undefined, false),
+  lamp("d-garden", "Garden string lights", undefined, true),
+  { ...lamp("d-tv", "Television", "room-living", true), kind: "tv" },
+];
+
+export const LIGHT_SCENES: StScene[] = [
+  { id: "scene-film", name: "Film night", locationId: HOME, lastRun: Date.now() - 26 * 3600_000 },
+  { id: "scene-after", name: "After the film", locationId: HOME },
+  { id: "scene-wake", name: "Good morning", locationId: HOME, lastRun: Date.now() - 9 * 3600_000 },
+  { id: "scene-dinner", name: "Dinner", locationId: HOME },
+  { id: "scene-read", name: "Reading corner", locationId: HOME },
+  { id: "scene-off", name: "Everything off", locationId: HOME, lastRun: Date.now() - 40 * 60_000 },
+  { id: "scene-fail", name: "Away (fails here)", locationId: HOME },
+];
+
+/** SmartThings as the panel calls it, answering after a short wait; "Away" is refused, to show the failure. */
+export const LIGHTS_API: LightsApi = {
+  runScene: (id) => new Promise((ok, no) => setTimeout(() => (id === "scene-fail" ? no(new Error("refused")) : ok({ status: "success" })), 900)),
+  command: () => new Promise((ok) => setTimeout(() => ok({ results: [] }), 300)),
+  roomsIn: () => new Promise((ok) => setTimeout(() => ok(LIGHT_ROOMS), 400)),
+};

@@ -23,9 +23,10 @@ export const CARD_SIZES: readonly CardSize[] = ["compact", "standard", "large"];
 export const CARD_SHAPE_LABELS: Record<Auto<CardShape>, string> = { auto: "Automatic", ...ROW_LOOK_LABEL };
 export const CARD_SIZE_LABELS: Record<Auto<CardSize>, string> = { auto: "Automatic", compact: "Compact", standard: "Standard", large: "Large" };
 
-/** The home row's poster at the standard size; every look but the spotlight is as tall, so rows keep one rhythm. */
-export const ROW_POSTER = { w: 180, h: 270, gap: 22 } as const;
-/** The legacy app's factors; larger would push the row below out of the clip. */
+/** The home row's poster at the standard size: tv-kit's POSTER (glass/pieces.tsx), the size of Secretary's opened cards, so
+ *  the catalog home shows as few posters a row as they do. Every look but the spotlight is as tall. */
+export const ROW_POSTER = { w: 252, h: 378, gap: 26 } as const;
+/** The legacy app's factors; the home sets each row's height from its look, so a large row pushes the next one down. */
 const SCALE: Record<CardSize, number> = { compact: 0.85, standard: 1, large: 1.15 };
 
 export const shapeOfTile = (t: TileShape): CardShape => (t === "POSTER" ? "poster" : t === "LANDSCAPE" ? "landscape" : "square");

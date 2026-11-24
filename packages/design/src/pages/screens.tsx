@@ -12,17 +12,32 @@ import { GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.t
 import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@secretary/launcher/src/card-style.ts";
 import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-order.ts";
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
-import { Home as NestHome } from "@secretary/launcher/src/home.tsx";
+import { headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
+import { LightsPanel } from "@secretary/launcher/src/lights.tsx";
+import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
 import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
 import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
-export const SCREENS = ["Home", "Home · assistant", "Home · chat", "Cinema", "Shows", "Anime", "Film page", "Show page", "Film page · slim", "Film page · offline"] as const;
+export const SCREENS = [
+  "Home",
+  "Home · assistant",
+  "Home · chat",
+  "Lights",
+  "Cinema",
+  "Shows",
+  "Anime",
+  "Film page",
+  "Show page",
+  "Film page · slim",
+  "Film page · offline",
+  "Show page · spoilers",
+] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
@@ -30,6 +45,7 @@ const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series",
 export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
+  if (name === "Lights") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
@@ -142,6 +158,17 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
 
 const noop = () => {};
 
+/** The lights panel over home's wallpaper, as Secretary opens it from the header's lights button. */
+function Lights({ mode, theme, backdrop }: PageProps & { art: Art }) {
+  // The panel re-mounts on every visit (fresh routine states), and Back reopens it here rather than leaving.
+  const [visit, setVisit] = useState(0);
+  return (
+    <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
+      <LightsPanel key={visit} devices={LIGHT_DEVICES} scenes={LIGHT_SCENES} api={LIGHTS_API} onChange={noop} onClose={() => setVisit((v) => v + 1)} />
+    </GlassRoot>
+  );
+}
+
 function Catalog({ type, art }: { type: CatalogType; art: Art }) {
   const rows = useMemo(() => catalogRows(art), [art]);
   const [focus, setFocus] = useState<GridFocus>({ row: 0, col: 0 });
@@ -154,6 +181,7 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       active
       status={null}
       heading={type === "movie" ? "Cinema" : type === "series" ? "Shows" : "Anime"}
+      person={{ name: "Robin", color: "#5b52e6" }}
       onFocus={setFocus}
       onOpen={noop}
       onOpenFolder={noop}
@@ -162,26 +190,40 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       onRowStyle={(id, style) => setRowStyles((s) => ({ ...s, [id]: style }))}
       onDwell={noop}
       onOpenHub={noop}
-      onOpenNest={noop}
-      onSwitchType={noop}
       onBack={noop}
     />
   );
 }
 
 const LONG =
-  "Neil McCauley is a career thief with a crew he trusts and a code he keeps. Lieutenant Vincent Hanna hunts him across Los Angeles, " +
-  "obsessed and out of marriages, and the two men recognise each other long before they meet. As the next score closes in, loyalty, " +
-  "love and the clock all start to cost more than the money is worth, and neither can walk away from the chase.";
+  "A placeholder synopsis drawn by the design workbench. A harbour town waits out the longest winter anyone remembers, and two " +
+  "neighbours who have not spoken in years are the only ones who can keep the lighthouse running. It is long enough to show how " +
+  "four lines of a film's description sit in the panel, and what happens when it runs on past them.";
+
+/** Each episode's own synopsis; the fourth has none, so the panel falls back to the show's. */
+const EPISODE_ABOUT = (season: number, n: number) =>
+  n === 4
+    ? undefined
+    : `Placeholder synopsis of season ${season}, chapter ${n}: what happens in this episode, written long enough to fill the three lines the panel gives it, so the focus can be seen following the episode.`;
+
+/** Secretary's header as the host lends it (catalog-kit host.ts): Up from the top of the page expands it. */
+const HEADER: HostHeader = {
+  time: "20:41",
+  person: { name: "Alex", color: "#5a7dff" },
+  buttons: headerButtons(undefined, true, 2),
+  press: () => {},
+};
 
 const streams: StreamClient = { get: async () => [], watch: (_i, _h, _t, cb) => (cb([], true), () => {}), warm: async () => {} };
 
 /** Detail on fixture data. `fetch` is stubbed while it is mounted: "Detail slim" gets its synopsis from the network, "offline" never does. */
 function DetailScreen({ variant, art }: { variant: string; art: Art }) {
-  const series = variant === "Show page";
+  const series = variant.startsWith("Show page");
+  const spoilers = variant === "Show page · spoilers";
   const slim = variant !== "Film page" && !series;
   const offline = variant === "Film page · offline";
-  // A show with two seasons, the first two episodes watched: the page opens on S1E3, up next, and ticks the two.
+  // A show with two seasons, the first two episodes watched: the page opens on S1E3, up next, and ticks the two. Each
+  // episode has its own synopsis (but the fourth), and the last two of season 2 are still to come.
   const videos = series
     ? [1, 2].flatMap((season) =>
         Array.from({ length: 8 }, (_, k) => ({
@@ -190,6 +232,8 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
           episode: k + 1,
           name: `Chapter ${k + 1}`,
           thumbnail: art.stills[(season * 8 + k) % art.stills.length],
+          overview: EPISODE_ABOUT(season, k + 1),
+          released: season === 2 && k >= 6 ? "2099-01-0" + (k - 4) + "T00:00:00Z" : `2024-0${season}-${10 + k}T00:00:00Z`,
         })),
       )
     : undefined;
@@ -209,7 +253,7 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
     window.fetch = (async () =>
       offline
         ? Promise.reject(new Error("offline"))
-        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: "170 min", year: "1995", imdbRating: "8.3", ...(videos ? { videos } : {}) } }) }) as typeof fetch;
+        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: series ? "52 min" : "170 min", year: "1995", imdbRating: "8.3", ...(videos ? { videos } : { cast: ["Example Actor One", "Example Actor Two", "Example Actor Three", "Example Actor Four", "Example Actor Five", "Example Actor Six"], director: ["Example Director"] }) } }) }) as typeof fetch;
     setReady(true);
     return () => {
       window.fetch = real;
@@ -222,6 +266,8 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
       title={title}
       streams={streams}
       resume={series ? undefined : { title, posSec: 4200, durSec: 10200, updated: 1 }}
+      header={HEADER}
+      spoilerProtection={spoilers}
       active
       onPlay={noop}
       onOpenTimeline={noop}

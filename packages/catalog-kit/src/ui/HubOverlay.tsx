@@ -6,7 +6,7 @@ import {
   useKeys,
   windowOf,
 } from "@secretary/tv-kit";
-import { Glass, GlassRoot, Icon, IconButton, ListCard, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, GlassRoot, Icon, IconButton, ListCard, MediaTile } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { posterUrl, searchCatalogsClient } from "../lib/cinemeta.ts";
 import { addonStore, loadDebrid, pluginStore, saveDebrid } from "../lib/plugins.ts";
@@ -50,19 +50,11 @@ const HEAD_H = 56;
 type TopBarAction =
   | { id: "search_bar"; label: string; short: string; icon: string }
   | { id: "voice_ime"; label: string; short: string; icon: string }
-  | { id: "nest"; label: string; short: string; icon: string }
-  | { id: "cat_movie"; label: string; short: string; icon: string; type: CatalogType }
-  | { id: "cat_series"; label: string; short: string; icon: string; type: CatalogType }
-  | { id: "cat_anime"; label: string; short: string; icon: string; type: CatalogType }
   | { id: "settings"; label: string; short: string; icon: string };
 
 const TOP_BAR_ITEMS: readonly TopBarAction[] = [
   { id: "search_bar", label: "Search movies, series, anime…", short: "Search", icon: "⌕" },
   { id: "voice_ime", label: "Voice / TV Keyboard", short: "Voice", icon: "🎤" },
-  { id: "nest", label: "Home", short: "Home", icon: "🪶" },
-  { id: "cat_movie", label: "Cinema", short: "Cinema", icon: "🎬", type: "movie" },
-  { id: "cat_series", label: "Shows", short: "Shows", icon: "📺", type: "series" },
-  { id: "cat_anime", label: "Anime", short: "Anime", icon: "⛩", type: "anime" },
   { id: "settings", label: "Perch Settings", short: "Settings", icon: "⚙" },
 ];
 
@@ -90,8 +82,7 @@ interface Props {
   initialTab?: OverlayTab;
   autoVoice?: boolean;
   onSelectTitle(type: CatalogType, title: Title, autoPlay?: boolean): void;
-  onSwitchType?(type: CatalogType): void;
-  /** Opens Secretary Nest, the dashboard (CH+ and the Nest pill). */
+  /** Opens Secretary Nest, the dashboard (CH+). */
   onOpenNest(): void;
   onClose(): void;
 }
@@ -115,7 +106,6 @@ export function HubOverlay({
   initialTab,
   autoVoice = false,
   onSelectTitle,
-  onSwitchType,
   onOpenNest,
   onClose,
 }: Props) {
@@ -454,24 +444,9 @@ export function HubOverlay({
         summonTvKeyboard(query);
         return;
       }
-      if (picked.id === "nest") {
-        onOpenNest();
-        return;
-      }
       if (picked.id === "settings") {
         setTab("settings");
         setFocus({ row: 1, col: 0 });
-        return;
-      }
-      if (
-        (picked.id === "cat_movie" || picked.id === "cat_series" || picked.id === "cat_anime") &&
-        picked.type
-      ) {
-        if (onSwitchType) {
-          onSwitchType(picked.type);
-        } else {
-          onClose();
-        }
         return;
       }
     }
@@ -573,7 +548,6 @@ export function HubOverlay({
 
   const railRow0 = hasRecentChipRow ? RECENT_ROW + 1 : RECENT_ROW;
   const railAt = focus.row >= railRow0 ? focus.row - railRow0 : 0;
-  const sectionIdx = activeType === "movie" ? 0 : activeType === "series" ? 1 : 2;
   // The settings page in sections: a heading, then its lines (`ys` is where each focusable line sits, row 1 first).
   const heads: { label: string; y: number }[] = [];
   const ys: number[] = [];
@@ -621,16 +595,7 @@ export function HubOverlay({
           <span class="hub-keycap">CH-</span>
         </Glass>
         <IconButton x={860} y={TOP_Y} w={140} h={68} icon={imeActive ? <><Icon name="mic" />…</> : <Icon name="mic" />} focused={focus.row === 0 && focus.col === 1} />
-        <Segmented
-          x={1030}
-          y={TOP_Y}
-          w={560}
-          h={68}
-          items={["Home", "Cinema", "Shows", "Anime"]}
-          picked={sectionIdx + 1}
-          focusIndex={focus.row === 0 && focus.col >= 2 && focus.col <= 5 ? focus.col - 2 : -1}
-        />
-        <IconButton x={1610} y={TOP_Y} w={110} h={68} icon={<Icon name="settings" />} focused={focus.row === 0 && focus.col === 6} />
+        <IconButton x={1610} y={TOP_Y} w={110} h={68} icon={<Icon name="settings" />} focused={focus.row === 0 && focus.col === 2} />
         <div class="hub-clock">{clockText}</div>
 
         {tab === "settings" && (

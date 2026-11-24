@@ -63,7 +63,7 @@ import { PlayerView } from "./ui/PlayerView.tsx";
 
 export interface CatalogConfig {
   type: CatalogType;
-  /** Shown in the header before a title has focus. */
+  /** The kind's name (Cinema, Shows, Anime), shown on the catalog home before a title has focus. */
   heading: string;
   /** Base URL of packages/server, no trailing slash. */
   serverUrl: string;
@@ -81,8 +81,12 @@ export interface CatalogConfig {
 export interface EmbeddedHost {
   /** Secretary's Nuvio client: the catalog uses it instead of making a second one over the same session. */
   cloud?: import("@secretary/nuvio").NuvioClient;
-  /** The root Back, CH+ and the home pill: give the screen back to Secretary's home. */
+  /** The root Back and CH+: give the screen back to Secretary's home. */
   onExit(): void;
+  /** The person Secretary's header shows top left; the catalog home draws the same header (tv-kit Header). */
+  person?: import("@secretary/tv-kit/src/glass/Header.tsx").HeaderPerson;
+  /** Secretary's header, which title pages draw collapsed to the clock (host.ts). Absent: the clock alone. */
+  header?: import("./host.ts").HostHeader;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -136,7 +140,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const [activeType, setActiveType] = useState<CatalogType>(type);
   const [settings, setSettings] = useState<DashboardSettings>(() => loadSettings());
   // Plugin and addon lists synced with the Nuvio profile (lib/listsync.ts), started with the stream setup below.
-  // The plugin scope follows the kind being browsed (the Hub and the home pill can switch it), not the one it opened on.
+  // The plugin scope follows the kind being browsed (Secretary's embedded API can switch it), not the one it opened on.
   const activeNow = useRef(activeType);
   activeNow.current = activeType;
   const lists = useRef<{ sync(): Promise<void>; stop(): void } | null>(null);
@@ -406,7 +410,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
 
   const flash = (msg: string) => island.push({ key: "app", text: msg, level: "info", ms: EXIT_WINDOW_MS });
 
-  /** CH+ and the home pill: back to Secretary's home (docs/launcher.md). */
+  /** CH+ and the root Back: back to Secretary's home (docs/launcher.md). */
   const openNest = () => embedded.onExit();
 
   chPlus.current.openNest = openNest;
@@ -594,6 +598,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         status={status}
         heading={currentHeading}
         clockFormat={settings.general.clockFormat}
+        person={embedded.person}
         onFocus={setFocus}
         onOpen={(title, autoPlay) => {
           fromContinue.current = Boolean(autoPlay);
@@ -616,11 +621,6 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         onOpenHub={(tab, autoVoice) => {
           void syncAllResume().then(setResume);
           setView({ name: "hub", tab, autoVoice });
-        }}
-        onOpenNest={openNest}
-        onSwitchType={(nextType) => {
-          setActiveType(nextType);
-          setFocus({ row: 0, col: 0 });
         }}
         onBack={homeBack}
       />
@@ -652,11 +652,6 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         onSelectTitle={(itemType, title, autoPlay) =>
           setView({ name: "detail", itemType, title, autoPlay })
         }
-        onSwitchType={(nextType) => {
-          setActiveType(nextType);
-          setFocus({ row: 0, col: 0 });
-          setView({ name: "home" });
-        }}
         onOpenNest={openNest}
         onClose={goHome}
       />
@@ -700,6 +695,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           active={view.name === "detail"}
           autoPlay={view.name === "detail" && Boolean(view.autoPlay)}
           clockFormat={settings.general.clockFormat}
+          header={embedded.header}
+          spoilerProtection={settings.playback.spoilerProtection}
           startAfter={settings.playback.startAfter}
           limits={settings.playback}
           remember={settings.playback.rememberSource}
