@@ -3,7 +3,7 @@
 // tabs ("All" first, every catalog together); rows show every catalog at once, and decades one row per decade. The
 // View button (top right) sets this folder's own view; the tabs take one of four styles. Pages are read as focus
 // nears the end. Glass rules as the home (docs/performance.md): transform-only motion, windowed lists, no blur.
-import { type Dir, type Focus, move, useKeys, windowOf } from "@secretary/tv-kit";
+import { type Dir, type Focus, move, rowColumn, useKeys, windowOf } from "@secretary/tv-kit";
 import { Glass, GlassRoot, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import type { CollectionFolder, NuvioCollection } from "@secretary/nuvio";
 import type { ComponentChildren } from "preact";
@@ -11,6 +11,8 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { backgroundUrl, posterUrl } from "../lib/cinemeta.ts";
 import {
   autoFolderView,
+  type CardShape,
+  viewOfLook,
   byDecade,
   byYear,
   FOLDER_VIEW_LABELS,
@@ -80,6 +82,8 @@ interface Props {
   keys: SourceKeys;
   /** Settings › Collections: the folder view and the tab style (each may be Automatic). */
   look: DashboardSettings["collections"];
+  /** The look of the home row it was opened from: a Top 10 opens as a ranking, a spotlight as a mural (viewOfLook). */
+  rowLook?: CardShape;
   active: boolean;
   onOpen(type: CatalogType, title: Title): void;
   onBack(): void;
@@ -88,9 +92,9 @@ interface Props {
 const isFilmography = (r: ResolvedSource) =>
   r.source.provider === "tmdb" && (r.source.tmdbSourceType === "PERSON" || r.source.tmdbSourceType === "DIRECTOR");
 
-export function NuvioFolder({ type, collection, folder, sources, keys, look, active, onOpen, onBack }: Props) {
+export function NuvioFolder({ type, collection, folder, sources, keys, look, rowLook, active, onOpen, onBack }: Props) {
   const [own, setOwn] = useState<FolderView | null>(() => loadFolderView(collection.id, folder.id));
-  const auto = autoFolderView(collection.viewMode, sources.length > 0 && sources.every(isFilmography));
+  const auto = viewOfLook(rowLook) ?? autoFolderView(collection.viewMode, sources.length > 0 && sources.every(isFilmography));
   const view = resolveFolderView(own, look.folderView, auto);
   const withTabs = tabbed(view);
   const allTab = withTabs && collection.showAllTab && sources.length > 1;
@@ -107,6 +111,9 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, act
   const [index, setIndex] = useState(0);
   /** The focused title in rows and decades. */
   const [focus, setFocus] = useState<Focus>({ row: 0, col: 0 });
+  // Rows view: where each row was left, so rows never sweep sideways as focus moves between them (as on Home).
+  const lastCol = useRef(new Map<number, number>());
+  lastCol.current.set(focus.row, focus.col);
 
   /** The sources the current tab shows. */
   const tabSources = !withTabs ? sources : allTab && tab === 0 ? sources : [sources[tab - (allTab ? 1 : 0)]].filter(Boolean);
@@ -174,12 +181,14 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, act
     if (next === tab) return;
     setTab(next);
     setIndex(0);
+    lastCol.current.clear();
     setFocus({ row: 0, col: 0 });
   };
   const pickView = (v: FolderView | null) => {
     saveFolderView(collection.id, folder.id, v);
     setOwn(v);
     setIndex(0);
+    lastCol.current.clear();
     setFocus({ row: 0, col: 0 });
     setTab(0);
   };
@@ -243,11 +252,9 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, act
       if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
         // Pages: Left from the first title turns back a page.
         if (key === "Left" && focus.col === 0 && tabStyle === "pages" && hasTabBar) return void pickTab(tab - 1);
-        const next = move(
-          stacked.map((r) => r.items.length),
-          focus,
-          key.toLowerCase() as Dir,
-        );
+        const lengths = stacked.map((r) => r.items.length);
+        let next = move(lengths, focus, key.toLowerCase() as Dir);
+        if (next !== focus && next.row !== focus.row) next = { row: next.row, col: rowColumn(lastCol.current.get(next.row), focus.col, lengths[next.row]) };
         if (next !== focus) setFocus(next);
         else if (key === "Right" && tabStyle === "pages" && hasTabBar) pickTab(tab + 1);
         return;
@@ -318,10 +325,12 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, act
           <div class="sg-clip nf-clip" style={{ left: "0px", top: `${ROWS_Y - 20}px`, width: "1920px", height: `${1080 - ROWS_Y + 20}px` }}>
             {!stacked.length && <div class="nf-empty" style={{ left: `${PAD}px`, top: `${BODY_Y - ROWS_Y + 40}px` }}>{status(tabSources)}</div>}
             <div class="sg-scroll" style={{ transform: `translate3d(0,${20 - focus.row * ROW_H}px,0)` }}>
-              {stacked.slice(focus.row, focus.row + BELOW + 1).map((r, k) => {
-                const row = focus.row + k;
-                const [from, to] = windowOf(row === focus.row ? focus.col : 0, r.items.length);
-                const shift = row === focus.row ? Math.max(0, focus.col - 1) * STRIDE : 0;
+              {stacked.slice(Math.max(0, focus.row - 1), focus.row + BELOW + 1).map((r, k) => {
+                // The row just left stays drawn above, sliding out under the clip rather than vanishing.
+                const row = Math.max(0, focus.row - 1) + k;
+                const at = row === focus.row ? focus.col : (lastCol.current.get(row) ?? 0);
+                const [from, to] = windowOf(at, r.items.length);
+                const shift = Math.max(0, at - 1) * STRIDE;
                 return (
                   <section key={r.key} class="cat-row" style={{ top: `${row * ROW_H}px` }}>
                     <div class="cat-row-head" style={{ left: `${PAD}px` }}>

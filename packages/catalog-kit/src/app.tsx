@@ -13,7 +13,7 @@ import { playbackLights, runMovieScene } from "./lib/home.ts";
 import { createPartySession, LEAVE_TEXT, type PartySession, releaseOf, type SocketLike, streamFor } from "./lib/party.ts";
 import { clearLocalLibrary, loadLibrary, setLibraryRemote, syncLibrary } from "./lib/library.ts";
 import { episodeLabel, fileHintFor, nextEpisode } from "./lib/episodes.ts";
-import { loadRowStyles, saveRowStyle } from "./lib/collectionlayout.ts";
+import { type CardShape, loadRowStyles, saveRowStyle } from "./lib/collectionlayout.ts";
 import {
   clearLocalNuvioCollections,
   collectionRows,
@@ -31,6 +31,7 @@ import { loadHome, saveHome } from "./lib/home-cache.ts";
 import {
   consumeHandoff,
   loadAllResume,
+  loadWatchedIds,
   setResumeServer,
   syncAllResume,
   clearLocalResume,
@@ -215,7 +216,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
   const [rowStyles, setRowStyles] = useState(() => loadRowStyles());
   // A folder Nest asked for (a home card), opened once the collections are in.
   const [wantFolder, setWantFolder] = useState<{ collectionId: string; folderId: string } | null>(folder ?? null);
-  const [folderOpen, setFolderOpen] = useState<{ collectionId: string; folderId: string } | null>(null);
+  const [folderOpen, setFolderOpen] = useState<{ collectionId: string; folderId: string; rowLook?: CardShape } | null>(null);
   const sourceKeys: SourceKeys = { tmdb: getTmdbKey(), trakt: typeof __TRAKT_CLIENT_ID__ !== "undefined" ? __TRAKT_CLIENT_ID__ : "" };
   const shownCols = useMemo(
     () => collectionsFor(nuvioCols, activeType, sourceUsable(activeType, addonStore.active(), sourceKeys)),
@@ -360,12 +361,16 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     }
     topRows.push(...nuvioRows.filter((r) => pinnedNuvio.has(r.id)));
     topRows.push(...nuvioRows.filter((r) => !pinnedNuvio.has(r.id)));
-    return [...topRows, ...catalog];
+    // Titles watched whole carry a tick on their poster (Continue watching is, by its nature, not watched yet).
+    const seen = new Set(loadWatchedIds());
+    const ticked = (r: HomeRow): HomeRow =>
+      r.id === "continue" || !r.items.some((m) => seen.has(m.id)) ? r : { ...r, items: r.items.map((m) => (seen.has(m.id) ? { ...m, watched: true } : m)) };
+    return [...topRows, ...catalog].map(ticked);
   }, [resume, catalog, activeType, watchedRev, shownCols]);
 
-  const openFolder = (collectionId: string, folderId: string) => {
+  const openFolder = (collectionId: string, folderId: string, rowLook?: CardShape) => {
     if (!findFolder(shownCols, collectionId, folderId)) return;
-    setFolderOpen({ collectionId, folderId });
+    setFolderOpen({ collectionId, folderId, rowLook });
     setView({ name: "folder" });
   };
   useEffect(() => {
@@ -381,6 +386,10 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
       .filter((r): r is ResolvedSource => r !== null);
     return { ...hit, sources };
   }, [folderOpen, shownCols]);
+
+  useEffect(() => {
+    focusedRowId.current = rows[focus.row]?.id;
+  }, [focus.row]);
 
   // An addon row whose catalog pages (`skip`) reads its next page as focus nears its end.
   const paging = useRef(new Set<string>());
@@ -403,9 +412,13 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
     );
   }, [focus, rows]);
 
+  // Rows come and go as syncs land (Continue watching, My List, collections): focus stays on the row it was on, by id.
+  const focusedRowId = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!rows.length) return;
-    const r = Math.min(focus.row, rows.length - 1);
+    const was = focusedRowId.current ? rows.findIndex((x) => x.id === focusedRowId.current) : -1;
+    const r = was >= 0 ? was : Math.min(focus.row, rows.length - 1);
+    focusedRowId.current = rows[r]?.id;
     const c = Math.min(focus.col, Math.max(0, (rows[r]?.items.length ?? 1) - 1));
     if (r !== focus.row || c !== focus.col) setFocus({ row: r, col: c });
   }, [rows]);
@@ -687,6 +700,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
           sources={folderShown.sources}
           keys={sourceKeys}
           look={settings.collections}
+          rowLook={folderOpen?.rowLook}
           active={view.name === "folder"}
           onOpen={(itemType, title) => setView({ name: "detail", itemType, title })}
           onBack={goHome}

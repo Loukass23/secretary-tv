@@ -21,7 +21,7 @@ import type { PageProps } from "../app.tsx";
 import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
-export const SCREENS = ["Nest home", "Nest assistant", "Nest chat", "Cinema", "Shows", "Anime", "Detail resumed", "Detail slim", "Detail offline"] as const;
+export const SCREENS = ["Nest home", "Nest assistant", "Nest chat", "Cinema", "Shows", "Anime", "Detail resumed", "Detail series", "Detail slim", "Detail offline"] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
@@ -177,8 +177,21 @@ const streams: StreamClient = { get: async () => [], watch: (_i, _h, _t, cb) => 
 
 /** Detail on fixture data. `fetch` is stubbed while it is mounted: "Detail slim" gets its synopsis from the network, "offline" never does. */
 function DetailScreen({ variant, art }: { variant: string; art: Art }) {
-  const slim = variant !== "Detail resumed";
+  const series = variant === "Detail series";
+  const slim = variant !== "Detail resumed" && !series;
   const offline = variant === "Detail offline";
+  // A show with two seasons, the first two episodes watched: the page opens on S1E3, up next, and ticks the two.
+  const videos = series
+    ? [1, 2].flatMap((season) =>
+        Array.from({ length: 8 }, (_, k) => ({
+          id: `${"tt0113277"}:${season}:${k + 1}`,
+          season,
+          episode: k + 1,
+          name: `Chapter ${k + 1}`,
+          thumbnail: art.stills[(season * 8 + k) % art.stills.length],
+        })),
+      )
+    : undefined;
   const title: Title = {
     id: "tt0113277",
     name: "The Quiet Harbour at the End of the Longest Winter",
@@ -190,11 +203,12 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
   };
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    if (series) localStorage.setItem("sectv.watched.episodes.v1", JSON.stringify({ tt0113277: ["1:1", "1:2"] }));
     const real = window.fetch;
     window.fetch = (async () =>
       offline
         ? Promise.reject(new Error("offline"))
-        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: "170 min", year: "1995", imdbRating: "8.3" } }) }) as typeof fetch;
+        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: "170 min", year: "1995", imdbRating: "8.3", ...(videos ? { videos } : {}) } }) }) as typeof fetch;
     setReady(true);
     return () => {
       window.fetch = real;
@@ -203,10 +217,10 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
   if (!ready) return null;
   return (
     <Detail
-      type="movie"
+      type={series ? "series" : "movie"}
       title={title}
       streams={streams}
-      resume={{ title, posSec: 4200, durSec: 10200, updated: 1 }}
+      resume={series ? undefined : { title, posSec: 4200, durSec: 10200, updated: 1 }}
       active
       onPlay={noop}
       onOpenTimeline={noop}

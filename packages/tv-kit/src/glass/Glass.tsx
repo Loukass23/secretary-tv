@@ -1,5 +1,5 @@
 import { type ComponentChildren, createContext } from "preact";
-import { useContext, useRef } from "preact/hooks";
+import { useContext, useRef, useState } from "preact/hooks";
 import { FROST_SCALE, PAGE_H, PAGE_W } from "./backdrop.ts";
 import type { Palette } from "./palette.ts";
 import { MetalSheen } from "./sheen.tsx";
@@ -54,17 +54,27 @@ export function GlassRoot({ mode, wallpaper, frost, class: cls, sheen, mood, chi
  */
 export function Frost({ x, y }: { x: number; y: number }) {
   const src = useContext(FrostContext);
+  // A new frost fades in over the old one, which is dropped once the fade ends: never a snap from one blur to the next.
+  const shown = useRef<{ now: string | null; before: string | null }>({ now: src, before: null });
+  if (shown.current.now !== src) shown.current = { now: src, before: src ? shown.current.now : null };
+  const [, redraw] = useState(0);
   if (!src) return null;
+  const before = shown.current.before;
+  const layer = (url: string) => ({
+    width: `${PAGE_W / FROST_SCALE}px`,
+    height: `${PAGE_H / FROST_SCALE}px`,
+    backgroundImage: `url(${url})`,
+    transform: `translate3d(${-x}px,${-y}px,0) scale(${FROST_SCALE})`,
+  });
+  const done = () => {
+    shown.current = { ...shown.current, before: null };
+    redraw((n) => n + 1);
+  };
   return (
-    <i
-      class="sg-frost"
-      style={{
-        width: `${PAGE_W / FROST_SCALE}px`,
-        height: `${PAGE_H / FROST_SCALE}px`,
-        backgroundImage: `url(${src})`,
-        transform: `translate3d(${-x}px,${-y}px,0) scale(${FROST_SCALE})`,
-      }}
-    />
+    <>
+      {before && <i key={before} class="sg-frost" style={layer(before)} />}
+      <i key={src} class={`sg-frost${before ? " is-in" : ""}`} style={layer(src)} onAnimationEnd={before ? done : undefined} />
+    </>
   );
 }
 

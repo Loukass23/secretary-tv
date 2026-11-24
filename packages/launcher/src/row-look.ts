@@ -2,53 +2,30 @@
 // apps' card shapes (catalog-kit collectionlayout: poster, landscape, square, the 4:3 highlight) plus a ranking with
 // big numerals, the idea of Nuvio Legacy's ranking view; each row keeps its own choice on this TV. Pure, so it is unit
 // tested; cards.tsx draws what these boxes say.
+import { lookBox, type LookBox, ROW_LOOK_LABEL } from "@secretary/tv-kit/src/row-look.ts";
 import { EXPANDED } from "./card-style.ts";
 
+/** The shared looks (tv-kit/src/row-look.ts) an opened card can take; the spotlight is taller than the card allows. */
 export const ROW_SHAPES = ["poster", "landscape", "square", "wide", "ranking"] as const;
 export type RowShape = (typeof ROW_SHAPES)[number];
 
 export const ROW_SHAPE_LABEL: Record<RowShape, string> = {
-  poster: "Poster",
-  landscape: "Landscape",
-  square: "Square",
-  wide: "Highlight 4:3",
-  ranking: "Ranking",
+  poster: ROW_LOOK_LABEL.poster,
+  landscape: ROW_LOOK_LABEL.landscape,
+  square: ROW_LOOK_LABEL.square,
+  wide: ROW_LOOK_LABEL.wide,
+  ranking: ROW_LOOK_LABEL.ranking,
 };
 
 export const ROW_LOOKS_KEY = "nest.rowLooks";
 
-export interface TileBox {
-  /** The tile's width, the ranking numeral's room included. */
-  w: number;
-  h: number;
-  /** From one tile's left edge to the next. */
-  stride: number;
-  /** Which art it shows: the portrait poster, or the landscape still (poster when a title has none). */
-  art: "poster" | "still";
-  /** Room on the left for a ranking numeral. */
-  lead: number;
-}
+export type TileBox = LookBox;
 
 const GAP = EXPANDED.stride - EXPANDED.w;
 const LEAD = 96;
 
 /** Every shape is as tall as the poster, and as wide as its art needs (16:9 stills, 4:3, square), so the image fits whole. */
-export function tileBox(shape: RowShape): TileBox {
-  const H = EXPANDED.h;
-  const box = (w: number, h: number, art: TileBox["art"], lead = 0): TileBox => ({ w: w + lead, h, stride: w + lead + GAP, art, lead });
-  switch (shape) {
-    case "poster":
-      return box(EXPANDED.w, H, "poster");
-    case "landscape":
-      return box(Math.round((EXPANDED.h * 16) / 9), EXPANDED.h, "still");
-    case "square":
-      return box(EXPANDED.h, EXPANDED.h, "poster");
-    case "wide":
-      return box(Math.round((EXPANDED.h * 4) / 3), EXPANDED.h, "still");
-    case "ranking":
-      return box(EXPANDED.w, H, "poster", LEAD);
-  }
-}
+export const tileBox = (shape: RowShape): TileBox => lookBox(shape, { w: EXPANDED.w, h: EXPANDED.h, gap: GAP, lead: LEAD });
 
 const isShape = (v: unknown): v is RowShape => ROW_SHAPES.includes(v as RowShape);
 

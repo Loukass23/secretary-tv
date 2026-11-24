@@ -138,6 +138,12 @@
   background-size: 100% 100%;
   transition: transform var(--sg-move) var(--sg-ease);
 }
+/* A frost swap: the new blur fades in over the old (Frost in Glass.tsx), which goes once this ends. */
+.sg-frost.is-in { animation: sgFrostIn 360ms var(--sg-ease) both; }
+@keyframes sgFrostIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* --- segmented pill --- */
 .sg-seg { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: var(--sg-r-pill); }
@@ -233,7 +239,31 @@
   transition: transform 220ms var(--sg-ease);
   will-change: transform;
 }
+/* A flat fill until the art has loaded; the art then fades in (opacity only, inside the tile's own layer). */
+.sg-tile { background: rgba(255, 255, 255, 0.06); }
 .sg-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* MediaTile's art (and any img marked sg-fade) waits for its load, then fades in. */
+.sg-tile img.sg-fade { opacity: 0; transition: opacity 240ms var(--sg-ease); will-change: opacity; }
+.sg-tile img.sg-fade.is-ready { opacity: 1; }
+/* Watched: dimmed while not focused, with a tick in the top-right corner. */
+.sg-tile.is-watched img.sg-fade.is-ready { opacity: 0.62; }
+.sg-tile.is-watched.is-focus img.sg-fade.is-ready { opacity: 1; }
+.sg-tile-tick {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent, #ff5a26);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 38px;
+  text-align: center;
+}
 .sg-tile::before {
   content: "";
   position: absolute;

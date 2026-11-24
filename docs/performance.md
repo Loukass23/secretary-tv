@@ -460,3 +460,27 @@ cold start was slower (p95 67 ms, 19 over 50 ms, with first cards at 5.5 s), so 
 Heat showed its synopsis, runtime, genres and resume bar inside the Detail panel. On Home the info panel cuts the
 synopsis at two lines with an explicit `max-height`: the TV's engine draws a sliver of a third line when `-webkit-line-clamp`
 sits in a flex item that is taller than the clamp.
+
+## Smooth rows, a single Detail reveal and fading art (Secretary, 2026-11-24)
+
+Measured in Secretary (`packages/launcher`, catalog embedded) on the Samsung TV, against `main` deployed the same way
+in a worktree. The walk is Nest's opened Cinema card: `cdp.mjs walk 250
+Right,Right,Right,Right,Down,Right,Right,Right,Down,Left,Left,Left,Up,Left,Left,Up,Right,Right,Right,Down,Left,Left`, four
+times in a row.
+
+| Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- |
+| `main` | 33 ms | 83-150 ms | 50, 61, 54, 23 | 5-7 MB |
+| this change | 33 ms | 83-150 ms | 53, 58, 47, 32 | 8-12 MB |
+
+The same within noise: the tile art fading in (`img.sg-fade`, its own layer), the frost cross-fade and the rows that no
+longer rise again cost nothing measurable there. The heap is a few MB higher; watch it in the next soak.
+
+- **Catalog Home inside Secretary** (Browse all on a card's end bar): warm walks gave 17-33 ms median, p95 50-67 ms,
+  7-26 frames over 50 ms. The row above the focused one now stays mounted (four rows, not three) and each row keeps
+  the column it was left at (`tv-kit` `rowColumn`). The figures drift with how long the TV has been browsing, so
+  compare builds side by side, not with older sections.
+- **Detail reveal**: opening a show, the page mounted at 0.84 s (after its details), the art's frost was in at 1.05 s,
+  and the veil lifted at 1.96 s and was gone at 2.6 s. There was no frost swap after the veil, and the page opened on
+  the up-next episode with its watched episodes ticked from the Nuvio history.
+- **Nest's opened card** ends on its own bar, and rows under the picks no longer replay `nestRise` when they mount.

@@ -11,6 +11,8 @@ import {
   HEADER_PROFILE,
   HEADER_SEARCH,
   HEADER_SOUND,
+  END_BROWSE,
+  END_TOP,
   LAUNCH,
   type Column,
   type Layout,
@@ -137,7 +139,12 @@ test("an opened card of several rows: Down and Up move between rows, the sides s
   assert.deepEqual(step(inside(0, 3), "Down", len), inside(0, 12), "same place in the next row");
   assert.deepEqual(step(inside(0, 8), "Down", len), inside(0, 13), "clamped to the shorter row");
   assert.deepEqual(step(inside(0, 12), "Down", len), inside(0, 17));
-  assert.deepEqual(step(inside(0, 19), "Down", len), { area: "ask", i: 0 }, "Down from the last row goes to the assistant");
+  assert.deepEqual(step(inside(0, 19), "Down", len), inside(0, END_TOP), "Down from the last row reaches the end bar, not the assistant");
+  assert.deepEqual(step(inside(0, END_TOP), "Down", len), inside(0, END_TOP), "the end bar is the end");
+  assert.deepEqual(step(inside(0, END_TOP), "Right", len), inside(0, END_BROWSE));
+  assert.deepEqual(step(inside(0, END_BROWSE), "Left", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_BROWSE), "Up", len), inside(0, 14), "Up goes back to the last row");
+  assert.deepEqual(clamp(inside(0, END_TOP), len), inside(0, END_TOP), "the end bar survives a layout change");
   assert.deepEqual(step(inside(0, 19), "Up", len), inside(0, 13), "clamped to the shorter row above");
   assert.deepEqual(step(inside(0, 12), "Up", len), inside(0, 3));
   assert.deepEqual(step(inside(0, 3), "Up", len), card(0), "Up from the picks folds the card");

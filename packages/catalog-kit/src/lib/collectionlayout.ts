@@ -4,42 +4,49 @@
 // Behaviour follows nuvio-native-legacy's row styles, "Exibição" views and tab styles; nothing is copied from it.
 import type { TileShape, ViewMode } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
+import { autoLook, type LookBox, type LookHints, lookBox, RANKING_MAX, ROW_LOOK_LABEL, ROW_LOOKS, type RowLook } from "@secretary/tv-kit/src/row-look.ts";
 import type { Title } from "./types.ts";
 
 // --- Home row cards ------------------------------------------------------------------------------------------------
 
-/** A card's shape: Nuvio's three, plus the 4:3 "highlight" the legacy app offers. */
-export type CardShape = "poster" | "landscape" | "square" | "wide";
+/**
+ * A row's look: Nuvio's three tile shapes, the legacy app's 4:3 "highlight", and the presets shared with Nest
+ * (tv-kit/src/row-look.ts): a Top 10 ranking and a spotlight of large stills.
+ */
+export type CardShape = RowLook;
 export type CardSize = "compact" | "standard" | "large";
 export type Auto<T> = T | "auto";
 
-export const CARD_SHAPES: readonly CardShape[] = ["poster", "landscape", "square", "wide"];
+export const CARD_SHAPES: readonly CardShape[] = ROW_LOOKS;
 export const CARD_SIZES: readonly CardSize[] = ["compact", "standard", "large"];
 
-export const CARD_SHAPE_LABELS: Record<Auto<CardShape>, string> = {
-  auto: "Automatic",
-  poster: "Poster",
-  landscape: "Landscape",
-  square: "Square",
-  wide: "Highlight 4:3",
-};
+export const CARD_SHAPE_LABELS: Record<Auto<CardShape>, string> = { auto: "Automatic", ...ROW_LOOK_LABEL };
 export const CARD_SIZE_LABELS: Record<Auto<CardSize>, string> = { auto: "Automatic", compact: "Compact", standard: "Standard", large: "Large" };
 
-/** Width and height at the standard size; every shape is 270 high, so rows keep one rhythm. */
-const BASE: Record<CardShape, readonly [number, number]> = {
-  poster: [180, 270],
-  landscape: [480, 270],
-  square: [270, 270],
-  wide: [360, 270],
-};
+/** The home row's poster at the standard size; every look but the spotlight is as tall, so rows keep one rhythm. */
+export const ROW_POSTER = { w: 180, h: 270, gap: 22 } as const;
 /** The legacy app's factors; larger would push the row below out of the clip. */
 const SCALE: Record<CardSize, number> = { compact: 0.85, standard: 1, large: 1.15 };
 
 export const shapeOfTile = (t: TileShape): CardShape => (t === "POSTER" ? "poster" : t === "LANDSCAPE" ? "landscape" : "square");
 
+/** The full box of a look at a size: the tile, its stride, which art, the ranking numeral's room, a caption. */
+export const cardLook = (shape: CardShape, size: CardSize): LookBox => lookBox(shape, ROW_POSTER, SCALE[size]);
+
 export function cardBox(shape: CardShape, size: CardSize): { w: number; h: number } {
-  const [w, h] = BASE[shape];
-  return { w: Math.round(w * SCALE[size]), h: Math.round(h * SCALE[size]) };
+  const { w, h } = cardLook(shape, size);
+  return { w, h };
+}
+
+/** The titles a row shows in its look: a ranking is a Top 10. */
+export const itemsFor = <T>(shape: CardShape, items: readonly T[]): readonly T[] => (shape === "ranking" ? items.slice(0, RANKING_MAX) : items);
+
+/** How a folder opened from a row of this look shows, when neither the folder nor the setting chose a view. */
+export function viewOfLook(shape: CardShape | undefined): FolderView | null {
+  if (shape === "ranking") return "ranking";
+  if (shape === "spotlight") return "mural";
+  if (shape === "landscape") return "rows";
+  return null;
 }
 
 export interface RowStyle {
@@ -64,16 +71,19 @@ export function saveRowStyle(rowId: string, style: RowStyle): Record<string, Row
 }
 
 /**
- * The card a row draws: the row's own choice, else the setting, else Automatic — the shape most of the collection's
- * folders have in Nuvio, at the standard size.
+ * The card a row draws: the row's own choice, else the setting (collection rows), else Automatic (tv-kit autoLook): the
+ * page's first collection as a spotlight, a chart as a Top 10, the shape most of a collection's folders have in Nuvio,
+ * posters for the rest. `row` is a collection's Nuvio tile shape alone, or what is known of the row.
  */
 export function resolveCard(
-  nuvioShape: TileShape,
+  row: TileShape | LookHints,
   setting: { cardShape: Auto<CardShape>; cardSize: Auto<CardSize> },
   own: RowStyle = {},
 ): { shape: CardShape; size: CardSize } {
-  const shape = own.shape ?? (setting.cardShape === "auto" ? shapeOfTile(nuvioShape) : setting.cardShape);
-  const size = own.size ?? (setting.cardSize === "auto" ? "standard" : setting.cardSize);
+  const hints: LookHints = typeof row === "string" ? { title: "", tileShape: row } : row;
+  const collection = hints.tileShape != null;
+  const shape = own.shape ?? (collection && setting.cardShape !== "auto" ? setting.cardShape : autoLook(hints));
+  const size = own.size ?? (collection && setting.cardSize !== "auto" ? setting.cardSize : "standard");
   return { shape, size };
 }
 

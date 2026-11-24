@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { defaultEpisode, episodeLabel, episodesOf, hasAired, nextEpisode, seasonsOf } from "../src/lib/episodes.ts";
-import { isFinished, saveProgress, upsert, type ResumeEntry } from "../src/lib/resume.ts";
+import { isFinished, markEpisodesWatched, mergeEpisodeMaps, saveProgress, upsert, watchedEpisodes, type ResumeEntry } from "../src/lib/resume.ts";
 import type { Video } from "../src/lib/types.ts";
 
 const v = (season: number, episode: number, released?: string): Video => ({
@@ -71,9 +71,31 @@ test("saveProgress: a finished episode moves the entry to the next episode at 0:
   };
   const title = { id: "tt1", name: "Show", year: "2020", rating: "8" };
   saveProgress("series", title, v(1, 1), 3590, 3600, v(1, 2));
-  const saved = JSON.parse([...store.values()][0]) as ResumeEntry[];
+  const saved = JSON.parse(store.get("sectv.series.resume.v2")!) as ResumeEntry[];
   assert.equal(saved[0].episode?.id, "tt1:1:2");
   assert.equal(saved[0].posSec, 0);
+  assert.deepEqual([...watchedEpisodes("tt1")], ["1:1"], "the finished episode is marked watched");
   saveProgress("series", title, v(1, 2), 3590, 3600, null);
-  assert.deepEqual(JSON.parse([...store.values()][0]), []);
+  assert.deepEqual(JSON.parse(store.get("sectv.series.resume.v2")!), []);
+  assert.deepEqual([...watchedEpisodes("tt1")].sort(), ["1:1", "1:2"]);
+  saveProgress("series", title, v(2, 1), 600, 3600, null);
+  assert.ok(!watchedEpisodes("tt1").has("2:1"), "an episode left halfway is not watched");
+  markEpisodesWatched("tt1", [v(1, 1), v(1, 2)], false);
+  assert.equal(watchedEpisodes("tt1").size, 0);
+});
+
+test("up next skips watched episodes; the remembered one still wins", () => {
+  const watched = new Set(["1:1", "1:2"]);
+  assert.equal(defaultEpisode(videos, undefined, NOW, watched)?.id, "tt1:2:1");
+  assert.equal(defaultEpisode(videos, "tt1:1:2", NOW, watched)?.id, "tt1:1:2");
+  // Caught up from a later season: the episode after the furthest one watched, not the first unwatched one.
+  assert.equal(defaultEpisode(videos, undefined, NOW, new Set(["2:1"]))?.id, "tt1:1:1", "nothing aired after S2E1: the first unwatched");
+  const long = [v(1, 1), v(1, 2), v(2, 1), v(2, 2), v(2, 3)];
+  assert.equal(defaultEpisode(long, undefined, NOW, new Set(["2:1"]))?.id, "tt1:2:2");
+  // Everything aired is watched: back to the first regular episode.
+  assert.equal(defaultEpisode(videos, undefined, NOW, new Set(["1:1", "1:2", "2:1"]))?.id, "tt1:1:1");
+});
+
+test("episode maps join: watched on either side stays watched", () => {
+  assert.deepEqual(mergeEpisodeMaps({ a: ["1:1"], b: ["1:1"] }, { a: ["1:2", "1:1"], c: ["2:3"] }), { a: ["1:1", "1:2"], b: ["1:1"], c: ["2:3"] });
 });

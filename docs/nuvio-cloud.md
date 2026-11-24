@@ -235,12 +235,20 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
     - The focused art is the folder's `heroBackdropUrl`, else the collection's `backdropImageUrl`, else the cover.
   - **Looks** (`lib/collectionlayout.ts`, Settings › Collections; each setting has Automatic). The choices follow
     nuvio-native-legacy's row styles, folder views and tab styles, with nothing copied from it.
-    - **Card shape and size:** Poster, Landscape, Square or Highlight 4:3, at Compact, Standard or Large (×0.85,
-      ×1, ×1.15; every shape is 270 high at Standard, so rows keep one rhythm).
-      - Automatic is the shape most of the collection's folders have (a tie goes to the first folder's), at
-        Standard.
-      - A long OK on a row (the first key repeat) opens its style menu beside the info panel: a line per shape,
-        then the size.
+    - **Row look and size:** one model for every home row and for Nest's opened cards (`tv-kit/src/row-look.ts`):
+      Poster, Stills (16:9 backdrops), Square, Highlight 4:3, and two presets, **Top 10 ranking** (an outlined
+      numeral before each poster, ten titles) and **Spotlight** (large 16:9 stills, ×1.15, with the title on a flat
+      strip over the art). Sizes are Compact, Standard or Large (×0.85, ×1, ×1.15; every look but Spotlight is 270
+      high at Standard, so rows keep one rhythm). Nest offers the same looks except Spotlight, which is taller than
+      its card.
+      - Automatic: the page's first collection row is a Spotlight; a row titled like a chart (Top, Trending,
+        Popular, Best, Most watched) is a Top 10; otherwise a collection takes the shape most of its folders have
+        (a tie goes to the first folder's: LANDSCAPE is Stills), and other rows are posters. The Settings ›
+        Collections choice applies to collection rows only.
+      - Collections and rows line up: a folder opened from a Top 10 row opens as Ranking, from a Spotlight as
+        Mural, from Stills as Rows, unless the folder or the setting chose a view.
+      - A long OK on any row (OK is acted on at release, held 600 ms it opens the menu) opens its look menu beside
+        the info panel: a line per look, then the size.
       - Each step shows on the row at once. OK keeps it, Back puts the old style back.
       - The row's own style is kept on this TV (`sectv.collections.rowStyle`) and wins over the setting.
     - **Folder view:** Grid, Rows, Timeline (oldest first, the year on the line where it changes), Cover flow,

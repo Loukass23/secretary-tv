@@ -133,6 +133,16 @@ export const watchedTitleIds = (rows: readonly WatchedRow[]): string[] => [
   ...new Set(rows.filter((r) => r.content_id && (r.content_type === "movie" || r.season == null)).map((r) => r.content_id)),
 ];
 
+/** Episodes the profile has watched, by title: `season:episode` keys (the apps' own ids differ between catalogs). */
+export function watchedEpisodeKeys(rows: readonly WatchedRow[]): Record<string, string[]> {
+  const out: Record<string, Set<string>> = {};
+  for (const r of rows) {
+    if (!r.content_id || r.content_type !== "series" || r.season == null || r.episode == null) continue;
+    (out[r.content_id] ??= new Set()).add(`${r.season}:${r.episode}`);
+  }
+  return Object.fromEntries(Object.entries(out).map(([id, keys]) => [id, [...keys]]));
+}
+
 const CINEMETA = "https://v3-cinemeta.strem.io";
 const KITSU = "https://anime-kitsu.strem.fun";
 // .2: titles now keep their description, so the cache from before is fetched again.

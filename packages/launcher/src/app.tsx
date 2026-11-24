@@ -80,6 +80,8 @@ import {
   HEADER_SETTINGS,
   HEADER_SOUND,
   type Layout,
+  END_BROWSE,
+  END_TOP,
   leave,
   rowAt,
   step,
@@ -1190,6 +1192,7 @@ export function App() {
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
+        browseAll: () => browse({ type: m.kind }, () => launch(m.app, m.name)),
         target: (i) =>
           i < going.length
             ? { type: going[i].type, title: going[i].title, resume: true, row: `${m.key}/picks` }
@@ -1577,6 +1580,9 @@ export function App() {
       // On the Assistant card, OK opens the full chat.
       if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
+      // The bar under an opened media card's last row: back to its first title, or the whole catalog.
+      if (col?.kind === "media" && i === END_TOP) return setFocus({ ...focus, i: 0 });
+      if (col?.kind === "media" && i === END_BROWSE) return col.browseAll?.();
       // A row under the picks (My List, a genre): its own item.
       if (col?.kind === "media" && i >= col.items.length) {
         const { r, x } = rowAt(expandedRows(col), i);

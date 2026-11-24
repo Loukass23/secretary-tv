@@ -14,7 +14,11 @@
   will-change: opacity;
 }
 .cat-hero.is-front { opacity: 1; }
-.cat-shade { will-change: transform; }
+.cat-shade { will-change: opacity; animation: catShadeIn 420ms var(--sg-ease) both; }
+@keyframes catShadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* Shared by the catalog screens: the accent kicker and the dim meta line. */
 .cat-kicker {
@@ -43,6 +47,7 @@
   font-weight: 600;
   white-space: nowrap;
   transition: transform 180ms var(--sg-ease);
+  will-change: transform;
 }
 .cat-btn.is-primary { background: var(--accent, #ff5a26); color: var(--tinta, #fff); box-shadow: none; }
 .cat-btn.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); box-shadow: none; transform: scale(1.05); }

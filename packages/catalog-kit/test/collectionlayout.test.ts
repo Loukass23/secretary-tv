@@ -5,6 +5,7 @@ import {
   byDecade,
   byYear,
   cardBox,
+  itemsFor,
   loadFolderView,
   loadRowStyles,
   resolveCard,
@@ -13,6 +14,7 @@ import {
   saveFolderView,
   saveRowStyle,
   tabbed,
+  viewOfLook,
 } from "../src/lib/collectionlayout.ts";
 import { mergeSettings } from "../src/lib/settings.ts";
 
@@ -31,6 +33,26 @@ test("card: the row's own choice, else the setting, else the collection's shape 
   assert.deepEqual(resolveCard("SQUARE", { cardShape: "wide", cardSize: "compact" }), { shape: "wide", size: "compact" });
   assert.deepEqual(resolveCard("SQUARE", { cardShape: "wide", cardSize: "compact" }, { shape: "poster" }), { shape: "poster", size: "compact" });
   assert.deepEqual(resolveCard("SQUARE", auto, { size: "large" }), { shape: "square", size: "large" });
+});
+
+test("card: rows that are not collections take their own choice or Automatic, never the collection setting", () => {
+  const setting = { cardShape: "wide", cardSize: "large" } as const;
+  assert.deepEqual(resolveCard({ title: "Popular" }, setting), { shape: "ranking", size: "standard" });
+  assert.deepEqual(resolveCard({ title: "Drama" }, setting), { shape: "poster", size: "standard" });
+  assert.deepEqual(resolveCard({ title: "Drama" }, setting, { shape: "spotlight" }), { shape: "spotlight", size: "standard" });
+  assert.deepEqual(resolveCard({ title: "Picks", tileShape: "POSTER", lead: true }, auto), { shape: "spotlight", size: "standard" });
+  assert.deepEqual(resolveCard({ title: "Picks", tileShape: "POSTER", lead: true }, setting), { shape: "wide", size: "large" });
+});
+
+test("a Top 10 shows ten; a folder opened from a look opens in the matching view", () => {
+  const many = Array.from({ length: 25 }, (_, i) => i);
+  assert.equal(itemsFor("ranking", many).length, 10);
+  assert.equal(itemsFor("poster", many).length, 25);
+  assert.equal(viewOfLook("ranking"), "ranking");
+  assert.equal(viewOfLook("spotlight"), "mural");
+  assert.equal(viewOfLook("landscape"), "rows");
+  assert.equal(viewOfLook("poster"), null);
+  assert.equal(viewOfLook(undefined), null);
 });
 
 test("card boxes keep one height per size, so rows keep one rhythm", () => {

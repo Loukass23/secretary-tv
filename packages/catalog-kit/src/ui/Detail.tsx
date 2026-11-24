@@ -11,7 +11,16 @@ import {
 } from "../lib/sagas.ts";
 import { defaultEpisode, episodeLabel, episodesOf, fileHintFor, hasAired, seasonsOf } from "../lib/episodes.ts";
 import { inLibrary, toggleLibrary } from "../lib/library.ts";
-import { isTitleWatched, type ResumeEntry, resumeLabel, resumeStart, toggleTitleWatched } from "../lib/resume.ts";
+import {
+  episodeKey,
+  isTitleWatched,
+  markEpisodesWatched,
+  type ResumeEntry,
+  resumeLabel,
+  resumeStart,
+  toggleTitleWatched,
+  watchedEpisodes,
+} from "../lib/resume.ts";
 import { audioLangsOf, type ClockFormat, subLangsOf } from "../lib/settings.ts";
 import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
@@ -34,6 +43,11 @@ import "./party.css";
 const PRELOAD_DWELL_MS = 1000;
 /** Browsing episodes should not look up streams for every card passed over. */
 const EPISODE_DWELL_MS = 400;
+/** The longest the page stays veiled waiting for its art and frost; after it, what is ready shows and the rest fades in. */
+const REVEAL_CAP_MS = 900;
+/** The veil's fade (detail.css .det-veil) and the loading screen's (.det-loading.is-out). */
+const VEIL_FADE_MS = 360;
+const LOADER_OUT_MS = 320;
 const PAD = 80;
 const EP_W = 320;
 const EP_H = 180;
@@ -219,8 +233,21 @@ export function Detail({
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [sourceIdx, setSourceIdx] = useState(0);
   const [watched, setWatched] = useState<boolean>(() => isTitleWatched(title.id));
+  // Episodes watched to the end (`season:episode`): their tiles carry a tick, and "up next" skips them.
+  const [epWatched, setEpWatched] = useState<ReadonlySet<string>>(() => watchedEpisodes(title.id));
+  /** The viewer has moved focus: the page no longer puts it on the up-next episode by itself. */
+  const moved = useRef(false);
   const [saved, setSaved] = useState<boolean>(() => inLibrary(type, title.id));
   const [clockText, setClockText] = useState(() => formatClock(clockFormat));
+  // The page shows itself once, whole: a veil in the page's base colour stays until the details, the art and its frost
+  // are in (or REVEAL_CAP_MS has passed), then fades out. What comes later fades in on its own, never snaps.
+  const [capped, setCapped] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setCapped(true), REVEAL_CAP_MS);
+    return () => clearTimeout(t);
+  }, []);
+  // The loading screen fades out rather than vanishing (LOADER_OUT_MS).
+  const [loaderOut, setLoaderOut] = useState(false);
   const [sagaCol, setSagaCol] = useState<SagaDef | undefined>(() =>
     findSagaForTitle(title.id, type),
   );
@@ -228,22 +255,48 @@ export function Detail({
   const series = isSeries(type);
   const artSrc = backgroundUrl(meta);
   const base = useBase(type);
-  // One title, so its art goes up at once; its frost still waits until nothing moves.
-  const hero = useHeroArt(meta.id, artSrc, active, true);
+  // One title on a page that does not move: its art and its frost go up at once, under the veil (below).
+  const hero = useHeroArt(meta.id, artSrc, active, true, 0);
   const videos = meta.videos ?? [];
 
   const seasons = useMemo(() => seasonsOf(videos), [videos]);
-  const start = useMemo(() => defaultEpisode(videos, resume?.episode?.id), [videos, resume?.episode?.id]);
+  const start = useMemo(() => defaultEpisode(videos, resume?.episode?.id, Date.now(), epWatched), [videos, resume?.episode?.id, epWatched]);
   const [season, setSeason] = useState<number | null>(null);
   const shownSeason = season ?? start?.season ?? seasons[0] ?? 1;
   const episodes = useMemo(() => episodesOf(videos, shownSeason), [videos, shownSeason]);
 
   // The title or episode Play would start, which the stream lookup and prepare-ahead follow.
   const focused = series && focus.row === 2 ? episodes[focus.col] : undefined;
+  /** Where focus lands in a season's episodes: the up-next one when it is in there, else its first aired unwatched one. */
+  const upNextIn = (eps: readonly Video[]): number => {
+    const at = start ? eps.findIndex((v) => v.id === start.id) : -1;
+    if (at >= 0) return at;
+    return Math.max(0, eps.findIndex((v) => hasAired(v) && !epWatched.has(episodeKey(v))));
+  };
+  // Focus resting on the up-next episode (where the page opens) searches at once; another episode waits for the dwell.
+  const dwell = !!focused && focused.id !== start?.id;
   const target: Video | undefined = series ? (focused ?? start ?? undefined) : undefined;
   const targetId = series ? target?.id : title.id;
   const resumeHere = !!resume && (series ? resume.episode?.id === target?.id : true);
   const startSec = resumeHere && resume ? resumeStart(resume.posSec, resume.durSec) : 0;
+
+  const revealed = capped || ((metaState !== "loading" || gaveUp) && hero.settled);
+  const [veilGone, setVeilGone] = useState(false);
+  useEffect(() => {
+    if (!revealed || veilGone) return;
+    const t = setTimeout(() => setVeilGone(true), VEIL_FADE_MS + 60);
+    return () => clearTimeout(t);
+  }, [revealed]);
+  const wasWaiting = useRef(waiting);
+  useEffect(() => {
+    if (wasWaiting.current && !waiting) {
+      setLoaderOut(true);
+      const t = setTimeout(() => setLoaderOut(false), LOADER_OUT_MS);
+      wasWaiting.current = waiting;
+      return () => clearTimeout(t);
+    }
+    wasWaiting.current = waiting;
+  }, [waiting]);
 
   useEffect(() => {
     setClockText(formatClock(clockFormat));
@@ -254,9 +307,17 @@ export function Detail({
   useEffect(() => {
     if (active) {
       setWatched(isTitleWatched(title.id));
+      setEpWatched(watchedEpisodes(title.id));
       setSaved(inLibrary(type, title.id));
     }
   }, [active, title.id]);
+
+  // A series opens on its up-next episode, once the episodes are known, unless the viewer has already moved.
+  useEffect(() => {
+    if (!series || moved.current || !start) return;
+    const col = episodes.findIndex((v) => v.id === start.id);
+    if (col >= 0) setFocus({ row: 2, col });
+  }, [series, start?.id, episodes]);
 
   useEffect(() => {
     let live = true;
@@ -307,14 +368,14 @@ export function Detail({
           else setPartial({ id: targetId, value: s });
         });
       },
-      focused ? EPISODE_DWELL_MS : 0,
+      dwell ? EPISODE_DWELL_MS : 0,
     );
     return () => {
       live = false;
       clearTimeout(t);
       stop();
     };
-  }, [type, targetId, !!focused]);
+  }, [type, targetId, dwell]);
 
   const ready = found && found.id === targetId && Array.isArray(found.value) ? found.value : null;
   // What the sheet lists: the final sources, or those found so far.
@@ -485,19 +546,20 @@ export function Detail({
 
   if (party) actionSpecs.push({ id: "together", label: "👥 Watch together" });
 
-  if (sagaCol) {
-    actionSpecs.push({
-      id: "timeline",
-      label: `❖ Timeline (${sagaCol.steps.length})`,
-    });
-  }
-
   actionSpecs.push({
     id: "watched",
     label: watched ? "✓ Watched" : "☐ Mark Watched",
   });
 
   actionSpecs.push({ id: "mylist", label: saved ? "✓ My List" : "＋ My List" });
+
+  // Last, since the saga lookup can answer after the page is up: arriving, it never pushes the other pills along.
+  if (sagaCol) {
+    actionSpecs.push({
+      id: "timeline",
+      label: `❖ Timeline (${sagaCol.steps.length})`,
+    });
+  }
 
   // "More like this": titles of the film's first genre, a row under the panel (Down from the actions).
   const [similar, setSimilar] = useState<Title[]>([]);
@@ -545,7 +607,13 @@ export function Detail({
     } else if (id === "timeline") {
       if (sagaCol) onOpenTimeline(sagaCol, meta.id);
     } else if (id === "watched") {
-      setWatched(toggleTitleWatched(meta.id));
+      const now = toggleTitleWatched(meta.id);
+      setWatched(now);
+      // A whole series marked (or cleared) marks every aired episode with it.
+      if (series) {
+        markEpisodesWatched(meta.id, videos.filter((v) => hasAired(v)), now);
+        setEpWatched(watchedEpisodes(meta.id));
+      }
       onWatchedChange();
     } else if (id === "mylist") {
       setSaved(toggleLibrary(type, meta));
@@ -687,10 +755,13 @@ export function Detail({
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       let next = move(lengths, focus, key.toLowerCase() as Dir);
       if (next === focus) return;
+      moved.current = true;
       if (series && focus.row !== 1 && next.row === 1) {
         const idx = seasons.indexOf(shownSeason);
         if (idx >= 0) next = { row: 1, col: idx };
       }
+      // Down from the seasons lands on that season's up-next episode, not under the season pill.
+      if (series && focus.row === 1 && next.row === 2) next = { row: 2, col: upNextIn(episodes) };
       setFocus(next);
       if (series && next.row === 1) setSeason(seasons[next.col]);
       return;
@@ -785,12 +856,14 @@ export function Detail({
       <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="det">
         <HeroLayers hero={hero} shade={base.shade} />
         <div class="det-clock">{clockText}</div>
-        {waiting && (
-          <LoadingScreen
-            heading={series && target && autoPlay ? `${meta.name} · ${episodeLabel(target)} ${target.name}` : meta.name}
-            status={pending && pluginProgress ? pluginProgress : "Spreading wings…"}
-            bar="loading"
-          />
+        {(waiting || loaderOut) && (
+          <div class={`det-loading${waiting ? "" : " is-out"}`}>
+            <LoadingScreen
+              heading={series && target && autoPlay ? `${meta.name} · ${episodeLabel(target)} ${target.name}` : meta.name}
+              status={pending && pluginProgress ? pluginProgress : "Spreading wings…"}
+              bar="loading"
+            />
+          </div>
         )}
 
         <Glass {...info} class="det-info">
@@ -827,13 +900,13 @@ export function Detail({
               const primary = act.id === "play";
               const foc = focus.row === 0 && i === focus.col && !sourcesOpen;
               return (
-                <span key={act.id} class={`cat-btn${primary ? " is-primary" : ""}${foc ? " is-focus" : ""}`}>
+                <span key={act.id} class={`cat-btn det-act-${act.id}${primary ? " is-primary" : ""}${foc ? " is-focus" : ""}`}>
                   {act.label}
                 </span>
               );
             })}
           </div>
-          <div class="det-will">
+          <div class="det-will" key={ready && topParsed ? "will" : "status"}>
             {ready && topParsed ? (
               <>
                 <span class="det-will-k">Will play</span>
@@ -911,6 +984,7 @@ export function Detail({
                       src={v.thumbnail ?? artSrc}
                       badge={aired ? episodeLabel(v) : `${episodeLabel(v)} · soon`}
                       progress={resume?.episode?.id === v.id && resume.durSec > 0 ? resume.posSec / resume.durSec : undefined}
+                      watched={epWatched.has(episodeKey(v))}
                       focused={focus.row === 2 && c === focus.col && !sourcesOpen}
                     />
                     <span class="det-ep-name">{v.name}</span>
@@ -1045,6 +1119,7 @@ export function Detail({
             </div>
           </Glass>
         )}
+        {!veilGone && <div class={`det-veil${revealed ? " is-off" : ""}`} />}
       </GlassRoot>
     </div>
   );

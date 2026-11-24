@@ -158,5 +158,7 @@ export function catalogRows(art: Art): HomeRow[] {
   });
   const cont = row("continue", "Continue watching", 0, 4);
   cont.items = cont.items.map((t, k) => ({ ...t, progressPct: 20 + k * 18, badge: k === 1 ? "Next · S01E03" : undefined }));
-  return [cont, row("popular", "Popular", 4, 12), row("new", "New releases", 2, 10), row("mylist", "My list", 6, 6)];
+  const fresh = row("new", "New releases", 2, 10);
+  fresh.items = fresh.items.map((t, k) => (k % 3 === 1 ? { ...t, watched: true } : t));
+  return [cont, row("popular", "Popular", 4, 12), fresh, row("mylist", "My list", 6, 6)];
 }

@@ -97,3 +97,30 @@
 .detail-glass.is-waiting .sg-clip,
 .detail-glass.is-waiting .sg-seg { visibility: hidden; }
 .detail-glass .sg-loader { background: rgba(8, 9, 12, 0.45); }
+
+/* The page shows itself once (Detail.tsx): a veil in the base colour over everything, faded out when the details,
+   the art and its frost are in. Opacity only, on its own layer. */
+.det-veil {
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 40;
+  background: #0b0807;
+  opacity: 1;
+  transition: opacity 360ms var(--sg-ease);
+  will-change: opacity;
+  pointer-events: none;
+}
+.det-veil.is-off { opacity: 0; }
+.det-loading { left: 0; top: 0; width: 1920px; height: 1080px; z-index: 30; will-change: opacity; }
+.det-loading.is-out { opacity: 0; transition: opacity 320ms var(--sg-ease); }
+/* Pills whose label changes as sources arrive keep their width, so the row never reflows. */
+.det-act-play { min-width: 196px; justify-content: center; }
+.det-act-sources { min-width: 176px; justify-content: center; }
+/* The "Will play" line fades in when it replaces the search status. */
+.det-will { animation: detWillIn 240ms var(--sg-ease) both; }
+@keyframes detWillIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

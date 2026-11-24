@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createClient, encodeLaunch, decodeLaunch, kindOf, nuvioConfig, progressKey, toItems, toRow, watchedTitleIds, withMeta } from "@secretary/nuvio";
+import { createClient, encodeLaunch, decodeLaunch, kindOf, nuvioConfig, progressKey, toItems, toRow, watchedEpisodeKeys, watchedTitleIds, withMeta } from "@secretary/nuvio";
 import * as cloudModule from "../src/lib/cloud.ts";
 import { checkOwner, cloud, shareCloud, takeLaunch } from "../src/lib/cloud.ts";
 import {
   clearLocalResume,
   loadResume,
   loadWatchedIds,
+  watchedEpisodes,
   markTitleWatched,
   mergeWithCloud,
   type ResumeEntry,
@@ -104,6 +105,16 @@ test("watched rows: movies and whole series only", () => {
     ]),
     ["tt1", "tt3"],
   );
+  assert.deepEqual(
+    watchedEpisodeKeys([
+      { content_id: "tt1", content_type: "movie", watched_at: 1 },
+      { content_id: "tt2", content_type: "series", season: 1, episode: 1, watched_at: 1 },
+      { content_id: "tt2", content_type: "series", season: 1, episode: 2, watched_at: 1 },
+      { content_id: "tt2", content_type: "series", season: 1, episode: 1, watched_at: 3 },
+      { content_id: "tt3", content_type: "series", watched_at: 1 },
+    ]),
+    { tt2: ["1:1", "1:2"] },
+  );
 });
 
 test("merge: the cloud is the truth up to the last sync; newer local saves win", () => {
@@ -126,7 +137,7 @@ function fakeRemote(cloudItems: UnifiedResumeEntry[], watched: string[] = []) {
     push: async (entries) => (log.push(`push ${entries.map((e) => `${e.title.id}@${e.posSec}`).join(",")}`), true),
     finished: async (type, t, ep) => void log.push(`finished ${type} ${t.id}${ep ? ` s${ep.season}e${ep.episode}` : ""}`),
     watched: async (id, w) => void log.push(`watched ${id} ${w}`),
-    pullWatched: async () => watched,
+    pullWatched: async () => ({ titles: watched, episodes: { tt7: ["1:1"] } }),
   };
   return { r, log };
 }
@@ -150,6 +161,7 @@ test("sync with the cloud: kinds land in their own lists, unsynced saves are pus
   ]);
   assert.deepEqual(log, ["push tt5@60"]);
   assert.deepEqual(loadWatchedIds(), ["tt99"]);
+  assert.deepEqual([...watchedEpisodes("tt7")], ["1:1"], "episodes watched elsewhere join");
   log.length = 0;
   await syncAllResume();
   assert.deepEqual(log, ["push "], "nothing new to push");

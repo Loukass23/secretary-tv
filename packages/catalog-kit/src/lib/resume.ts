@@ -7,6 +7,8 @@ const MAX = 20;
 const FINISHED_SEC = EDGE_SEC * 6;
 const ALL_TYPES: readonly CatalogType[] = ["movie", "series", "anime"];
 const WATCHED_KEY = "sectv.watched.v1";
+/** Watched episodes by title id, as `season:episode` keys, so they match across catalogs and devices. */
+const EPISODES_KEY = "sectv.watched.episodes.v1";
 
 const keyFor = (type: CatalogType) => `sectv.${type}.resume.v2`;
 
@@ -48,6 +50,44 @@ export function markTitleWatched(id: string, watched = true): boolean {
 
 export function toggleTitleWatched(id: string): boolean {
   return markTitleWatched(id, !isTitleWatched(id));
+}
+
+export const episodeKey = (v: Pick<Video, "season" | "episode">): string => `${v.season}:${v.episode}`;
+
+function loadEpisodeMap(): Record<string, string[]> {
+  const m = readJson<Record<string, unknown>>(EPISODES_KEY);
+  if (!m || typeof m !== "object" || Array.isArray(m)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [id, keys] of Object.entries(m)) {
+    if (Array.isArray(keys)) out[id] = keys.filter((k): k is string => typeof k === "string");
+  }
+  return out;
+}
+
+/** The episodes of a title watched to the end, here or (after a sync) on another device. */
+export function watchedEpisodes(titleId: string): ReadonlySet<string> {
+  return new Set(loadEpisodeMap()[titleId] ?? []);
+}
+
+/** Marks or clears episodes of a title on this TV. */
+export function markEpisodesWatched(titleId: string, episodes: readonly Pick<Video, "season" | "episode">[], watched = true): void {
+  if (!titleId || !episodes.length) return;
+  const all = loadEpisodeMap();
+  const keys = new Set(all[titleId] ?? []);
+  for (const v of episodes) {
+    if (watched) keys.add(episodeKey(v));
+    else keys.delete(episodeKey(v));
+  }
+  if (keys.size) all[titleId] = [...keys];
+  else delete all[titleId];
+  writeJson(EPISODES_KEY, all);
+}
+
+/** Two episode maps joined: an episode watched on either side stays watched. Pure, so it is unit tested. */
+export function mergeEpisodeMaps(a: Readonly<Record<string, readonly string[]>>, b: Readonly<Record<string, readonly string[]>>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) out[id] = [...new Set([...(a[id] ?? []), ...(b[id] ?? [])])];
+  return out;
 }
 
 export function badgeForResume(entry: {
@@ -160,8 +200,13 @@ export interface ResumeRemote {
   /** A movie or episode was watched to the end: record it and clear its progress. */
   finished(type: CatalogType, title: Title, episode?: Pick<Video, "season" | "episode">): Promise<void>;
   watched(id: string, watched: boolean): Promise<void>;
-  /** Titles watched whole, or null when they cannot be read. */
-  pullWatched(): Promise<string[] | null>;
+  /** Titles watched whole and episodes watched (by title, `season:episode`), or null when they cannot be read. */
+  pullWatched(): Promise<WatchedPull | null>;
+}
+
+export interface WatchedPull {
+  titles: string[];
+  episodes: Record<string, string[]>;
 }
 
 let remote: ResumeRemote | null = null;
@@ -175,6 +220,7 @@ export function setResumeRemote(r: ResumeRemote | null): void {
 export function clearLocalResume(): void {
   for (const type of ALL_TYPES) writeJson(keyFor(type), []);
   writeJson(WATCHED_KEY, []);
+  writeJson(EPISODES_KEY, {});
   writeJson(LAST_SYNC, 0);
 }
 
@@ -292,7 +338,10 @@ async function syncWithRemote(r: ResumeRemote): Promise<UnifiedResumeEntry[]> {
     writeJson(keyFor(type), mergeWithCloud(local, fromCloud, lastSync));
   }
   const watched = await r.pullWatched();
-  if (watched) writeJson(WATCHED_KEY, [...new Set([...loadWatchedIds(), ...watched])]);
+  if (watched) {
+    writeJson(WATCHED_KEY, [...new Set([...loadWatchedIds(), ...watched.titles])]);
+    writeJson(EPISODES_KEY, mergeEpisodeMaps(loadEpisodeMap(), watched.episodes));
+  }
   if (await r.push(pending)) writeJson(LAST_SYNC, startedAt);
   return loadAllResume();
 }
@@ -346,6 +395,7 @@ export function saveProgress(
     updated: Date.now(),
   };
   let drop = false;
+  if (finished && episode) markEpisodesWatched(title.id, [episode]);
   if (finished) {
     if (episode && next) {
       entry = { ...entry, episode: slimEpisode(next), posSec: 0, durSec: 0 };

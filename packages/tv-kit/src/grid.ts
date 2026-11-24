@@ -21,6 +21,17 @@ export function move(lengths: readonly number[], at: Focus, dir: Dir): Focus {
   return at;
 }
 
+/**
+ * The column a vertical move lands on in a row of `length`: where that row was left (`remembered`), else the same
+ * on-screen slot as now. Rows scroll so the focused card sits in the second slot, and a row not visited yet is not
+ * scrolled, so that slot is column 1 (or 0): the row never sweeps sideways as focus arrives on it.
+ */
+export function rowColumn(remembered: number | undefined, col: number, length: number): number {
+  const last = Math.max(0, length - 1);
+  if (remembered != null) return Math.min(remembered, last);
+  return Math.min(col, 1, last);
+}
+
 /** The slice of a row worth rendering: the focused card plus a margin each side. */
 export function windowOf(col: number, length: number, before = 3, after = 9): [number, number] {
   return [Math.max(0, col - before), Math.min(length, col + after)];

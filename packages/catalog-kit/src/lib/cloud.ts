@@ -25,6 +25,7 @@ import {
   sharesPrimary,
   toItems,
   toRow,
+  watchedEpisodeKeys,
   watchedTitleIds,
   withMeta,
 } from "@secretary/nuvio";
@@ -178,7 +179,8 @@ export function nuvioRemote(appType: CatalogType): ResumeRemote {
     async pullWatched() {
       if (!live()) return null;
       try {
-        return watchedTitleIds(await pullWatched(cloud, profile()));
+        const rows = await pullWatched(cloud, profile());
+        return { titles: watchedTitleIds(rows), episodes: watchedEpisodeKeys(rows) };
       } catch {
         return null;
       }
