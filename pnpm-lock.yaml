@@ -212,6 +212,9 @@ importers:
       '@secretary/launcher':
         specifier: workspace:*
         version: link:../launcher
+      '@secretary/smartthings':
+        specifier: workspace:*
+        version: link:../smartthings
       '@secretary/tv-kit':
         specifier: workspace:*
         version: link:../tv-kit
