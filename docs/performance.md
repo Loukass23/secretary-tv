@@ -472,6 +472,22 @@ from a 400-cue file: 250 ms ticks held steady (max 252 ms, no long task) over 30
 +120 s seek reopened the source. Frame gaps from `cdp.mjs walk` with the menu open are not recorded yet. Bundle: Shows'
 JS gzip went from 107.6 KB to 109.5 KB with the menu and the subtitle reader (limit 300 KB).
 
+### Options menu geometry, measured on the TV (2026-11-24, `cdp.mjs eval`, Shows)
+
+- **A rows-run-off-the-panel bug.** `.sg-glass > :not(.sg-frost)` (glass.css) sets every child of a glass surface to
+  `position: relative`, which beat the menu's lone `.pm-head` / `.pm-row` classes. The head and rows then stacked in flow
+  with their `top` offsets added on, so the pitch was 128 px instead of 68: on the Subtitles page row 5 sat at y 748 and
+  row 8 at y 1132, off a 1080 px screen and 460 px below the panel's own bottom. The selectors now name the parent
+  (`.pm > .pm-row`); after the fix 8 rows run y 164 to 700 inside a 672 px panel, and the head is 560 px wide as designed.
+- Still open from the read-through: `.pm-label` is `display: flex`, so a long label is cut without an ellipsis (a 837 px
+  label in a 536 px box); the Info page's File value shows 276 of 634 px. A 26-character title (`Subtitles · could not load`)
+  fits one line at 40 px, so the wrapping feared for it does not happen.
+- **Frames.** `cdp.mjs walk` with the Subtitles list open (32 Down/Up presses, 250 ms apart): median 17 ms, p95 17 ms,
+  max 17 ms, 0 frames over 50 ms; an idle 8 s baseline is the same. Moving the focus row's background costs nothing
+  measurable here.
+- **Playback speed.** `webapis.avplay.setSpeed(2)` plays at 2.00x on a progressive HEVC file with no re-buffering;
+  `setSpeed(0.5)` is accepted without an error but plays at 1.00x, so only whole multiples are available.
+
 ## Smooth rows, a single Detail reveal and fading art (Secretary, 2026-11-24)
 
 Measured in Secretary (`packages/launcher`, catalog embedded) on the Samsung TV, against `main` deployed the same way
