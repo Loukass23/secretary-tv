@@ -3,17 +3,14 @@
 // edge. The assistant also sits under the cards (the compact mode, with its line and one line of text), or takes the
 // whole screen (the chat, opened from its card). Layout only; data and keys live in app.tsx.
 import { useRef } from "preact/hooks";
-import { Avatar, Glass, Glow, Icon, IconButton, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, Glow, Header, Icon, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, MOVE_LINE, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SETTINGS, HEADER_SOUND } from "./nest-nav.ts";
 
 const PAD = 80;
-const HEAD_Y = 44;
-/** Party, Search, Lights, Picture, Sound, Settings and Bell, right to left from the edge. */
-const ICON = { w: 88, h: 78, gap: 28 };
-const ICON_COUNT = 7;
-const ICONS_X = 1920 - PAD - ICON_COUNT * ICON.w - (ICON_COUNT - 1) * ICON.gap;
+/** The header buttons, left to right, as nest-nav numbers them. */
+const HEADER_ORDER = [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL];
 
 /** The picture button shows the mode the TV is on: a sun for Dynamic, a moon for Eco, a screen for anything else. */
 function pictureIcon(mode: string | undefined): IconName {
@@ -195,27 +192,17 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
 
   return (
     <>
-      <Avatar x={PAD} y={HEAD_Y} name={me?.name ?? "Secretary"} sub={status || <Links links={links} />} color={me?.color} img={me?.img} focused={on("header", HEADER_PROFILE)} />
-
-      {/* Top right, quiet: a small clock, then the buttons. The date and the weather are cards now. */}
-      <div class="nest-head" style={{ right: `${1920 - ICONS_X + 48}px`, top: `${HEAD_Y}px` }}>
-        <div class="nest-time">
-          <b>{time}</b>
-        </div>
-      </div>
-      {(["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "settings", "bell"] as const satisfies readonly IconName[]).map((icon, k) => (
-        <IconButton
-          key={k}
-          x={ICONS_X + k * (ICON.w + ICON.gap)}
-          y={HEAD_Y}
-          w={ICON.w}
-          h={ICON.h}
-          class="nest-quiet"
-          icon={<Icon name={icon} />}
-          badge={k === 6 ? open : undefined}
-          focused={on("header", [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL][k])}
-        />
-      ))}
+      {/* The one header (tv-kit Header): the person top left, a small clock and the quiet buttons top right. */}
+      <Header
+        time={time}
+        person={{ name: me?.name ?? "Secretary", sub: status || <Links links={links} />, color: me?.color, img: me?.img }}
+        buttons={(["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "settings", "bell"] as const satisfies readonly IconName[]).map((icon, k) => ({
+          key: String(k),
+          icon,
+          badge: k === 6 ? open : undefined,
+        }))}
+        focus={focus?.area !== "header" ? null : focus.i === HEADER_PROFILE ? "person" : HEADER_ORDER.indexOf(focus.i)}
+      />
 
       <Glow at={glowAt} src={glow} />
 

@@ -70,7 +70,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
         title: "Surfaces",
         specs: [
           { name: "Glass", w: 300, h: 120, render: (b, f) => <Glass {...b} focused={f} class="dz-panel"><b>Glass panel</b><small>Frost, fill and hairline</small></Glass> },
-          { name: "Segmented", w: 470, h: 68, render: (b, f) => <Segmented {...b} items={["Home", "Films", "Shows", "Anime"]} picked={1} focusIndex={f ? 2 : -1} /> },
+          { name: "Segmented", w: 470, h: 68, render: (b, f) => <Segmented {...b} items={["Home", "Cinema", "Shows", "Anime"]} picked={1} focusIndex={f ? 2 : -1} /> },
           { name: "IconButton", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="search" />} /> },
           { name: "badge", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="lights" />} badge /> },
           { name: "count", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="bell" />} badge={3} /> },
@@ -82,7 +82,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
         specs: [
           { name: "DateChip", w: CHIP.w, h: CHIP.h, render: (b, f) => <DateChip {...b} focused={f} day="19" label="Thu" /> },
           { name: "with dot", w: CHIP.w, h: CHIP.h, render: (b, f) => <DateChip {...b} focused={f} day="20" label="Fri" dot /> },
-          { name: "AppChip", w: 140, h: 128, render: (b, f) => <AppChip {...b} focused={f} icon={art.icons[0]} label="Cinema" /> },
+          { name: "AppChip", w: 140, h: 128, render: (b, f) => <AppChip {...b} focused={f} icon={art.icons[0]} label="Music" /> },
           { name: "no icon", w: 140, h: 128, render: (b, f) => <AppChip {...b} focused={f} label="Photos" /> },
           { name: "Avatar", w: 260, h: 84, render: (b, f) => <Avatar x={b.x + 4} y={b.y + 4} focused={f} name="Guest" sub="No profile" /> },
           { name: "own colour", w: 260, h: 84, render: (b, f) => <Avatar x={b.x + 4} y={b.y + 4} focused={f} name="Robin" sub="Profile" color="#5b52e6" /> },
