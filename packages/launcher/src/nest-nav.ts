@@ -3,7 +3,8 @@
 //   header    profile, then Watch together, Search, Lights, Picture mode, Sound and Bell, across the top
 //   ask       the assistant under the cards (the compact mode), fixed at the bottom centre; Down from a card or the last
 //             line inside one goes straight to it, except in an opened media card, whose rows end on a bar of their
-//             own (Back to top, Browse all). What it is asked moves focus to the card concerned
+//             own (Back to top, Recommend me, See all), and an opened weather card keeps it. What it is asked moves
+//             focus to the card concerned
 //   chat      the full-screen assistant, opened with OK on the Assistant card (the first card); Back leaves it
 //   row       the content cards (Assistant, At a glance, Recent, Cinema, Shows, Anime, Home, Reminders, Apps). Left and
 //             Right move from card to card;
@@ -30,6 +31,8 @@ export interface Column {
    * items each row has, in order. `i` then counts across all of them; Up and Down move between rows.
    */
   rows?: readonly number[];
+  /** An opened card that keeps the remote (the weather's detail): Down stays in it rather than going to the assistant. */
+  hold?: boolean;
 }
 
 /** Which row item `i` is on and where in it, for a column with `rows`. */
@@ -59,10 +62,12 @@ export const HEADER_BELL = 7;
 export const HEADER_LENGTH = 8;
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
-/** The bar under an opened media card's last row: Back to top, then Browse all. */
+/** The bar under an opened media card's last row, left to right: Back to top, Recommend me, See all. */
 export const END_TOP = -3;
-export const END_BROWSE = -4;
-export const atEnd = (i: number) => i === END_TOP || i === END_BROWSE;
+export const END_RECOMMEND = -4;
+export const END_ALL = -5;
+export const END_BUTTONS = [END_TOP, END_RECOMMEND, END_ALL] as const;
+export const atEnd = (i: number) => (END_BUTTONS as readonly number[]).includes(i);
 
 const header = (i: number): Focus => ({ area: "header", i });
 const card = (col: number): Focus => ({ area: "row", col, i: 0 });
@@ -136,17 +141,18 @@ export function step(at: Focus, key: string, len: Layout): Focus {
       }
       // Inside: the Launch button, then the items as a stack or a grid; the sides keep focus in the card, and Down
       // from the last line goes to the assistant.
-      const toAsk: Focus = len.ask > 0 ? { area: "ask", i: 0 } : at;
+      const toAsk: Focus = len.ask > 0 && !col.hold ? { area: "ask", i: 0 } : at;
       if (i === LAUNCH) {
         if (key === "Down") return col.count > 0 ? { ...at, i: 0 } : toAsk;
         if (key === "Up") return card(c);
         return at;
       }
       if (col.rows) {
-        // The end bar: its two buttons side by side; Up goes back to the start of the last row, Down stays.
+        // The end bar: its buttons side by side; Up goes back to the start of the last row, Down stays.
         if (atEnd(i)) {
-          if (key === "Left") return { ...at, i: END_TOP };
-          if (key === "Right") return { ...at, i: END_BROWSE };
+          const b = END_BUTTONS.indexOf(i as (typeof END_BUTTONS)[number]);
+          if (key === "Left") return b > 0 ? { ...at, i: END_BUTTONS[b - 1] } : at;
+          if (key === "Right") return b < END_BUTTONS.length - 1 ? { ...at, i: END_BUTTONS[b + 1] } : at;
           if (key === "Up") return { ...at, i: col.rows.slice(0, -1).reduce((s, n) => s + n, 0) };
           return at;
         }

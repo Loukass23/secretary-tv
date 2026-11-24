@@ -92,10 +92,14 @@ export const EXPANDED_W = 1920 - 2 * 80;
 /** The focused title's caption under the opened row (name, line, a few lines of synopsis), fixed at its left edge. */
 export const CAPTION_W = 900;
 
-/** The caption under a row of an opened card: its gap, and the room it keeps for a name, a line and three of synopsis. */
-export const CAPTION = { top: 30, h: 176 } as const;
-/** The rows under the picks in an opened card (My List, the genres) are the picks row again: same tiles, a label over each, the same caption under. */
-export const MORE = { labelH: 52, gap: 28 } as const;
+/** The caption under a row of an opened card: its gap from the tiles, and the room it keeps for a name, a line and three of synopsis. */
+export const CAPTION = { top: 44, h: 176 } as const;
+/**
+ * The rows under the first in an opened card (My List, the genres) are the first row again: same tiles, a label over
+ * each, the same caption under. Every row takes one block, so only the top of the next row (about 60px of its tiles)
+ * peeks in at the bottom of the screen, whatever the row's look.
+ */
+export const MORE = { labelH: 52, gap: 72 } as const;
 /** Where extra row `k` (0-based) starts in the opened card: under the picks and their caption, then a block apiece. */
 export const moreTop = (k: number): number => EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap + k * (MORE.labelH + EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap);
 /** How far a row of `n` tiles (`stride` apart, `w` wide) scrolls so tile `i` stays in view, a few in from the left. */

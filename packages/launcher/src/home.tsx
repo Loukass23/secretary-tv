@@ -222,7 +222,8 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
               picked={focus?.area === "row" && !inside && colAt === c}
               lifted={moving === col.key}
               focus={inside && colAt === c ? focus!.i : null}
-              dim={(openCol >= 0 && openCol !== c) || (menuKey != null && menuKey !== col.key)}
+              dim={menuKey != null && menuKey !== col.key}
+              away={openCol >= 0 && openCol !== c}
             />
           ))}
         </Scroller>

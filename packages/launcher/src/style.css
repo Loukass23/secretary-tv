@@ -121,6 +121,8 @@ html, body {
   will-change: transform, opacity;
 }
 .nest-col.is-dim { opacity: 0.35; }
+/* Another card is open across the screen: the rest fade out whole, so no sliver of them shows at either edge. */
+.nest-col.is-away { opacity: 0; }
 /* A card being moved (card-order.ts): lifted on its own layer while it slides; transform and opacity only. */
 .nest-col.is-lifted .nest-col-body { transform: scale(1.04); transform-origin: 0 0; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
 .nest-move-hint { position: absolute; left: 0; right: 0; top: 846px; text-align: center; font-size: 26px; color: var(--sg-ink-dim); }
@@ -133,6 +135,9 @@ html, body {
   will-change: opacity;
 }
 .nest-media-small.is-out { opacity: 0; }
+/* Any other card that opens (the weather): the folded card fades out under what it opens into. */
+.nest-fold { position: absolute; left: 0; top: 0; transition: opacity var(--sg-fade) var(--sg-ease); will-change: opacity; }
+.nest-fold.is-out { opacity: 0; }
 /* The opened row: each title rises in a beat after the one before it (the delay is set per tile). */
 .nest-rise { position: absolute; left: 0; top: 0; animation: nestRise 420ms var(--sg-ease) both; }
 .nest-col .nest-result-cap { position: absolute; }
@@ -359,17 +364,25 @@ html, body {
 
 /* --- the weather card and the calendar card, one full card each --- */
 .nest-weather-card { padding: 30px 32px; }
-.nest-wc-now { display: flex; align-items: center; gap: 20px; height: 120px; }
-.nest-wc-now b { font-size: 84px; font-weight: 600; letter-spacing: -0.03em; }
-.nest-wc-now small { display: block; font-size: 26px; line-height: 1.25; }
-.nest-wc-hours { display: flex; justify-content: space-between; margin-top: 12px; padding: 12px 0; box-shadow: inset 0 1px 0 var(--sg-line), inset 0 -1px 0 var(--sg-line); }
-.nest-wc-hours > div { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.nest-wc-hours small { font-size: 22px; }
-.nest-wc-hours b { font-size: 26px; font-weight: 600; }
-.nest-wc-days > div { display: flex; align-items: center; justify-content: space-between; height: 52px; }
-.nest-wc-days small { width: 100px; font-size: 25px; }
-.nest-wc-days b { font-size: 26px; font-weight: 600; }
-.nest-wc-days b span { font-weight: 500; opacity: 0.55; }
+.nest-wc-now { display: flex; align-items: center; gap: 22px; height: 150px; }
+.nest-wc-now b { font-size: 112px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+.nest-wc-say { margin-top: 26px; }
+.nest-wc-say b { display: block; font-size: 34px; font-weight: 600; }
+.nest-wc-say small { display: block; margin-top: 8px; font-size: 26px; color: var(--sg-ink-dim); }
+.nest-wc-hint { display: block; margin-top: 56px; font-size: 22px; color: var(--sg-ink-dim); }
+/* The weather opened (cards.tsx WeatherDetail): now on the left, the hours and the days beside it, split by hairlines. */
+.nest-weather-detail { padding: 44px 48px; }
+.nest-weather-detail > .nest-wd-now { position: absolute; left: 48px; top: 44px; bottom: 44px; display: flex; flex-direction: column; box-shadow: inset -1.5px 0 0 var(--sg-line); }
+.nest-wd-now b { margin-top: 18px; font-size: 128px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+.nest-wd-now span { margin-top: 18px; font-size: 36px; font-weight: 600; }
+.nest-wd-now small { margin-top: 8px; font-size: 27px; color: var(--sg-ink-dim); }
+.nest-weather-detail > .nest-wd-side { position: absolute; top: 44px; right: 48px; }
+.nest-wd-hours, .nest-wd-days { display: flex; justify-content: space-between; margin: 14px 0 34px; }
+.nest-wd-hours > div, .nest-wd-days > div { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 120px; }
+.nest-wd-hours small, .nest-wd-days small { font-size: 23px; color: var(--sg-ink-dim); }
+.nest-wd-hours b, .nest-wd-days b { font-size: 30px; font-weight: 600; }
+.nest-wd-days b span { font-weight: 500; opacity: 0.55; }
+.nest-wd-hours { padding-bottom: 30px; box-shadow: inset 0 -1.5px 0 var(--sg-line); }
 .nest-wc-none { font-size: 28px; color: var(--sg-ink-dim); }
 .nest-calendar-card { padding: 30px 28px; }
 .nest-calendar-card > b { display: block; font-size: 34px; font-weight: 600; line-height: 42px; }
@@ -399,7 +412,7 @@ html, body {
 .nest-stack { position: absolute; left: 0; top: 0; width: 1760px; height: 0; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
 .nest-more { position: absolute; left: 0; width: 1760px; height: 640px; contain: layout paint style; }
 .nest-more > .sg-clip { position: absolute; }
-.nest-row0, .nest-more { transition: opacity var(--sg-fade) var(--sg-ease); }
+.nest-row0, .nest-more { transition: opacity var(--sg-fade) var(--sg-ease); will-change: opacity; }
 .nest-row0.is-gone, .nest-more.is-gone { opacity: 0; }
 .nest-more-label { position: absolute; left: 2px; top: 6px; font-size: 26px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
 .nest-more.is-peek { opacity: 0.55; }
@@ -419,25 +432,16 @@ html, body {
   border-radius: var(--sg-r-panel);
   background: var(--sg-fill);
   box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  transition: opacity var(--sg-fade) var(--sg-ease);
+  transition: opacity var(--sg-fade) var(--sg-ease), transform var(--sg-move) var(--sg-ease);
+  will-change: transform, opacity;
 }
 .nest-end.is-peek { opacity: 0.55; }
+.nest-end.is-loading .nest-end-text { opacity: 0.7; }
+/* See all: the same pill, smaller, beside Recommend me. */
+.nest-end-small .sg-btn { height: 48px; padding: 0 22px; font-size: 22px; }
 .nest-end-text { flex: 1; min-width: 0; }
 .nest-end-text b { display: block; font-size: 30px; font-weight: 700; }
 .nest-end-text small { font-size: 21px; }
-.nest-end-btn {
-  height: 60px;
-  padding: 0 26px;
-  border-radius: 30px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  font-size: 23px;
-  font-weight: 600;
-  line-height: 60px;
-  white-space: nowrap;
-  transition: transform 180ms var(--sg-ease);
-}
-.nest-end-btn.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); box-shadow: none; transform: scale(1.05); }
 .nest-more-label em, .nest-col-label em { margin-left: 14px; font-size: 22px; font-style: normal; font-weight: 500; color: var(--sg-ink-dim); }
 .nest-crumb { margin: 0 14px; font-style: normal; color: var(--sg-ink-dim); }
 .nest-col-hint { position: absolute; left: 1060px; width: 700px; text-align: right; top: 12px; font-size: 22px; color: var(--sg-ink-dim); white-space: nowrap; }

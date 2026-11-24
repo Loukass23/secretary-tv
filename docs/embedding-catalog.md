@@ -19,7 +19,7 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
     once);
   - a Nuvio collection folder opens the folder (`folder`);
   - the header's Settings button opens the Hub on Settings (`hub`);
-  - **Browse all** on the end bar of an opened Cinema, Shows or Anime card opens the catalog home for that kind.
+  - **See all** on the end bar of an opened Cinema, Shows or Anime card opens the catalog home for that kind.
     The kind comes only from that card (`CatalogConfig.type`): the catalog home has no section tabs.
 - **One header.** The catalog has no header of its own; it draws Secretary's (tv-kit `Header`).
   - The catalog home draws it with the clock, Search and Settings, and the person Secretary passes in
