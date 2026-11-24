@@ -1,6 +1,4 @@
-import { PLAY_STREAMS_MAX, type PlayNow } from "@secretary/nuvio";
-import { launchCatalogApp } from "./cloud.ts";
-import { APP_IDS, SYNC_BACKEND, YOUTUBE_APP_ID } from "./config.ts";
+import { YOUTUBE_APP_ID } from "./config.ts";
 
 export interface RawApp {
   id: string;
@@ -124,10 +122,10 @@ export function launchApp(id: string): Promise<void> {
   });
 }
 
-/** The catalog apps get Nest's launch payload (a session of their own, a title to open); other apps a plain launch. */
+/** Opens another TV app, after Secretary's ripple on the lights. */
 export async function openApp(id: string): Promise<void> {
   await beforeLaunch();
-  return (Object.values(APP_IDS) as string[]).includes(id) ? launchCatalogApp(id, undefined, launchApp) : launchApp(id);
+  return launchApp(id);
 }
 
 /**
@@ -144,35 +142,10 @@ export function openYoutube(watch?: string): Promise<void> {
   });
 }
 
-/** Starts playing in the catalog app at once, on the sources the embedded catalog already found (no second search). */
-export async function playInApp(play: PlayNow): Promise<void> {
-  await beforeMedia();
-  // The first sources are the ones the player would try; the rest only grow the payload.
-  await launchCatalogApp(APP_IDS[play.type], undefined, launchApp, undefined, { ...play, streams: play.streams.slice(0, PLAY_STREAMS_MAX) });
-}
-
-/** Opens a folder of the profile's Nuvio collections in the catalog app that fits it. */
-export async function openFolderInApp(type: CatalogKind, collectionId: string, folderId: string): Promise<void> {
-  await beforeLaunch();
-  await launchCatalogApp(APP_IDS[type], undefined, launchApp, { collectionId, folderId });
-}
-
 /** Something to finish before another app opens (Nest plays the lights' ripple); none in tests, and it never blocks the launch. */
 let before: (() => Promise<void>) | null = null;
 export const onBeforeLaunch = (fn: (() => Promise<void>) | null) => {
   before = fn;
-};
-/** Something to do before media starts playing (Nest dims the side lights); like `before`, it never blocks the launch. */
-let beforePlay: (() => Promise<void>) | null = null;
-export const onBeforePlay = (fn: (() => Promise<void>) | null) => {
-  beforePlay = fn;
-};
-const beforeMedia = async () => {
-  try {
-    await (beforePlay ?? before)?.();
-  } catch {
-    // The app opens anyway.
-  }
 };
 const beforeLaunch = async () => {
   try {
@@ -181,33 +154,6 @@ const beforeLaunch = async () => {
     // The app opens anyway.
   }
 };
-
-/**
- * Launches the target catalog app on the title's Detail view: the title travels in the launch payload, and through
- * `@secretary/server` too while the apps still read the server's handoff.
- */
-export async function openTitleInApp(
-  serverUrl: string,
-  type: CatalogKind,
-  title: SlimTitle,
-  autoPlay = false,
-  f: typeof fetch = fetch,
-): Promise<void> {
-  await (autoPlay ? beforeMedia() : beforeLaunch());
-  // With Nuvio the title travels in the launch payload only; the server's handoff would open it a second time.
-  if (serverUrl && SYNC_BACKEND === "secretary") {
-    try {
-      await f(`${serverUrl}/handoff`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type, title, autoPlay }),
-      });
-    } catch {
-      // Proceed to launch even if the server handoff fails.
-    }
-  }
-  await launchCatalogApp(APP_IDS[type], { type, title, autoPlay }, launchApp);
-}
 
 export function ownId(): string | undefined {
   try {

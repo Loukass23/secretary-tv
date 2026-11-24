@@ -274,7 +274,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.resumeAtOnce",
     section: "Playback",
     label: "Resume from Continue watching",
-    description: "A title in progress plays at once when you press OK on it in Nest; off, its page opens first",
+    description: "A title in progress plays at once when you press OK on it on the home screen; off, its page opens first",
     getValue: (s) => (s.playback.resumeAtOnce ? "Plays at once" : "Opens the page"),
     cycle: (s) => ({ ...s, playback: { ...s.playback, resumeAtOnce: !s.playback.resumeAtOnce } }),
   },
@@ -469,7 +469,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     section: "Lights",
     label: "Movie lights",
     description:
-      "Run the movie scene picked in Nest's Lights panel when playback starts, and its restore scene after. Without SmartThings on Nest, the server dims to 15%",
+      "Run the movie scene picked in the Lights panel when playback starts, and its restore scene after. Without SmartThings in Secretary, the server dims to 15%",
     getValue: (s) => (s.domotics.cinemaAutoDim ? "On" : "Off"),
     cycle: (s) => ({
       ...s,

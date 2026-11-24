@@ -1,6 +1,6 @@
 # Stremio addons
 
-The catalog apps install Stremio addons, the protocol Nuvio also uses, next to the Nuvio plugin repositories
+Secretary installs Stremio addons, the protocol Nuvio also uses, next to the Nuvio plugin repositories
 (`plugins.md`). An addon is a manifest URL. The apps ask it over plain HTTP for streams, subtitles, meta and catalogs.
 Everything is local to the TV for now. The list has the shape Nuvio Cloud syncs (`addons` table, `sync_push_addons`),
 so a sync adapter can be added later without touching the rest.
@@ -126,7 +126,7 @@ catalogs changes, not on every manifest read. Rows stay windowed, so a long row 
 ## Budget
 
 The whole feature adds 3.0 KB gzip per app: 56.3 KB to 59.3 KB of the 300 KB budget, measured with `check-budget.mjs`
-on all three apps.
+in Secretary.
 
 ## Not done yet
 

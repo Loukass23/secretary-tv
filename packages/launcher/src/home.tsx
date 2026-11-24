@@ -195,7 +195,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
 
   return (
     <>
-      <Avatar x={PAD} y={HEAD_Y} name={me?.name ?? "Secretary Nest"} sub={status || <Links links={links} />} color={me?.color} img={me?.img} focused={on("header", HEADER_PROFILE)} />
+      <Avatar x={PAD} y={HEAD_Y} name={me?.name ?? "Secretary"} sub={status || <Links links={links} />} color={me?.color} img={me?.img} focused={on("header", HEADER_PROFILE)} />
 
       {/* Top right, quiet: a small clock, then the buttons. The date and the weather are cards now. */}
       <div class="nest-head" style={{ right: `${1920 - ICONS_X + 48}px`, top: `${HEAD_Y}px` }}>

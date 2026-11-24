@@ -1,7 +1,22 @@
 # Secretary TV
 
-Small Preact apps for Samsung Tizen TVs, MIT licensed. Formerly the private repo `torbox-tv`, branded "Secretary
-Frame"; the Frame dashboard is now Secretary Nest (`packages/launcher`). Read `README.md` and `CONTRIBUTING.md` first.
+One Preact app for Samsung Tizen TVs, **Secretary**, plus its home server and phone companion. MIT licensed. Read
+`README.md` and `CONTRIBUTING.md` first.
+
+## The product: one app, Secretary
+
+- **Secretary is the only TV app.** It is built and deployed from `packages/launcher` (the folder keeps its old
+  name, and the TV keeps the app id `<package id>.Launcher`, so installs update in place and keep their data).
+- The films, shows and anime screens (rows, title pages, Hub, sources, the AVPlay player) are `packages/catalog-kit`,
+  a library that Secretary mounts inside itself (`launcher/src/catalog-host.tsx`, `docs/embedding-catalog.md`). It is
+  not an app.
+- Secretary Cinema, Shows and Anime were separate apps until November 2026. They are retired and deleted; there is no
+  fallback that launches another app.
+- **Every TV deploy, test and measurement goes through `packages/launcher`.** Reach catalog screens the way a viewer
+  does, from Secretary's cards (Browse all on a card's end bar opens the catalog home). In the design workbench, check
+  the Secretary screens.
+- "Nest" survives in code names (`nest-nav.ts`, `NEST_*` env vars, CSS classes) for Secretary's home screen. What the
+  viewer reads says Secretary.
 
 ## Hard rule: no sources
 
@@ -14,22 +29,21 @@ live in `.env` / `.env.tizen` (gitignored) and on the TV.
 ## Layout
 
 pnpm workspace, one package per folder in `packages/`. Packages import each other's TypeScript source directly
-(`main: src/index.ts`); there is no build step outside the Tizen apps.
+(`main: src/index.ts`); the only build is Secretary's Tizen build.
 
 | Package | What it is |
 | --- | --- |
 | `core` | Debrid cache checks and links, file choice, release ranking |
-| `assistant` | Ask Nest's answers (`route()`), Gemini, watch intents, catalog search and weather; shared by the server and Nest |
+| `assistant` | The assistant's answers (`route()`), Gemini, watch intents, catalog search and weather; shared by the server and Secretary |
 | `plugins` | Runs Nuvio-format plugin repositories on the TV, one Worker per provider |
-| `catalog-kit` | Shared catalog engine: home, detail, Hub (search, settings), sources, AVPlay player |
-| `app-movies`, `app-series`, `app-anime` | Thin Tizen shells over `catalog-kit` (Cinema, Shows, Anime) |
-| `launcher` | Secretary Nest, the glass home screen |
+| `launcher` | **Secretary, the app**: the glass home screen, with the catalog and player mounted inside |
+| `catalog-kit` | The catalog screens Secretary embeds: home rows, detail, Hub (search, settings), sources, AVPlay player |
 | `server` | Home server and Secretary Desk (phone companion) |
 | `nuvio` | Nuvio Cloud client |
 | `smartthings` | SmartThings client used from the TV: devices, scenes, OAuth refresh, home alerts and by-name commands |
 | `party` | Watch-party Cloudflare Worker and Durable Object |
-| `tv-kit` | Focus grid, keys, glass components and tokens, perf marks, Vite plugin, deploy and inspector scripts |
-| `design` | Desktop design workbench (`pnpm design`): tokens, components and real screens with a TV-rules linter |
+| `tv-kit` | Focus grid, keys, glass components and tokens, row looks, perf marks, Vite plugin, deploy and inspector scripts |
+| `design` | Desktop design workbench (`pnpm design`): tokens, components and Secretary's screens with a TV-rules linter |
 
 ## Commands
 
@@ -41,17 +55,17 @@ pnpm typecheck   # tsc --noEmit over every package's src and test
 
 Both run in CI (`.github/workflows/ci.yml`) and must pass before a PR. Tizen builds do not run in CI.
 
-Deploy to a TV from an app folder (needs Tizen Studio CLI `tz`/`sdb`, a certificate profile with the TV's DUID, and
+Deploy Secretary to a TV (needs Tizen Studio CLI `tz`/`sdb`, a certificate profile with the TV's DUID, and
 `.env.tizen` from `.env.tizen.example`):
 
 ```bash
-cd packages/app-movies
+cd packages/launcher
 node ../tv-kit/scripts/tizen.mjs deploy   # build, sign, install in place (keeps the app's data), launch
 node ../tv-kit/scripts/tizen.mjs debug    # prints the inspector port
 node ../tv-kit/scripts/cdp.mjs <port> walk|keys|eval|shot|logs|soak|layers
 ```
 
-`scripts/check-budget.mjs` enforces each app's `budget.json` after every build. Server: `pnpm --filter
+`scripts/check-budget.mjs` enforces Secretary's `budget.json` after every build. Server: `pnpm --filter
 @secretary/server start`, or the root `Dockerfile` for hosting it with a `SERVER_KEY` (`docs/hosting.md`).
 
 ## UI direction
@@ -74,11 +88,11 @@ canvas UI framework. The measured reasons are in `docs/performance.md` (Glass la
 Try designs first in the workbench (`pnpm design`, `docs/design.md`): the TV's own components at 1920x1080 with
 the keyboard as the remote, Night/Daylight, and a linter for the rules above. Tokens live in `glass/tokens.ts` and
 `glass.css` together (a test keeps them in step). The workbench does not measure frames: when a change touches the
-player, focus or rendering, measure it on a TV with `cdp.mjs walk` and add the numbers to
-`docs/performance.md`.
+player, focus or rendering, measure it on a TV inside Secretary with `cdp.mjs walk` (against `main` deployed the same
+way) and add the numbers to `docs/performance.md`.
 
 ### Restyle status (checked 2026-10-31)
 
-The catalog apps are already restyled to glass. Every catalog-kit screen (`Home`, `Detail`, `HubOverlay`,
+The catalog screens are already restyled to glass. Every catalog-kit screen (`Home`, `Detail`, `HubOverlay`,
 `SagaTimeline`, `NuvioFolder`, `PlayerView`, `ControlCentre`, `PartyOverlay`, `Island`) uses `GlassRoot`/`Glass`, and
 `catalog-kit/src/style.css` holds only base styles.

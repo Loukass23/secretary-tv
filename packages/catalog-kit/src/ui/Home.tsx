@@ -1,7 +1,7 @@
 // Catalog home in glass, Apple TV "top shelf" style: the focused title's art fills the top of the page,
 // a frosted panel describes it, and poster rows scroll underneath. Same rules as Secretary Nest
 // (tv-kit/src/glass, docs/performance.md): transform-only motion, no live blur, no soft shadows.
-import { type Dir, type Focus, move, useKeys, windowOf } from "@secretary/tv-kit";
+import { type Dir, type Focus, move, rowColumn, useKeys, windowOf } from "@secretary/tv-kit";
 import {
   Glass,
   GlassRoot,
@@ -9,27 +9,28 @@ import {
   IconButton,
   MediaTile,
   Segmented,
+  showImg,
 } from "@secretary/tv-kit/src/glass/index.ts";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { backgroundUrl, fetchMeta, posterUrl } from "../lib/cinemeta.ts";
 import {
   CARD_SHAPE_LABELS,
   CARD_SHAPES,
   CARD_SIZE_LABELS,
   CARD_SIZES,
-  cardBox,
+  type CardShape,
+  cardLook,
+  itemsFor,
   resolveCard,
   type RowStyle,
 } from "../lib/collectionlayout.ts";
+import type { LookBox } from "@secretary/tv-kit/src/row-look.ts";
 import type { ClockFormat, DashboardSettings, OverlayTab } from "../lib/settings.ts";
 import type { CatalogType, HomeRow, Title } from "../lib/types.ts";
 import { DWELL_MS, HeroLayers, useBase, useHeroArt } from "./art.tsx";
 import "./home.css";
 
 const PAD = 80;
-const CARD_W = 180;
-const CARD_H = 270;
-const STRIDE = CARD_W + 22;
 /** The style menu of a collection row (a long OK): beside the info panel, over the art. */
 const MENU = { x: 1000, y: 150, w: 620 };
 const MENU_LINE = 58;
@@ -37,19 +38,20 @@ const MENU_LINE = 58;
 const ROWS_Y = 560;
 const ROW_H = 372;
 const LABEL_H = 52;
-/** Rows rendered below the focused one. */
+/** Rows rendered below the focused one; the one above stays too, so a row leaving slides out instead of vanishing. */
 const ROWS_BELOW = 2;
+const ROWS_ABOVE = 1;
+/** The bar under the last row: "You're all caught up", with Back to top and Browse all. */
+const END_H = 120;
+const END_ACTIONS = ["↑ Back to top", "⌕ Browse all"] as const;
 const INFO = { x: PAD, y: 150, w: 880, h: 330 };
-const SEG = { x: 650, y: 52, w: 620, h: 68 };
-const ICON_W = 120;
-const ICON_X = [1580, 1720];
 /** Inside Secretary Nest the top bar takes Nest's header: the pill at the left, then the time and two quiet buttons at the
  *  right, at Nest's own size and height (launcher/src/home.tsx). */
 const NEST_HEAD = { y: 44, h: 78, iconW: 88, gap: 28, pad: PAD, seg: { x: PAD, w: 620 } };
 const NEST_ICONS_X = 1920 - NEST_HEAD.pad - 2 * NEST_HEAD.iconW - NEST_HEAD.gap;
 
 /** The top bar, left to right: the section pill, then Search and Settings. */
-export const SECTIONS = ["Nest", "Cinema", "Shows", "Anime"] as const;
+export const SECTIONS = ["Home", "Cinema", "Shows", "Anime"] as const;
 const SECTION_TYPES: readonly (CatalogType | null)[] = [null, "movie", "series", "anime"];
 const TOP_LENGTH = SECTIONS.length + 2;
 const TOP_SEARCH = SECTIONS.length;
@@ -77,7 +79,7 @@ interface Props {
   clockFormat?: ClockFormat;
   onFocus(f: Focus): void;
   onOpen(title: Title, autoPlay?: boolean): void;
-  onOpenFolder(collectionId: string, folderId: string): void;
+  onOpenFolder(collectionId: string, folderId: string, rowLook?: CardShape): void;
   /** How Nuvio collection rows look (Settings › Collections), and each row's own choice (a long OK on it). */
   look: DashboardSettings["collections"];
   rowStyles: Record<string, RowStyle>;
@@ -85,8 +87,6 @@ interface Props {
   onDwell(title: Title): void;
   onOpenHub(tab?: OverlayTab, autoVoice?: boolean): void;
   onOpenNest(): void;
-  /** Inside Nest: the top bar follows Nest's header. */
-  embedded?: boolean;
   onSwitchType(type: CatalogType): void;
   onBack(): void;
 }
@@ -125,16 +125,31 @@ export function Home({
   onDwell,
   onOpenHub,
   onOpenNest,
-  embedded,
   onSwitchType,
   onBack,
 }: Props) {
   /** Focus in the top bar (0..TOP_LENGTH-1), or null when it is in the rows. */
   const [topIdx, setTopIdx] = useState<number | null>(null);
   const [clockText, setClockText] = useState(() => formatClock(clockFormat));
-  const lengths = rows.map((r) => r.items.length);
+  // Each row's look (shared with Nest, tv-kit/src/row-look.ts): its own choice, the setting, or Automatic, which
+  // makes the page's first collection a spotlight and a chart a Top 10.
+  const looks = useMemo(() => {
+    const lead = rows.find((r) => r.rowKind === "folders")?.id;
+    return rows.map((r) => {
+      const folders = r.rowKind === "folders";
+      const style = resolveCard({ title: r.title, tileShape: folders ? (r.tileShape ?? "SQUARE") : undefined, lead: r.id === lead }, look, rowStyles[r.id]);
+      return { shape: style.shape, box: cardLook(style.shape, style.size), items: itemsFor(style.shape, r.items) };
+    });
+  }, [rows, look, rowStyles]);
+  const lengths = looks.map((l) => l.items.length);
   const activeRow = rows[focus.row];
-  const current = activeRow?.items[focus.col];
+  const current = looks[focus.row]?.items[focus.col];
+  // Where each row was left: a row comes back scrolled as it was, and arriving on a new one keeps focus in its slot.
+  const lastCol = useRef(new Map<string, number>());
+  if (activeRow) lastCol.current.set(activeRow.id, focus.col);
+  /** Focus on the bar under the last row (0 Back to top, 1 Browse all), or null. */
+  const [endIdx, setEndIdx] = useState<number | null>(null);
+  useEffect(() => setEndIdx(null), [type]);
   const { backdrop, shade, sheen, mood } = useBase(type, current ? heroArt(current) : undefined);
   // The focused card's art becomes the backdrop once focus rests on it.
   const hero = useHeroArt(current?.id, current ? heroArt(current) : undefined, active);
@@ -169,7 +184,9 @@ export function Home({
       if (!holdTimer.current) return;
       clearTimeout(holdTimer.current);
       holdTimer.current = null;
-      if (current?.folder) onOpenFolder(current.folder.collectionId, current.folder.folderId);
+      if (!current) return;
+      if (current.folder) onOpenFolder(current.folder.collectionId, current.folder.folderId, looks[focus.row]?.shape);
+      else onOpen(current, activeRow?.id === "continue");
     };
     window.addEventListener("keyup", onUp);
     return () => {
@@ -177,7 +194,7 @@ export function Home({
       if (holdTimer.current) clearTimeout(holdTimer.current);
       holdTimer.current = null;
     };
-  }, [active, current?.id]);
+  }, [active, current?.id, looks]);
 
   const openMenu = () => {
     if (!activeRow) return;
@@ -228,18 +245,27 @@ export function Home({
       return false;
     }
 
+    if (endIdx !== null) {
+      if (key === "Up" || key === "Back") return void setEndIdx(null);
+      if (key === "Left" || key === "Right") return void setEndIdx(key === "Left" ? 0 : 1);
+      if (key === "Enter" && !e.repeat) {
+        setEndIdx(null);
+        if (endIdx === 1) return void onOpenHub("search");
+        lastCol.current.clear();
+        return void onFocus({ row: 0, col: 0 });
+      }
+      return;
+    }
+
     if (key === "Enter") {
       if (!current) return;
-      if (current.folder) {
-        if (holdTimer.current || holding.current) return;
-        holdTimer.current = setTimeout(() => {
-          holdTimer.current = null;
-          holding.current = true;
-          openMenu();
-        }, 600);
-        return;
-      }
-      if (!e.repeat) onOpen(current, activeRow?.id === "continue");
+      // Every row opens on release; held for 600 ms, OK opens the row's look menu instead.
+      if (holdTimer.current || holding.current || e.repeat) return;
+      holdTimer.current = setTimeout(() => {
+        holdTimer.current = null;
+        holding.current = true;
+        openMenu();
+      }, 600);
       return;
     }
     if (key === "Back") return void onBack();
@@ -249,8 +275,15 @@ export function Home({
       return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
-      const next = move(lengths, focus, key.toLowerCase() as Dir);
-      if (next !== focus) onFocus(next);
+      let next = move(lengths, focus, key.toLowerCase() as Dir);
+      // Down past the last row: the end bar, never out of the page.
+      if (next === focus && key === "Down") return void setEndIdx(0);
+      if (next === focus) return;
+      if (next.row !== focus.row) {
+        const id = rows[next.row]?.id;
+        next = { row: next.row, col: rowColumn(id ? lastCol.current.get(id) : undefined, focus.col, lengths[next.row]) };
+      }
+      onFocus(next);
       return;
     }
     return false;
@@ -266,7 +299,9 @@ export function Home({
   const inRows = topIdx === null;
   const isContinue = activeRow?.id === "continue";
   const frost = hero.frost ?? backdrop?.frost;
-  const rowScroll = focus.row * ROW_H;
+  // On the end bar the page lifts just enough to show it whole under the last row.
+  const endLift = endIdx !== null ? Math.max(0, ROW_H + END_H + 40 - (1080 - ROWS_Y)) : 0;
+  const rowScroll = focus.row * ROW_H + endLift;
   const sectionIdx = Math.max(1, SECTION_TYPES.indexOf(type));
 
   // Entries saved without a synopsis (older Continue rows, My List) get one once focus rests on them.
@@ -305,7 +340,7 @@ export function Home({
     <GlassRoot mode="fake" wallpaper={backdrop?.wallpaper} frost={frost} sheen={sheen} mood={mood} class="cat-home">
       <HeroLayers hero={hero} shade={shade} />
 
-      {embedded ? (
+      {/* Secretary's header: the section pill at the left, then the time and two quiet buttons. */}
         <>
           <Segmented x={NEST_HEAD.seg.x} y={NEST_HEAD.y} w={NEST_HEAD.seg.w} h={NEST_HEAD.h} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
           <div class="nest-head" style={{ right: `${1920 - NEST_ICONS_X + 48}px`, top: `${NEST_HEAD.y}px` }}>
@@ -316,16 +351,6 @@ export function Home({
           <IconButton x={NEST_ICONS_X} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
           <IconButton x={NEST_ICONS_X + NEST_HEAD.iconW + NEST_HEAD.gap} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
         </>
-      ) : (
-        <>
-          <div class="cat-clock" style={{ left: `${PAD}px`, top: "56px" }}>
-            {clockText}
-          </div>
-          <Segmented {...SEG} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
-          <IconButton x={ICON_X[0]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
-          <IconButton x={ICON_X[1]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
-        </>
-      )}
 
       <Glass {...INFO} class="cat-info">
         <span class="cat-kicker">{kicker}</span>
@@ -334,53 +359,52 @@ export function Home({
         {(current?.description || extraText) && <p>{current?.description || extraText}</p>}
         {current && (
           <div class="cat-hint">
-            <span class="cat-ok">{isContinue ? "▶ OK to resume" : current.folder ? "OK to open the folder · hold OK for the card style" : "OK for details"}</span>
-            <span>CH- search · CH+ Nest</span>
+            <span class="cat-ok">{isContinue ? "▶ OK to resume" : current.folder ? "OK to open the folder · hold OK for the row's look" : "OK for details · hold OK for the row's look"}</span>
+            <span>CH- search · CH+ home</span>
           </div>
         )}
       </Glass>
 
       <div class="sg-clip cat-rows-clip" style={{ left: "0px", top: `${ROWS_Y - 20}px`, width: "1920px", height: `${1080 - ROWS_Y + 20}px` }}>
         <div class="sg-scroll" style={{ transform: `translate3d(0,${20 - rowScroll}px,0)` }}>
-          {rows.slice(focus.row, focus.row + ROWS_BELOW + 1).map((row, k) => {
-            const r = focus.row + k;
-            const style = row.rowKind === "folders" ? resolveCard(row.tileShape ?? "SQUARE", look, rowStyles[row.id]) : null;
-            const card = style ? cardBox(style.shape, style.size) : null;
-            const stride = card ? card.w + 22 : STRIDE;
-            const [from, to] = windowOf(r === focus.row ? focus.col : 0, row.items.length);
-            const shift = r === focus.row ? Math.max(0, focus.col - 1) * stride : 0;
-            const rowY = r * ROW_H;
+          {rows.slice(Math.max(0, focus.row - ROWS_ABOVE), focus.row + ROWS_BELOW + 1).map((row, k) => {
+            const r = Math.max(0, focus.row - ROWS_ABOVE) + k;
+            const { box, items } = looks[r];
+            // Rows keep the column they were left at (lastCol), so moving between rows never sweeps one sideways.
+            const col = r === focus.row ? focus.col : (lastCol.current.get(row.id) ?? 0);
+            const [from, to] = windowOf(col, items.length);
+            const shift = Math.max(0, col - 1) * box.stride;
             return (
-              <section key={row.id} class="cat-row" style={{ top: `${rowY}px` }}>
+              <section key={row.id} class="cat-row" style={{ top: `${r * ROW_H}px` }}>
                 <div class="cat-row-head" style={{ left: `${PAD}px` }}>
                   <h2>{row.title}</h2>
                   <span>{rowOriginLabel(row, type)}</span>
                 </div>
                 <div class="sg-scroll" style={{ top: `${LABEL_H}px`, transform: `translate3d(${PAD - shift}px,0,0)` }}>
-                  {row.items.slice(from, to).map((m, j) => {
+                  {items.slice(from, to).map((m, j) => {
                     const c = from + j;
-                    const focused = inRows && !menu && r === focus.row && c === focus.col;
-                    if (card && m.folder) {
-                      return <FolderTile key={m.id} item={m} x={c * stride} w={card.w} h={card.h} focused={focused} />;
-                    }
-                    return (
-                      <MediaTile
-                        key={`${row.id}:${m.catalogType ?? type}:${m.id}`}
-                        x={c * STRIDE}
-                        y={0}
-                        w={CARD_W}
-                        h={CARD_H}
-                        src={posterUrl(m)}
-                        badge={m.badge}
-                        progress={m.progressPct != null ? m.progressPct / 100 : undefined}
-                        focused={focused}
-                      />
-                    );
+                    const focused = inRows && endIdx === null && !menu && r === focus.row && c === focus.col;
+                    return <RowTile key={`${row.id}:${m.catalogType ?? type}:${m.id}`} item={m} rank={c + 1} x={c * box.stride} box={box} focused={focused} />;
                   })}
                 </div>
               </section>
             );
           })}
+          {rows.length > 0 && focus.row >= rows.length - 1 - ROWS_BELOW && (
+            <Glass x={PAD} y={rows.length * ROW_H + 12} w={1920 - 2 * PAD} h={END_H} frost={false} class="cat-end">
+              <div class="cat-end-text">
+                <b>You're all caught up</b>
+                <small>That's every row for now</small>
+              </div>
+              <div class="cat-end-actions">
+                {END_ACTIONS.map((label, i) => (
+                  <span key={label} class={`cat-btn${endIdx === i ? " is-focus" : ""}`}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </Glass>
+          )}
         </div>
       </div>
       {menu && <RowStyleMenu menu={menu} />}
@@ -394,7 +418,7 @@ function RowStyleMenu({ menu }: { menu: StyleMenu }) {
   const size = menu.style.size ?? "auto";
   return (
     <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={(SIZE_LINE + 1) * MENU_LINE + 110} class="cat-style">
-      <span class="cat-kicker">{menu.title} · card style</span>
+      <span class="cat-kicker">{menu.title} · row look</span>
       {MENU_SHAPES.map((s, i) => (
         <div key={s} class={`cat-style-line${menu.line === i ? " is-focus" : ""}${shape === s ? " is-picked" : ""}`}>
           <span>{CARD_SHAPE_LABELS[s]}</span>
@@ -410,6 +434,40 @@ function RowStyleMenu({ menu }: { menu: StyleMenu }) {
   );
 }
 
+/**
+ * One card of a home row in its look: a poster or a still, with the ranking numeral before it (Top 10) or the title
+ * on the art (spotlight); a Nuvio folder draws as FolderTile in the same box.
+ */
+function RowTile({ item, rank, x, box, focused }: { item: Title; rank: number; x: number; box: LookBox; focused: boolean }) {
+  const w = box.w - box.lead;
+  const at = box.lead ? box.lead : x;
+  const tile = item.folder ? (
+    <FolderTile item={item} x={at} w={w} h={box.h} focused={focused} />
+  ) : (
+    <MediaTile
+      x={at}
+      y={0}
+      w={w}
+      h={box.h}
+      src={box.art === "still" ? backgroundUrl(item) : posterUrl(item)}
+      title={box.caption ? item.name : undefined}
+      sub={box.caption ? [item.year, item.genre?.[0]].filter(Boolean).join(" · ") : undefined}
+      badge={item.badge}
+      progress={item.progressPct != null ? item.progressPct / 100 : undefined}
+      watched={item.watched}
+      class={box.caption ? "cat-spot" : undefined}
+      focused={focused}
+    />
+  );
+  if (!box.lead) return tile;
+  return (
+    <div class="cat-rank" style={{ left: `${x}px`, width: `${box.w}px`, height: `${box.h}px` }}>
+      <span style={{ width: `${box.lead + 30}px` }}>{rank}</span>
+      {tile}
+    </div>
+  );
+}
+
 /** A Nuvio folder: its cover, else its emoji, else its name, on a flat glass-like fill. */
 function FolderTile({ item, x, w, h, focused }: { item: Title; x: number; w: number; h: number; focused: boolean }) {
   const cover = item.poster;
@@ -417,7 +475,7 @@ function FolderTile({ item, x, w, h, focused }: { item: Title; x: number; w: num
   return (
     <div class={`sg-tile cat-folder${focused ? " is-focus" : ""}`} style={{ left: `${x}px`, top: "0px", width: `${w}px`, height: `${h}px` }}>
       {cover ? (
-        <img src={cover} alt="" decoding="async" onError={hideImg} />
+        <img class="sg-fade" src={cover} alt="" decoding="async" onLoad={showImg} onError={hideImg} />
       ) : (
         item.folder?.emoji && <span class="cat-folder-emoji">{item.folder.emoji}</span>
       )}

@@ -105,6 +105,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
           { name: "badge", w: 380, h: 214, render: (b, f) => <MediaTile {...b} focused={f} src={art.stills[1]} title="Northern Lights" badge="4K" /> },
           { name: "progress", w: 380, h: 214, render: (b, f) => <MediaTile {...b} focused={f} src={art.stills[2]} title="Glass Mountain" sub="42 min left" progress={0.6} /> },
           { name: "poster, count", w: 160, h: 240, render: (b, f) => <MediaTile {...b} focused={f} src={art.posters[3]} count={12} /> },
+          { name: "watched", w: 380, h: 214, render: (b, f) => <MediaTile {...b} focused={f} src={art.stills[3]} badge="S1E2" watched /> },
         ],
       },
       {

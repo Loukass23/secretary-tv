@@ -1,6 +1,6 @@
 # Nuvio Cloud
 
-Nest and the catalog apps are moving their accounts and sync from `@secretary/server` to Nuvio Cloud. Nuvio Cloud is the
+Secretary is moving its accounts and sync from `@secretary/server` to Nuvio Cloud. Nuvio Cloud is the
 Supabase-compatible API behind the official Nuvio apps, at `https://api.nuvio.tv`. Signing in to the same account and profile
 shares Continue Watching, watched history, the library, addons and plugin repositories with the official apps. The server
 stays in the repo as a dev and test backend (`SYNC_BACKEND=secretary`).
@@ -64,7 +64,8 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
   - A second anonymous session started its own login, and Nest's session approved it. The poll then said `approved`
     and the exchange gave a session for the same user with a **different `session_id`**.
   - Both refresh tokens then renewed independently (200 / 200), and Nest's session kept working.
-  - Plan: each catalog app opens its own login on first run and hands the code to Nest; Nest approves it.
+  - (The plan for separate catalog apps to log in through Nest was dropped with the apps: the catalog uses
+    Secretary's own session.)
 - [x] `start_device_login_session` exists too. It returns `{device_code, user_code (6 chars, e.g. 9G84RX),
       verification_uri: https://nuvio.tv/link, verification_uri_complete, expires_at}`. The site approves it with
       `approve_device_login_session {p_user_code}` and reads it with `get_device_login_session {p_user_code}`. The short
@@ -123,7 +124,8 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
 - `SYNC_BACKEND=secretary` in `.env.tizen` turns all of this off (dev and tests against the home server).
 
 ## Watch sync (phase 3)
-- Each catalog app has its own client (`catalog-kit/src/lib/cloud.ts`). On start and on every wake, `takeLaunch` reads
+- The catalog uses Secretary's client (`shareCloud` in `catalog-kit/src/lib/cloud.ts`). What follows describes the
+  retired apps, which each had their own. On start and on every wake, `takeLaunch` reads
   Nest's payload once (by its `at`).
   - A grant for another account or profile replaces the app's session and clears the local lists
     (`clearLocalResume`).
@@ -188,7 +190,7 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
 - **Addons** use the addon store's existing `synced()` / `replace()`.
 - **Sharing profile 1's lists:** a profile with `uses_primary_plugins` / `uses_primary_addons` reads profile 1's list
   and never writes it.
-- All three apps read the same profile lists, so a repository added in one app reaches the others on their next wake.
+- The lists live on the profile, so a repository added on one TV reaches Secretary on another on its next wake.
 - **Checked on the TV (profile 3, which has `uses_primary_plugins: true`):**
   - Movies and Shows both showed profile 1's plugin repository and wrote nothing to it.
   - Frenchie's two addons came down to both apps.
@@ -235,12 +237,20 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
     - The focused art is the folder's `heroBackdropUrl`, else the collection's `backdropImageUrl`, else the cover.
   - **Looks** (`lib/collectionlayout.ts`, Settings › Collections; each setting has Automatic). The choices follow
     nuvio-native-legacy's row styles, folder views and tab styles, with nothing copied from it.
-    - **Card shape and size:** Poster, Landscape, Square or Highlight 4:3, at Compact, Standard or Large (×0.85,
-      ×1, ×1.15; every shape is 270 high at Standard, so rows keep one rhythm).
-      - Automatic is the shape most of the collection's folders have (a tie goes to the first folder's), at
-        Standard.
-      - A long OK on a row (the first key repeat) opens its style menu beside the info panel: a line per shape,
-        then the size.
+    - **Row look and size:** one model for every home row and for Nest's opened cards (`tv-kit/src/row-look.ts`):
+      Poster, Stills (16:9 backdrops), Square, Highlight 4:3, and two presets, **Top 10 ranking** (an outlined
+      numeral before each poster, ten titles) and **Spotlight** (large 16:9 stills, ×1.15, with the title on a flat
+      strip over the art). Sizes are Compact, Standard or Large (×0.85, ×1, ×1.15; every look but Spotlight is 270
+      high at Standard, so rows keep one rhythm). Nest offers the same looks except Spotlight, which is taller than
+      its card.
+      - Automatic: the page's first collection row is a Spotlight; a row titled like a chart (Top, Trending,
+        Popular, Best, Most watched) is a Top 10; otherwise a collection takes the shape most of its folders have
+        (a tie goes to the first folder's: LANDSCAPE is Stills), and other rows are posters. The Settings ›
+        Collections choice applies to collection rows only.
+      - Collections and rows line up: a folder opened from a Top 10 row opens as Ranking, from a Spotlight as
+        Mural, from Stills as Rows, unless the folder or the setting chose a view.
+      - A long OK on any row (OK is acted on at release, held 600 ms it opens the menu) opens its look menu beside
+        the info panel: a line per look, then the size.
       - Each step shows on the row at once. OK keeps it, Back puts the old style back.
       - The row's own style is kept on this TV (`sectv.collections.rowStyle`) and wins over the setting.
     - **Folder view:** Grid, Rows, Timeline (oldest first, the year on the line where it changes), Cover flow,

@@ -10,7 +10,7 @@ import type { CatalogKind, SlimTitle } from "./apps.ts";
 import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, MORE, moreTop, rowScroll } from "./card-style.ts";
 import { type RowShape, tileBox } from "./row-look.ts";
 import { Component } from "preact";
-import { type Column, rowAt } from "./nest-nav.ts";
+import { atEnd, type Column, END_BROWSE, END_TOP, rowAt } from "./nest-nav.ts";
 
 /** A title on a media card. */
 export interface MediaItem {
@@ -80,6 +80,8 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       more?: MoreRow[];
       /** The title behind tile `i` of the opened card, for its long-OK menu; null for the Open tile and the rows under. */
       target?: (i: number) => TileTarget | null;
+      /** Browse all on the bar under the last row: the whole catalog of this kind. */
+      browseAll?: () => void;
     }
   | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
@@ -148,6 +150,7 @@ const rowsOf = (c: MediaColumn): MoreRow[] => (c.more ?? []).filter((m) => m.ite
 
 /** The title behind item `i` of an opened media card (a pick, or a title in a row under them). */
 export function targetAt(c: MediaColumn, i: number): TileTarget | null {
+  if (i < 0) return null;
   const { r, x } = rowAt(expandedRows(c), i);
   return (r === 0 ? c.target?.(x) : rowsOf(c)[r - 1]?.target?.(x)) ?? null;
 }
@@ -428,11 +431,15 @@ class MoreBlock extends Component<MoreBlockProps> {
 /** A media card opened: every title in one row; they rise in one after another. Down reaches the rows under them. */
 function MediaRow({ col, focus: flat }: { col: Extract<RowColumn, { kind: "media" }>; focus: number }) {
   const rows = expandedRows(col);
-  const { r: onRow, x: onX } = rowAt(rows, Math.max(0, flat));
+  // On the end bar the stack stays on the last row, with the bar under it where the next row would peek.
+  const end = atEnd(flat);
+  const { r: onRow0, x: onX0 } = rowAt(rows, Math.max(0, flat));
+  const onRow = end ? rows.length - 1 : onRow0;
+  const onX = end ? -1 : onX0;
   // Down moves to the rows under the picks: the whole stack slides up by transform until that row is at the top.
   const offY = onRow === 0 ? 0 : moreTop(onRow - 1);
   const b = tileBox(col.shape ?? "poster");
-  const at = onRow === 0 ? Math.max(0, Math.min(flat, col.items.length - 1)) : -2;
+  const at = onRow === 0 && !end ? Math.max(0, Math.min(flat, col.items.length - 1)) : -2;
   const scroll = rowScroll(Math.max(0, at), col.items.length, b.stride, b.w);
   const hit = onRow === 0 ? col.items[at] : undefined;
   const more = rowsOf(col);
@@ -461,10 +468,25 @@ function MediaRow({ col, focus: flat }: { col: Extract<RowColumn, { kind: "media
             gone={r < onRow}
             peek={r > onRow}
             at={r === onRow ? onX : -1}
-            scroll={rowScroll(r === onRow ? onX : 0, m.items.length, bm.stride, bm.w)}
+            scroll={rowScroll(r === onRow ? Math.max(0, onX) : 0, m.items.length, bm.stride, bm.w)}
           />
         );
       })}
+      {onRow === rows.length - 1 && <EndBar top={moreTop(rows.length - 1)} focus={end ? flat : null} peek={!end} />}
+    </div>
+  );
+}
+
+/** Under an opened card's last row: the end, with Back to top and Browse all, so Down never leaves the card. */
+function EndBar({ top, focus, peek }: { top: number; focus: number | null; peek: boolean }) {
+  return (
+    <div class={`nest-end${peek ? " is-peek" : ""}`} style={{ top: `${top}px` }}>
+      <div class="nest-end-text">
+        <b>You're all caught up</b>
+        <small>That's every row in this card</small>
+      </div>
+      <span class={`nest-end-btn${focus === END_TOP ? " is-focus" : ""}`}>↑ Back to top</span>
+      <span class={`nest-end-btn${focus === END_BROWSE ? " is-focus" : ""}`}>⌕ Browse all</span>
     </div>
   );
 }

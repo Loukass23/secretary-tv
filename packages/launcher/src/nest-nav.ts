@@ -2,7 +2,8 @@
 //
 //   header    profile, then Watch together, Search, Lights, Picture mode, Sound and Bell, across the top
 //   ask       the assistant under the cards (the compact mode), fixed at the bottom centre; Down from a card or the last
-//             line inside one goes straight to it. What it is asked moves focus to the card concerned
+//             line inside one goes straight to it, except in an opened media card, whose rows end on a bar of their
+//             own (Back to top, Browse all). What it is asked moves focus to the card concerned
 //   chat      the full-screen assistant, opened with OK on the Assistant card (the first card); Back leaves it
 //   row       the content cards (Assistant, At a glance, Recent, Cinema, Shows, Anime, Home, Reminders, Apps). Left and
 //             Right move from card to card;
@@ -58,6 +59,10 @@ export const HEADER_BELL = 7;
 export const HEADER_LENGTH = 8;
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
+/** The bar under an opened media card's last row: Back to top, then Browse all. */
+export const END_TOP = -3;
+export const END_BROWSE = -4;
+export const atEnd = (i: number) => i === END_TOP || i === END_BROWSE;
 
 const header = (i: number): Focus => ({ area: "header", i });
 const card = (col: number): Focus => ({ area: "row", col, i: 0 });
@@ -138,9 +143,16 @@ export function step(at: Focus, key: string, len: Layout): Focus {
         return at;
       }
       if (col.rows) {
+        // The end bar: its two buttons side by side; Up goes back to the start of the last row, Down stays.
+        if (atEnd(i)) {
+          if (key === "Left") return { ...at, i: END_TOP };
+          if (key === "Right") return { ...at, i: END_BROWSE };
+          if (key === "Up") return { ...at, i: col.rows.slice(0, -1).reduce((s, n) => s + n, 0) };
+          return at;
+        }
         const { r, x, start } = rowAt(col.rows, i);
         const len = col.rows[r];
-        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : toAsk;
+        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : { ...at, i: END_TOP };
         if (key === "Up") return r > 0 ? { ...at, i: start - col.rows[r - 1] + Math.min(x, col.rows[r - 1] - 1) } : col.launch ? { ...at, i: LAUNCH } : card(c);
         if (key === "Right") return x < len - 1 ? { ...at, i: i + 1 } : at;
         if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;

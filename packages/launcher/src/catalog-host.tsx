@@ -1,6 +1,6 @@
-// The catalog inside Nest (docs/embedding-catalog.md, option B): Home, Detail, folders and search run here as a chunk
-// that loads when the first one opens, so Nest's own start is as it was. Playing hands the title to the catalog app,
-// which owns the player. Preact and plain DOM, like Nest.
+// The catalog inside Secretary (docs/embedding-catalog.md): its home, title pages, folders, the Hub and the AVPlay player
+// run here as a chunk that loads when the first one opens, so Secretary's own start stays as fast. Preact and plain DOM,
+// like the rest of Secretary.
 import type { CatalogConfig, EmbeddedHost } from "@secretary/catalog-kit";
 import type { ComponentType } from "preact";
 import { BirdLoader } from "@secretary/tv-kit/src/glass/index.ts";
@@ -14,7 +14,7 @@ export interface CatalogEntry {
   hub?: CatalogConfig["hub"];
 }
 
-const HEADING = { movie: "Secretary Cinema", series: "Secretary Shows", anime: "Secretary Anime" } as const;
+const HEADING = { movie: "Cinema", series: "Shows", anime: "Anime" } as const;
 
 export function CatalogHost({ entry, host, serverUrl }: { entry: CatalogEntry; host: EmbeddedHost; serverUrl: string }) {
   const [App, setApp] = useState<ComponentType<CatalogConfig> | null>(null);
@@ -29,7 +29,7 @@ export function CatalogHost({ entry, host, serverUrl }: { entry: CatalogEntry; h
   // The catalog comes in by opacity, on its own layer, so it feels like the card opening rather than a new page.
   return (
     <div class="nest-catalog-in">
-      <App type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} returnTo="" embedded={host} open={entry.open} folder={entry.folder} hub={entry.hub} />
+      <App type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} embedded={host} open={entry.open} folder={entry.folder} hub={entry.hub} />
     </div>
   );
 }

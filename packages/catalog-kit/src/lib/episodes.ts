@@ -35,12 +35,27 @@ export function nextEpisode(videos: readonly Video[], current: string, now: numb
   return null;
 }
 
-/** Where Play starts: the remembered episode if it still exists, else the first aired regular episode. */
-export function defaultEpisode(videos: readonly Video[], rememberedId?: string, now: number = Date.now()): Video | null {
+/**
+ * Where Play starts, the "up next": the remembered episode if it still exists; else the first aired regular episode not
+ * yet watched after the furthest one watched (`watched` holds `season:episode` keys), so a show caught up from season
+ * 12 does not open on S1E1; else the first one not watched; else the first aired regular one.
+ */
+export function defaultEpisode(
+  videos: readonly Video[],
+  rememberedId?: string,
+  now: number = Date.now(),
+  watched: ReadonlySet<string> = new Set(),
+): Video | null {
   const remembered = rememberedId ? videos.find((v) => v.id === rememberedId) : undefined;
   if (remembered) return remembered;
   const all = ordered(videos);
-  return all.find((v) => v.season > 0 && hasAired(v, now)) ?? all.find((v) => hasAired(v, now)) ?? null;
+  const regular = all.filter((v) => v.season > 0 && hasAired(v, now));
+  const seen = (v: Video) => watched.has(`${v.season}:${v.episode}`);
+  let furthest = -1;
+  regular.forEach((v, i) => {
+    if (seen(v)) furthest = i;
+  });
+  return regular.slice(furthest + 1).find((v) => !seen(v)) ?? regular.find((v) => !seen(v)) ?? regular[0] ?? all.find((v) => hasAired(v, now)) ?? null;
 }
 
 export const episodeLabel = (v: Pick<Video, "season" | "episode">) =>

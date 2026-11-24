@@ -4,9 +4,7 @@ import { contentApp, normalizeCode, partyErrorText, type RoomSummary } from "@se
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useState } from "preact/hooks";
-import { launchApp } from "./apps.ts";
-import { cloud, launchCatalogApp, partyApi } from "./cloud.ts";
-import { APP_IDS } from "./config.ts";
+import { cloud, partyApi } from "./cloud.ts";
 
 const PANEL = { x: 360, y: 200, w: 1200, h: 680 };
 
@@ -28,8 +26,8 @@ export function WatchTogether({
   onJoinHere,
 }: {
   onClose: () => void;
-  /** Built with the player inside Nest: join the room in Nest's own catalog instead of opening the catalog app. */
-  onJoinHere?: (open: { type: "movie" | "series" | "anime"; title: { id: string; name: string }; room: string }) => void;
+  /** Join the room in Secretary's own catalog. */
+  onJoinHere: (open: { type: "movie" | "series" | "anime"; title: { id: string; name: string }; room: string }) => void;
 }) {
   const [step, setStep] = useState<Step>(() =>
     !partyApi.configured
@@ -71,10 +69,7 @@ export function WatchTogether({
 
   const join = (room: RoomSummary) => {
     const { type: kind, titleId } = contentApp(room.contentId);
-    if (onJoinHere) return onJoinHere({ type: kind, title: { id: titleId, name: room.title }, room: room.code });
-    launchCatalogApp(APP_IDS[kind], { type: kind, title: { id: titleId, name: room.title }, autoPlay: false, room: room.code }, launchApp).catch(
-      () => setStep({ kind: "idle", note: "Couldn't open the app for this party." }),
-    );
+    onJoinHere({ type: kind, title: { id: titleId, name: room.title }, room: room.code });
   };
 
   const buttons = step.kind === "found" ? ["Join the party", "Another code"] : ready ? ["Type a code"] : [];
@@ -98,7 +93,7 @@ export function WatchTogether({
         ? `Looking for ${step.code}…`
         : step.kind === "found"
           ? `${step.room.members} watching · ${STATE_TEXT[step.room.state]}`
-          : step.note ?? "OK types a code · Back returns to Nest";
+          : step.note ?? "OK types a code · Back returns home";
 
   return (
     <Glass {...PANEL} class="nest-account nest-party">

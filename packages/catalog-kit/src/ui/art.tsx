@@ -76,6 +76,8 @@ export interface HeroArt {
   front: number;
   /** The shown art's frost once focus has rested on it, else null (use the wallpaper's). */
   frost: string | null;
+  /** The art for `id` is up and its frost is in (or either could not be had): a page can show itself whole. */
+  settled: boolean;
 }
 
 /**
@@ -85,21 +87,32 @@ export interface HeroArt {
 /** Art already shown on this page: a screen that takes over for the same title (the player after its page) starts with it on, not fading in from black. */
 const shownArt = new Set<string>();
 
-export function useHeroArt(id: string | undefined, src: string | undefined, active: boolean, immediate = false): HeroArt {
+export function useHeroArt(
+  id: string | undefined,
+  src: string | undefined,
+  active: boolean,
+  immediate = false,
+  /** How long focus rests before the frost swaps; a page that does not move (Detail) takes it at once. */
+  frostRestMs = FROST_REST_MS,
+): HeroArt {
   // The backdrop alternates between two permanent layers; `front` is the one shown.
   const [slots, setSlots] = useState<[Slot | null, Slot | null]>(() => (immediate && id && src && shownArt.has(src) ? [{ id, src }, null] : [null, null]));
   const [front, setFront] = useState(0);
   const frontRef = useRef(0);
   frontRef.current = front;
-  const [frost, setFrost] = useState<{ id: string; frost: string } | null>(null);
+  const [frost, setFrost] = useState<{ src: string; frost: string } | null>(null);
+  /** What has failed for the current id ("art", "frost"), so `settled` never waits on it. */
+  const [failed, setFailed] = useState<{ id: string; art?: boolean; frost?: boolean } | null>(null);
 
   useEffect(() => {
     if (!active || !id || !src) return;
     let live = true;
     let rest: ReturnType<typeof setTimeout> | undefined;
+    // Details arriving with another backdrop for a title already shown keep the shown art, and its frost with it.
+    const shownSrc = slots[front]?.id === id ? slots[front]!.src : null;
     const t = setTimeout(
       () => {
-        if (slots[front]?.id !== id) {
+        if (!shownSrc) {
           void preload(src).then(
             () => {
               if (!live) return;
@@ -111,17 +124,18 @@ export function useHeroArt(id: string | undefined, src: string | undefined, acti
                 if (frontRef.current === back) setSlots((s) => (back === 0 ? [s[0], null] : [null, s[1]]));
               }, FADE_MS);
             },
-            () => {},
+            () => live && setFailed((f) => ({ ...(f?.id === id ? f : {}), id, art: true })),
           );
         }
         // Browsing never pays for the frost swap: it lands after focus has rested, while nothing moves.
-        const blurred = frostFor(src);
+        const frostSrc = shownSrc ?? src;
+        const blurred = frostFor(frostSrc);
         rest = setTimeout(() => {
           void blurred.then(
-            (f) => live && setFrost({ id, frost: f }),
-            () => {},
+            (f) => live && setFrost({ src: frostSrc, frost: f }),
+            () => live && setFailed((x) => ({ ...(x?.id === id ? x : {}), id, frost: true })),
           );
-        }, FROST_REST_MS);
+        }, frostRestMs);
       },
       immediate ? 0 : DWELL_MS,
     );
@@ -133,7 +147,10 @@ export function useHeroArt(id: string | undefined, src: string | undefined, acti
   }, [active, id, src]);
 
   const shown = slots[front];
-  return { slots, front, frost: frost && frost.id === shown?.id ? frost.frost : null };
+  const shownFrost = frost && frost.src === shown?.src ? frost.frost : null;
+  const fail = failed?.id === id ? failed : null;
+  const settled = Boolean(id && (fail?.art || (shown?.id === id && (shownFrost || fail?.frost))));
+  return { slots, front, frost: shownFrost, settled };
 }
 
 /** The art layers and the shade over them; place first inside a GlassRoot. */
@@ -143,6 +160,7 @@ export function HeroLayers({ hero, shade }: { hero: HeroArt; shade: string | nul
       {hero.slots.map((h, i) =>
         h ? <img key={i} class={`cat-hero${i === hero.front ? " is-front" : ""}`} src={h.src} alt="" onError={hideImg} /> : null,
       )}
+      {/* Mounted with the first art, and fading in with it, so the page never darkens in one step. */}
       {shade && hero.slots[hero.front] && <img class="cat-shade" src={shade} alt="" />}
     </>
   );

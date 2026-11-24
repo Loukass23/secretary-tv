@@ -61,6 +61,11 @@ function hideImg(e: Event) {
   (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
 }
 
+/** Art fades in over the tile's flat fill once it has loaded, rather than popping in line by line (glass.css). */
+export function showImg(e: Event) {
+  (e.currentTarget as HTMLImageElement).classList.add("is-ready");
+}
+
 interface CardProps {
   title: string;
   sub?: string;
@@ -92,17 +97,20 @@ interface TileProps {
   badge?: string;
   /** Watched fraction, 0..1, drawn as a bar along the bottom. */
   progress?: number;
+  /** Watched to the end: a tick in the top-right corner, and the art dimmed while the tile is not focused. */
+  watched?: boolean;
 }
 
 /** Artwork with a caption; the focused tile lifts (transform only) and gets a white ring. */
-export function MediaTile({ x, y, w, h, focused, src, title, sub, count, badge, progress }: Omit<BoxProps, "page"> & TileProps) {
+export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched }: Omit<BoxProps, "page"> & TileProps) {
   return (
     <div
-      class={`sg-tile${focused ? " is-focus" : ""}`}
+      class={`sg-tile${focused ? " is-focus" : ""}${watched ? " is-watched" : ""}${cls ? ` ${cls}` : ""}`}
       style={{ left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` }}
     >
-      <img src={src} alt="" decoding="async" onError={hideImg} />
+      <img class="sg-fade" src={src} alt="" decoding="async" onLoad={showImg} onError={hideImg} />
       {badge && <span class="sg-tile-badge">{badge}</span>}
+      {watched && <span class="sg-tile-tick">✓</span>}
       {(title || sub) && (
         <div class="sg-tile-cap">
           {title && <b>{title}</b>}
