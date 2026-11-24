@@ -1062,14 +1062,17 @@ export function App() {
   const pictureMode = pictureSet ?? pictureTv(devices)?.pictureMode;
   const soundOn = soundSet ?? devices.find((d) => d.kind === "audio")?.on;
   const openReminders = reminders.filter((r) => !r.completed).length;
+  const headerPerson = { name: me?.name ?? "Secretary", color: me?.color, img: me?.img };
   const embeddedHost: EmbeddedHost = {
     // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
     cloud,
+    // The catalog home draws Secretary's header too, with the same person top left.
+    person: headerPerson,
     onExit: leaveCatalog,
     // Secretary's one header, which the catalog's title pages draw collapsed to the clock (catalog-kit host.ts).
     header: {
       time,
-      person: { name: me?.name ?? "Secretary", color: me?.color, img: me?.img },
+      person: headerPerson,
       buttons: headerButtons(pictureMode, soundOn, openReminders),
       press: (at) => {
         const i = at === "person" ? HEADER_PROFILE : HEADER_ORDER[at];

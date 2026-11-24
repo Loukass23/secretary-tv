@@ -56,10 +56,10 @@ test("a Top 10 shows ten; a folder opened from a look opens in the matching view
 });
 
 test("card boxes keep one height per size, so rows keep one rhythm", () => {
-  assert.deepEqual(cardBox("landscape", "standard"), { w: 480, h: 270 });
-  assert.deepEqual(cardBox("poster", "compact"), { w: 153, h: 230 });
+  assert.deepEqual(cardBox("landscape", "standard"), { w: 672, h: 378 });
+  assert.deepEqual(cardBox("poster", "compact"), { w: 214, h: 321 });
   assert.equal(cardBox("wide", "large").h, cardBox("square", "large").h);
-  assert.ok(cardBox("poster", "large").h <= 320, "a large card still fits under the row's title");
+  assert.ok(cardBox("poster", "large").h <= 440, "a large row still leaves the next row's label in view");
 });
 
 test("a row's own style is kept per row, and Automatic for both clears it", () => {

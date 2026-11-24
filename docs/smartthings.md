@@ -7,7 +7,7 @@ any of it. The server's `/domotics` stays as a fallback for builds without Smart
 
 | | Where | How |
 | --- | --- | --- |
-| Scenes and lights | Nest's Lights button opens the Lights panel | OK runs a scene or switches a light. Matter lights show "Local · TV hub". |
+| Routines and lights | Nest's Lights button opens the Lights panel | Under the light effects: the routines (SmartThings scenes, manual routines in the app), four at a time, then the lights and switches grouped by room (rooms by name; devices in no room last, under "No room"). OK runs a routine, and its card says Running…, Done ✓ or Couldn't run, then when it last ran; OK on a light switches it. Matter lights say "TV hub". |
 | Movie lights | Catalog settings, Settings → Lights → Movie lights | On Play Secretary runs the scene marked 🎬 in the Lights panel (Red on a scene); when the player closes, the scene marked ↩ (Green). |
 | Home status | Nest's home screen | A toast when the phone leaves or comes home, when the vacuum starts, finishes or gets stuck. |
 | Daylight | Nest, theme Automatic | Follows the TV's light sensor when the room is clearly bright (150 lux or more) or dark (under 60 lux), and the clock in between. |
@@ -65,7 +65,9 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
 
 - **`packages/smartthings`** is a `fetch`-only client used by Secretary, its home screen and its catalog:
   - `devices()` returns every device with its status in one call (`GET /devices?includeStatus=true`);
-  - `command()`, `scenes()`, `runScene()`, `rooms()`;
+  - `command()`, `scenes()` (with the last run), `runScene()`, `rooms()` and `roomsIn()` (every room of the homes
+    given), with every page of a list read (`_links.next`, at most 20 pages);
+  - `groupByRoom` (`rooms.ts`): devices grouped by room for the Lights panel;
   - OAuth: `authorizeUrl`, `exchangeCode`, and `oauthTokens`, a refreshing token source;
   - pure helpers: `homeAlerts` (what changed between two polls), `homeAction` (prompts that name a device or scene),
     and `roomLux`.
