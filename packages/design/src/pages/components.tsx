@@ -5,20 +5,29 @@ import { type Dir, type Focus, move, useKeys } from "@secretary/tv-kit";
 import {
   AppChip,
   Avatar,
+  ButtonRow,
   DateChip,
   Fab,
   Glass,
   GlassRoot,
   Glow,
   glowImage,
+  Header,
+  type HeaderButton,
   Icon,
   IconButton,
   type IconName,
   ICON_PATHS,
+  InfoPanel,
+  Kicker,
+  LandscapeTile,
   ListCard,
   MediaTile,
+  PosterTile,
+  RowLabel,
   Scroller,
   Segmented,
+  Tabs,
   TINTS,
   VoiceWave,
   type WaveState,
@@ -50,6 +59,16 @@ const WAVES: readonly WaveState[] = ["idle", "listening", "thinking", "speaking"
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
 const CHIP = { w: 112, h: 120, stride: 126 };
 const NAMES = Object.keys(ICON_PATHS) as IconName[];
+/** Secretary's header buttons, as the home screen shows them. */
+const HEAD_BUTTONS: readonly HeaderButton[] = (["party", "search", "lights", "partly", "hifi", "settings", "bell"] as const).map((icon, k) => ({
+  key: icon,
+  icon,
+  badge: k === 6 ? 2 : undefined,
+}));
+const SEASONS = Array.from({ length: 12 }, (_, i) => `Season ${i + 1}`);
+const ABOUT = "A lighthouse keeper on a remote island finds a message in a bottle, and starts a long correspondence with a stranger who seems to know the island better than anyone.";
+/** The groups drawn under the header, which start lower so it stays clear. */
+const UNDER_HEADER = [3, 4];
 const ACTIONS = NAMES.slice(0, NAMES.indexOf("clear"));
 const WEATHER = NAMES.slice(NAMES.indexOf("clear"));
 
@@ -63,6 +82,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
   const [inside, setInside] = useState(-1);
   const [wave, setWave] = useState(0);
   const [glow, setGlow] = useState<string | undefined>();
+  const [headOpen, setHeadOpen] = useState(true);
 
   const groups: { title: string; specs: Spec[] }[][] = [
     [
@@ -170,10 +190,80 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
       { title: "Icons · actions", specs: ACTIONS.map((n) => iconSpec(n)) },
       { title: "Icons · weather", specs: WEATHER.map((n) => iconSpec(n)) },
       { title: "In use", specs: [
-        { name: "Header button", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} class="nest-quiet" icon={<Icon name="bell" />} badge={2} /> },
+        { name: "Header button", w: 72, h: 64, render: (b, f) => <IconButton {...b} focused={f} frost={false} class="sg-quiet" icon={<Icon name="bell" />} badge={2} /> },
         { name: "Settings button", w: 120, h: 68, render: (b, f) => <IconButton {...b} focused={f} icon={<Icon name="settings" />} /> },
         { name: "Voice, listening", w: 140, h: 68, render: (b, f) => <IconButton {...b} focused={f} icon={<><Icon name="mic" />…</>} /> },
       ] },
+    ],
+    // The one header (drawn at the top of this page) and the pieces the catalog screens take from the home screen.
+    [
+      {
+        title: "Header",
+        specs: [
+          {
+            name: headOpen ? "Header: expanded (OK collapses)" : "Header: clock only (OK expands, as Up does)",
+            w: 420,
+            h: 60,
+            render: (b, f) => <ButtonRow x={b.x} y={b.y} items={[{ id: "t", label: headOpen ? "Collapse to the clock" : "Expand the header", icon: "settings" }]} focusIndex={f ? 0 : -1} />,
+          },
+        ],
+      },
+      {
+        title: "Info panel",
+        specs: [
+          { name: "InfoPanel (home caption)", w: 620, h: 200, render: (b) => <InfoPanel {...b} title="The Quiet Harbour" meta={["2019", "Drama", "1 h 52 min"]} about={ABOUT} /> },
+          {
+            name: "InfoPanel glass + ButtonRow (title page)",
+            w: 900,
+            h: 330,
+            render: (b, f) => (
+              <InfoPanel {...b} glass kicker="Film" title="The Quiet Harbour" meta={["2019", "Drama", "1 h 52 min", "7.8"]} about={ABOUT} lines={2}>
+                <ButtonRow
+                  items={[
+                    { id: "resume", label: "Resume", icon: "cinema", primary: true },
+                    { id: "start", label: "Start over" },
+                    { id: "party", label: "Watch together", icon: "party" },
+                  ]}
+                  focusIndex={f ? 0 : -1}
+                />
+              </InfoPanel>
+            ),
+          },
+        ],
+      },
+      {
+        title: "Buttons and tabs",
+        specs: [
+          {
+            name: "ButtonRow",
+            w: 520,
+            h: 60,
+            render: (b, f) => <ButtonRow x={b.x} y={b.y} items={[{ id: "play", label: "Play", primary: true }, { id: "trailer", label: "Trailer" }, { id: "list", label: "My List" }]} focusIndex={f ? 1 : -1} />,
+          },
+          { name: "Tabs (seasons, scrolls)", w: 760, h: 60, render: (b, f) => <Tabs {...b} items={SEASONS} picked={1} focusIndex={f ? 5 : -1} /> },
+          { name: "Kicker", w: 200, h: 30, render: (b) => <span class="dz-at" style={{ left: `${b.x}px`, top: `${b.y}px` }}><Kicker>Watch together</Kicker></span> },
+        ],
+      },
+    ],
+    [
+      {
+        title: "Posters",
+        specs: [
+          { name: "RowLabel", w: 260, h: 40, render: (b) => <RowLabel x={b.x} y={b.y} label="Trending" count={20} /> },
+          { name: "PosterTile", w: 252, h: 378, render: (b, f) => <PosterTile x={b.x} y={b.y} focused={f} src={art.posters[0]} /> },
+          { name: "resume", w: 252, h: 378, render: (b, f) => <PosterTile x={b.x} y={b.y} focused={f} src={art.posters[1]} badge="▶ Resume" progress={0.4} /> },
+          { name: "watched", w: 252, h: 378, render: (b, f) => <PosterTile x={b.x} y={b.y} focused={f} src={art.posters[2]} watched /> },
+          { name: "scale 0.8", w: 202, h: 302, render: (b, f) => <PosterTile x={b.x} y={b.y} focused={f} src={art.posters[3]} scale={0.8} /> },
+        ],
+      },
+      {
+        title: "Landscape (Continue watching, episodes)",
+        specs: [
+          { name: "LandscapeTile", w: 448, h: 252, render: (b, f) => <LandscapeTile x={b.x} y={b.y} focused={f} src={art.stills[0]} title="Glass Mountain" sub="42 min left" progress={0.6} /> },
+          { name: "episode", w: 448, h: 252, render: (b, f) => <LandscapeTile x={b.x} y={b.y} focused={f} src={art.stills[1]} title="The Long Night" sub="S1 · E3" badge="Next" /> },
+          { name: "watched", w: 448, h: 252, render: (b, f) => <LandscapeTile x={b.x} y={b.y} focused={f} src={art.stills[2]} title="Arrival" sub="S1 · E1" watched /> },
+        ],
+      },
     ],
   ];
   const rows = groups[group] ?? groups[0];
@@ -196,6 +286,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
     if (key === "Enter") {
       if (scroller) setInside(0);
       else if (current.name.startsWith("VoiceWave")) setWave((wave + 1) % WAVES.length);
+      else if (current.name.startsWith("Header")) setHeadOpen(!headOpen);
       return true;
     }
     const dir = ({ Left: "left", Right: "right", Up: "up", Down: "down" } as Record<string, Dir>)[key];
@@ -206,8 +297,22 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
   });
 
   // Rows top to bottom: a kicker, then the specimens, each with its caption under it.
-  let y = 70;
+  const underHeader = UNDER_HEADER.includes(group);
+  let y = underHeader ? 160 : 70;
   const placed: VNode[] = [];
+  if (underHeader) {
+    const onHeader = group === 3 && at.row === 0;
+    placed.push(
+      <Header
+        key="head"
+        time="20:41"
+        expanded={group === 4 ? false : headOpen}
+        person={{ name: "Robin", sub: "Profile", color: "#5b52e6" }}
+        buttons={HEAD_BUTTONS}
+        focus={focusAll || onHeader ? 1 : null}
+      />,
+    );
+  }
   rows.forEach((row, r) => {
     placed.push(<div key={`k${r}`} class="dz-kicker" style={{ left: `${PAD}px`, top: `${y}px` }}>{row.title}</div>);
     y += 48;
