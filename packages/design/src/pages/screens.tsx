@@ -13,16 +13,17 @@ import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@s
 import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-order.ts";
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { Home as NestHome } from "@secretary/launcher/src/home.tsx";
+import { LightsPanel } from "@secretary/launcher/src/lights.tsx";
 import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
 import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
-export const SCREENS = ["Home", "Home · assistant", "Home · chat", "Cinema", "Shows", "Anime", "Film page", "Show page", "Film page · slim", "Film page · offline"] as const;
+export const SCREENS = ["Home", "Home · assistant", "Home · chat", "Lights", "Cinema", "Shows", "Anime", "Film page", "Show page", "Film page · slim", "Film page · offline"] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
@@ -30,6 +31,7 @@ const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series",
 export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
+  if (name === "Lights") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
@@ -141,6 +143,17 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
 }
 
 const noop = () => {};
+
+/** The lights panel over home's wallpaper, as Secretary opens it from the header's lights button. */
+function Lights({ mode, theme, backdrop }: PageProps & { art: Art }) {
+  // The panel re-mounts on every visit (fresh routine states), and Back reopens it here rather than leaving.
+  const [visit, setVisit] = useState(0);
+  return (
+    <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
+      <LightsPanel key={visit} devices={LIGHT_DEVICES} scenes={LIGHT_SCENES} api={LIGHTS_API} onChange={noop} onClose={() => setVisit((v) => v + 1)} />
+    </GlassRoot>
+  );
+}
 
 function Catalog({ type, art }: { type: CatalogType; art: Art }) {
   const rows = useMemo(() => catalogRows(art), [art]);

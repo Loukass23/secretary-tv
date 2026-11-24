@@ -1,4 +1,5 @@
-// The SmartThings REST API, as much as Secretary TV uses: devices with their status in one call, commands, scenes.
+// The SmartThings REST API, as much as Secretary TV uses: devices with their status in one call, commands, scenes
+// (the app calls them routines), locations and their rooms. Lists come in pages; every page is read.
 // The TV calls it directly (packaged apps apply no CORS). The device list allows 10 calls per ~15 s per token, so
 // pollers stay at one call per 15 s.
 import { ST_API, type TokenSource } from "./oauth.ts";
@@ -45,7 +46,25 @@ export interface StScene {
   id: string;
   name: string;
   locationId?: string;
+  /** Epoch ms of its last run, when SmartThings reports one. */
+  lastRun?: number;
 }
+
+/** A room in a SmartThings location. */
+export interface StRoom {
+  id: string;
+  name: string;
+  locationId: string;
+}
+
+/** A list endpoint's answer: its items and, when there are more, the link to the next page. */
+interface Page<T> {
+  items?: T[];
+  _links?: { next?: { href?: string } | null };
+}
+
+/** Pages read at most per list, so a link that loops cannot keep the TV asking. */
+const MAX_PAGES = 20;
 
 /** A SmartThings location (a home); the coordinates are what the owner set in the app, when they did. */
 export interface StLocation {
@@ -170,11 +189,29 @@ export function smartThings({ token, fetch: f = fetch, base = ST_API }: SmartThi
     return (text ? JSON.parse(text) : {}) as T;
   }
 
+  /** Every item of a list, following `_links.next` (an absolute link, on the same API) page by page. */
+  async function list<T>(path: string): Promise<T[]> {
+    const out: T[] = [];
+    let next: string | undefined = path;
+    for (let n = 0; next && n < MAX_PAGES; n++) {
+      const body: Page<T> = await call<Page<T>>(next);
+      out.push(...(body.items ?? []));
+      const href = body._links?.next?.href;
+      next = href ? (href.startsWith(base) ? href.slice(base.length) : href.startsWith("/") ? href : undefined) : undefined;
+    }
+    return out;
+  }
+
+  async function roomsOf(locationId: string): Promise<StRoom[]> {
+    const items = await list<{ roomId?: string; name?: string; locationId?: string }>(`/locations/${encodeURIComponent(locationId)}/rooms`);
+    return items.filter((r) => r.roomId).map((r) => ({ id: r.roomId!, name: (r.name ?? "").trim(), locationId: r.locationId ?? locationId }));
+  }
+
   return {
-    /** Every device with its current status, one call. */
+    /** Every device with its current status, one call (more only for a home of over a page of devices). */
     async devices(): Promise<StDevice[]> {
-      const body = await call<{ items?: RawDevice[] }>("/devices?includeStatus=true");
-      return (body.items ?? []).map(toDevice).filter((d): d is StDevice => d !== null);
+      const items = await list<RawDevice>("/devices?includeStatus=true");
+      return items.map(toDevice).filter((d): d is StDevice => d !== null);
     },
     command(deviceId: string, commands: readonly StCommand[]): Promise<unknown> {
       return call(`/devices/${encodeURIComponent(deviceId)}/commands`, {
@@ -182,19 +219,28 @@ export function smartThings({ token, fetch: f = fetch, base = ST_API }: SmartThi
         body: JSON.stringify({ commands: commands.map((c) => ({ component: "main", arguments: [], ...c })) }),
       });
     },
+    /** The scenes, which the SmartThings app shows as manual routines: the ones OK can run. */
     async scenes(): Promise<StScene[]> {
-      const body = await call<{ items?: { sceneId?: string; sceneName?: string; locationId?: string }[] }>("/scenes");
-      return (body.items ?? [])
+      const items = await list<{ sceneId?: string; sceneName?: string; locationId?: string; lastExecutedDate?: number | string }>("/scenes");
+      return items
         .filter((s) => s.sceneId)
-        .map((s) => ({ id: s.sceneId!, name: (s.sceneName ?? "").trim(), ...(s.locationId ? { locationId: s.locationId } : {}) }));
+        .map((s) => {
+          const last = typeof s.lastExecutedDate === "number" ? s.lastExecutedDate : s.lastExecutedDate ? Date.parse(s.lastExecutedDate) : Number.NaN;
+          return {
+            id: s.sceneId!,
+            name: (s.sceneName ?? "").trim(),
+            ...(s.locationId ? { locationId: s.locationId } : {}),
+            ...(Number.isFinite(last) && last > 0 ? { lastRun: last } : {}),
+          };
+        });
     },
     runScene(sceneId: string): Promise<unknown> {
       return call(`/scenes/${encodeURIComponent(sceneId)}/execute`, { method: "POST" });
     },
     /** The account's locations with their coordinates (the list has none, so each is read once more). */
     async locations(): Promise<StLocation[]> {
-      const body = await call<{ items?: { locationId?: string; name?: string }[] }>("/locations");
-      const ids = (body.items ?? []).filter((l) => l.locationId).map((l) => l.locationId!);
+      const items = await list<{ locationId?: string; name?: string }>("/locations");
+      const ids = items.filter((l) => l.locationId).map((l) => l.locationId!);
       const out = await Promise.all(
         ids.map((id) => call<{ locationId?: string; name?: string; latitude?: number; longitude?: number }>(`/locations/${encodeURIComponent(id)}`)),
       );
@@ -206,8 +252,12 @@ export function smartThings({ token, fetch: f = fetch, base = ST_API }: SmartThi
     },
     /** Room names by id for a location. */
     async rooms(locationId: string): Promise<Record<string, string>> {
-      const body = await call<{ items?: { roomId?: string; name?: string }[] }>(`/locations/${encodeURIComponent(locationId)}/rooms`);
-      return Object.fromEntries((body.items ?? []).filter((r) => r.roomId).map((r) => [r.roomId!, r.name ?? ""]));
+      return Object.fromEntries((await roomsOf(locationId)).map((r) => [r.id, r.name]));
+    },
+    /** The rooms of every location given (a device's `locationId`s, say), one call per location. */
+    async roomsIn(locationIds: Iterable<string>): Promise<StRoom[]> {
+      const ids = [...new Set(locationIds)].filter(Boolean);
+      return (await Promise.all(ids.map(roomsOf))).flat();
     },
   };
 }

@@ -282,6 +282,18 @@ html, body {
 .sg-glass > .nest-lights-head,
 .sg-glass > .nest-lights-status { position: absolute; }
 .sg-glass > .nest-lights-body { position: absolute; inset: 0; }
+/* Room names sit in a 250px column beside their lights. */
+.nest-lights-body > .sg-row-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; }
+.nest-light-card,
+.nest-routine { padding: 18px 24px; }
+.nest-light-card .sg-card-row,
+.nest-routine .sg-card-row { font-size: 27px; line-height: 34px; }
+.nest-light-card small,
+.nest-routine small { font-size: 21px; line-height: 28px; margin-top: 6px; }
+/* More routines past an end of the line. */
+.nest-lights-more { position: absolute; margin-top: -24px; font-size: 40px; line-height: 48px; color: var(--sg-ink-dim); }
+.nest-lights-more.is-left { left: 22px; }
+.nest-lights-more.is-right { right: 22px; }
 
 /* --- card focus (cards.tsx): the whole card picked, then the Launch button inside an app card --- */
 .nest-col-ring {
