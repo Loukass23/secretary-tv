@@ -7,8 +7,8 @@ import { renderManifest, readApplicationId } from "../../tv-kit/scripts/manifest
 const tpl = readFileSync(new URL("../tizen/config.xml.tpl", import.meta.url), "utf8");
 
 test("fills package id and version", () => {
-  const xml = renderManifest(tpl, { packageId: "ScrtMovies", version: "0.0.1" });
-  assert.equal(readApplicationId(xml), "ScrtMovies.Movies");
+  const xml = renderManifest(tpl, { packageId: "ScrtLaunch", version: "0.0.1" });
+  assert.equal(readApplicationId(xml), "ScrtLaunch.Launcher");
   assert.match(xml, /version="0\.0\.1"/);
 });
 
@@ -17,5 +17,5 @@ test("rejects a package id that is not 10 alphanumerics", () => {
 });
 
 test("rejects an out-of-range version", () => {
-  assert.throws(() => renderManifest(tpl, { packageId: "ScrtMovies", version: "300.0.0" }), /not a Tizen version/);
+  assert.throws(() => renderManifest(tpl, { packageId: "ScrtLaunch", version: "300.0.0" }), /not a Tizen version/);
 });

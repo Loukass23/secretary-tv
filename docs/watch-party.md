@@ -281,7 +281,7 @@ These come from `docs/lessons.md` and shape the client, not the server:
 
 ## The TV client
 
-The catalog apps join rooms; Nest only looks a code up and opens the right app.
+Secretary looks a code up on its home screen, and its catalog joins the room.
 
 | File | Role |
 |---|---|
@@ -299,7 +299,7 @@ The catalog apps join rooms; Nest only looks a code up and opens the right app.
   among torrent sources, since only those have a fingerprint. The room is created paused at the resume point, as the
   signed-in profile, with host control; the host's TV opens the player on that source, prepared and paused, with the
   code on screen. OK starts it for everyone.
-- **Join**: Nest › 👥 › type the code; Nest shows the room's title and member count, then launches the catalog app with
+- **Join**: Home › 👥 › type the code; Secretary shows the room's title and member count, then opens the catalog with
   `open: { type, title, room }` in the launch payload (`nuvio/src/handoff.ts`). The app asks for a ticket, connects,
   and opens the room's content from `welcome`: the title's meta, the episode by its id, and the release through **this
   TV's first debrid service** (`debrid:<service>:<hash>[/<fileIdx>]` with the episode hint). The detail page's
@@ -360,12 +360,12 @@ Nothing here has been run against the maintainer's Cloudflare account; the maint
    `curl -i https://<origin>/rooms/ABC234 -H "Authorization: Bearer <token>"` answers 404 `no such room`; without the
    header it answers 401.
 6. Build the TV apps with the origin: add `PARTY_URL=https://<origin>` to the repo's `.env` (gitignored; `tizen.mjs`
-   reads it), then `node ../tv-kit/scripts/tizen.mjs deploy` from `packages/launcher` and each catalog app.
+   reads it), then `node ../tv-kit/scripts/tizen.mjs deploy` from `packages/launcher`.
 7. Two-device check: start a party from a detail page on one TV, join it by code from Nest on the other, then OK,
    pause, seek, a stall (unplug the network briefly), reactions, a host handover, Back on the host, and End for
    everyone. The two sides must be **two profiles** (Frenchie, profile 3, on one side and another profile on the
    other): a member is account + profile, so the same profile joining again replaces the first connection (`4009`).
-   With one TV, two catalog apps cannot both hold the decoder, so the second side has to be another TV.
+   With one TV there is one decoder, so the second side has to be another TV.
 
 ## Running it
 

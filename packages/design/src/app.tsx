@@ -183,8 +183,8 @@ export function App() {
             </div>
           </div>
         </div>
-        {s.page === "screens" && SCREENS[s.screen] && !SCREENS[s.screen].startsWith("Nest") && (
-          <p class="dz-note">The catalog home draws its own glass (fake, its app's tint); the theme and mode switches apply to Nest and the other pages.</p>
+        {s.page === "screens" && SCREENS[s.screen] && !SCREENS[s.screen].startsWith("Home") && (
+          <p class="dz-note">Secretary's catalog pages draw their own glass (fake, in the section's tint); the theme and mode switches apply to the home screen and the other pages.</p>
         )}
       </main>
 

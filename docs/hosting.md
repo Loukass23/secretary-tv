@@ -46,7 +46,7 @@ The host terminates HTTPS. Request bodies over 2 MB are refused (a voice clip is
 
 ## Point the TV and phone at it
 
-In `.env.tizen`, set the server URL with the key on the end, then redeploy Nest and the catalog apps:
+In `.env.tizen`, set the server URL with the key on the end, then redeploy Secretary (`packages/launcher`):
 
 ```bash
 SECRETARY_TV_SERVER_URL=https://tv.example.com/<SERVER_KEY>

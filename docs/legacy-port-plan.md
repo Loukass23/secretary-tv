@@ -1,5 +1,8 @@
 # Porting Nuvio Legacy 2.x ideas into the catalog apps
 
+> **History.** This page was written when Cinema, Shows and Anime were separate apps. They are now screens inside
+> Secretary (`docs/embedding-catalog.md`); read "the catalog apps" below as "the catalog inside Secretary".
+
 ## Context
 
 The maintainer wants the catalog apps (Cinema, Shows, Anime) to feel like Nuvio Legacy 2.x: they should start playing sooner,

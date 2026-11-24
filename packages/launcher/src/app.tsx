@@ -13,12 +13,8 @@ import {
   launchApp,
   listApps,
   onBeforeLaunch,
-  onBeforePlay,
   openApp,
-  openFolderInApp,
-  openTitleInApp,
   openYoutube,
-  playInApp,
   orderReminders,
   ownId,
   posterUrl,
@@ -53,7 +49,7 @@ import {
 } from "./assistant.ts";
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
-import { APP_IDS, EMBED_CATALOG, EMBED_PLAYER, GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY } from "./config.ts";
+import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY } from "./config.ts";
 import { applyOrder, keepOrder, loadOrder, moveKey, saveOrder } from "./card-order.ts";
 import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
 import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
@@ -93,7 +89,6 @@ import {
   independentLights,
   lastPictureMode,
   noteStatus,
-  dimForMedia,
   mediaReleased,
   playFarewell,
   playOpenRipple,
@@ -159,8 +154,8 @@ function loadSpeakReplies(): boolean {
   }
 }
 
-/** The catalog apps and the TV's settings have their own places (cards, the profile menu), not the Apps card. */
-const OWN_PLACES: readonly string[] = [APP_IDS.movie, APP_IDS.series, APP_IDS.anime, PINS[PINS.length - 1]];
+/** The TV's settings have their own place (the profile menu), not the Apps card. */
+const OWN_PLACES: readonly string[] = [PINS[PINS.length - 1]];
 const SETTINGS_ID = PINS[PINS.length - 1];
 /** Trending titles for the empty Cinema, Shows and Anime cards, fetched from the TV once a day. */
 // .2: picks now carry their description (the caption under an opened card).
@@ -192,9 +187,9 @@ function loadablePosters(items: SearchResult[]): Promise<SearchResult[]> {
 
 /** The media cards, in row order: what fills each and how it is named (cards.tsx, card-style.ts). */
 const MEDIA = [
-  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", app: APP_IDS.movie, going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film" },
-  { key: "shows", kind: "series", name: "Shows", unit: "shows", app: APP_IDS.series, going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series" },
-  { key: "anime", kind: "anime", name: "Anime", unit: "titles", app: APP_IDS.anime, going: "Anime", picks: "Anime", pickBadge: undefined },
+  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film" },
+  { key: "shows", kind: "series", name: "Shows", unit: "shows", going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series" },
+  { key: "anime", kind: "anime", name: "Anime", unit: "titles", going: "Anime", picks: "Anime", pickBadge: undefined },
 ] as const;
 /** Titles an opened media card holds at most. */
 const MEDIA_MAX = 8;
@@ -311,7 +306,7 @@ export function App() {
   const [view, setView] = useState<"home" | "search" | "signin" | "profiles" | "party" | "lights" | "catalog">(() =>
     cloudEnabled && !cloud.session.signedIn() && !signInSkipped() ? "signin" : "home",
   );
-  // The catalog browsed inside Nest (catalog-host.tsx) when built with NEST_EMBED_CATALOG=1: what it opened on.
+  // The catalog browsed inside Secretary (catalog-host.tsx): what it opened on.
   const [catalog, setCatalog] = useState<CatalogEntry | null>(null);
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
   const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
@@ -970,7 +965,6 @@ export function App() {
   // back to the screen after a while away (the first one, at start, is in pollHome).
   useEffect(() => {
     onBeforeLaunch(rippleBeforeLaunch);
-    onBeforePlay(dimForMedia);
     let hiddenAt = 0;
     const onVisible = () => {
       if (document.visibilityState === "hidden") return void (hiddenAt = Date.now());
@@ -981,7 +975,6 @@ export function App() {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       onBeforeLaunch(null);
-      onBeforePlay(null);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
@@ -1037,25 +1030,19 @@ export function App() {
 
   // The row: one card per app, each laid out for what it holds (docs/launcher.md, "Home screen").
   const failed = (name: string) => () => flash(`Couldn't open ${name}`);
-  const launch = (id: string, name: string) => void openApp(id).catch(failed(name));
-  const playTitle = (type: CatalogKind, title: SlimTitle, autoPlay = true) =>
-    // With the player inside Nest, resuming opens the title's page and plays it here; else the catalog app does.
-    EMBED_PLAYER
-      ? browse({ type, open: { type, title, autoPlay } }, () => {})
-      : void openTitleInApp(SERVER_URL, type, title, autoPlay).catch(failed(title.name));
+  // Resuming opens the title's page inside Secretary and plays it there.
+  const playTitle = (type: CatalogKind, title: SlimTitle, autoPlay = true) => browse({ type, open: { type, title, autoPlay } });
   // Settings › Playback › Resume from Continue watching: play at once, or open the title's page first.
   const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title, loadSettings().playback.resumeAtOnce);
-  const openHit = (r: SearchResult) =>
-    browse({ type: r.type, open: { type: r.type, title: r.title } }, () => void openTitleInApp(SERVER_URL, r.type, r.title).catch(failed(r.title.name)));
-  /** Browses the catalog inside Nest when it is built in, else opens the catalog app (the old way). */
-  const browse = (entry: CatalogEntry, fallback: () => void) => {
-    if (!EMBED_CATALOG) return fallback();
+  const openHit = (r: SearchResult) => browse({ type: r.type, open: { type: r.type, title: r.title } });
+  /** Shows the catalog inside Secretary, on its home or on what `entry` names. */
+  const browse = (entry: CatalogEntry) => {
     setCatalog(entry);
     setView("catalog");
   };
-  // The catalog runs the cinema scenes from the grant it finds in `sectv.home` (catalog-kit lib/home.ts). In the apps Nest
-  // put it in the launch payload; embedded there is none, so Nest writes it as the catalog opens and keeps it fresh while
-  // it is open (a personal token lasts an hour, and the restore scene runs when the film ends).
+  // The catalog runs the cinema scenes from the grant it finds in `sectv.home` (catalog-kit lib/home.ts): Secretary writes
+  // it as the catalog opens and keeps it fresh while it is open (a personal token lasts an hour, and the restore scene
+  // runs when the film ends).
   useEffect(() => {
     if (view !== "catalog") return;
     const put = () => void homeGrant().then((g) => g && saveHomeGrant(g), () => {});
@@ -1064,7 +1051,6 @@ export function App() {
     return () => clearInterval(t);
   }, [view]);
   const embeddedHost = {
-    ownPlayer: EMBED_PLAYER,
     // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
     cloud,
     onExit: () => {
@@ -1073,18 +1059,6 @@ export function App() {
       // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
       void refreshCloud();
     },
-    // Nest cannot hold AVPlay's page: the catalog app plays it.
-    onPlay: (o: {
-      type: CatalogKind;
-      title: { id: string; name: string; year?: string; rating?: string; poster?: string; background?: string; description?: string };
-      autoPlay: boolean;
-      play?: { episode?: { id: string }; streams: { url: string }[]; start: number; manual?: boolean };
-    }) =>
-      // The embedded page already found the sources: the app opens its player on them at once, else it searches itself.
-      void (o.play?.streams.length
-        ? playInApp({ type: o.type, title: o.title, episode: o.play.episode as never, streams: o.play.streams, start: o.play.start, manual: o.play.manual })
-        : openTitleInApp(SERVER_URL, o.type, { ...o.title, year: o.title.year ?? "", rating: o.title.rating ?? "" }, o.autoPlay)
-      ).catch(failed(o.title.name)),
   };
   const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
   const byKind = (k: CatalogKind) => continueItems.filter((e) => e.type === k);
@@ -1192,7 +1166,7 @@ export function App() {
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
-        browseAll: () => browse({ type: m.kind }, () => launch(m.app, m.name)),
+        browseAll: () => browse({ type: m.kind }),
         target: (i) =>
           i < going.length
             ? { type: going[i].type, title: going[i].title, resume: true, row: `${m.key}/picks` }
@@ -1232,10 +1206,7 @@ export function App() {
         key: c.key,
         label: c.title,
         folders: shown.map((f) => ({ title: f.title, cover: f.cover })),
-        run: (i) =>
-          browse({ type: shown[i].kind, folder: { collectionId: c.id, folderId: shown[i].id } }, () =>
-            void openFolderInApp(shown[i].kind, c.id, shown[i].id).catch(failed(shown[i].title)),
-          ),
+        run: (i) => browse({ type: shown[i].kind, folder: { collectionId: c.id, folderId: shown[i].id } }),
       },
       shown.map((f) => (f.cover ? { src: f.cover, type: f.kind } : undefined)),
     );
@@ -1566,7 +1537,7 @@ export function App() {
       if (i === HEADER_PICTURE) return togglePicture();
       if (i === HEADER_SOUND) return toggleSoundButton();
       // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
-      if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } }, () => flash("Settings open in the Cinema app"));
+      if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
       if (i === HEADER_BELL) {
         const due = reminders.findIndex((r) => !r.completed);
         if (due < 0) return flash("No open reminders");
@@ -1812,10 +1783,8 @@ export function App() {
       const hit = results[col];
       if (hit) {
         if (query.trim().length >= 2) setRecentSearches(saveRecent(query));
-        // With the catalog inside Nest the page opens here (leaving the search for the catalog view); else in the app.
-        browse({ type: hit.type, open: { type: hit.type, title: hit.title } }, () =>
-          void openTitleInApp(SERVER_URL, hit.type, hit.title).catch(() => flash(`Couldn't open ${hit.title.name}`)),
-        );
+        // The page opens inside Secretary, leaving the search for the catalog view.
+        browse({ type: hit.type, open: { type: hit.type, title: hit.title } });
       }
       return;
     }
@@ -1854,7 +1823,7 @@ export function App() {
     SERVER_URL ? (serverOnline ? "Server online · CH- to search" : "Server offline · apps still work") : "No server configured",
   ];
   const searchStatus = !query.trim()
-    ? "Hunt across Secretary Cinema, Shows and Anime"
+    ? "Hunt across films, shows and anime"
     : searching
       ? "Scouring the tall grass…"
       : `${results.length} result${results.length === 1 ? "" : "s"}`;
@@ -1911,11 +1880,7 @@ export function App() {
       ) : view === "party" ? (
         <WatchTogether
           onClose={() => setView("home")}
-          onJoinHere={
-            EMBED_PLAYER
-              ? (o) => browse({ type: o.type, open: { type: o.type, title: { ...o.title, year: "", rating: "" }, autoPlay: false, room: o.room } }, () => {})
-              : undefined
-          }
+          onJoinHere={(o) => browse({ type: o.type, open: { type: o.type, title: { ...o.title, year: "", rating: "" }, autoPlay: false, room: o.room } })}
         />
       ) : view === "lights" ? (
         <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />

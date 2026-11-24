@@ -1,8 +1,11 @@
 # Secretary TV
 
-Small, fast apps for Samsung Tizen TVs: **Secretary Cinema** (films), **Secretary Shows** (series), **Secretary Anime**
-and **Secretary Nest**, a glass home screen with your apps, Continue Watching, reminders, an assistant and your
-lights. **Secretary Desk** is the phone companion, served by a small home server.
+**Secretary** is one small, fast app for Samsung Tizen TVs: a glass home screen with your films, shows and anime,
+Continue Watching, your TV apps, reminders, an assistant and your lights. Browsing, the title pages, search and the
+player all run inside it. **Secretary Desk** is the phone companion, served by a small home server.
+
+(Secretary Cinema, Shows and Anime used to be separate apps. They were folded into Secretary in November 2026 and
+are gone.)
 
 Named after the **Secretary Bird** (_Sagittarius serpentarius_), the tall African raptor crowned with black quill
 feathers that hunts snakes by stomping them in 15 milliseconds. Zero bloat, flat-fill Tizen rendering, and instant
@@ -25,7 +28,7 @@ stream sources.
 
 ## Debrid support
 
-| Service | TV apps | Home server | Notes |
+| Service | TV app | Home server | Notes |
 | --- | --- | --- | --- |
 | [TorBox](https://torbox.app) | ✅ | ✅ | Checking a source adds it to the account, so sources are checked ahead only when Settings › Sources › "Check TorBox sources ahead" is on. |
 | [Premiumize](https://www.premiumize.me) | ✅ | — | Cache checks add nothing to the account, so sources are checked in parallel. |
@@ -36,9 +39,20 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
 
 ## Features
 
-### TV apps (Cinema, Shows, Anime)
+### Secretary on the TV
 
-- Glass "top shelf" home with windowed rows, detail pages, saga and collection timelines.
+The home screen (`packages/launcher`):
+
+- Cards for Continue watching, tonight's picks, films, shows and anime, opening into rows of titles; your TV apps,
+  the weather, reminders and Home.
+- **Ask Secretary**: an assistant panel ("play dune", "something for tonight"), reminders and the Daylight theme
+  (`docs/launcher.md`).
+- **SmartThings from the TV, no server**: real scenes and lights, movie lights while a film plays, home status toasts,
+  and "turn off the couch light" by name (`docs/smartthings.md`).
+
+Films, shows and anime (the screens of `packages/catalog-kit`, inside Secretary):
+
+- Glass "top shelf" catalog with windowed rows, title pages, saga and collection timelines.
 - **Raptor Hunt**: one search across films, shows and anime.
 - Streams from Nuvio plugin repositories run on the TV, one Worker per provider (`docs/plugins.md`), and from
   Stremio-protocol addons (streams, meta, catalogs as home rows; `docs/addons.md`).
@@ -50,14 +64,6 @@ shared code is `packages/core` (`debrid.ts`, one file per service).
   (`docs/nuvio-cloud.md`).
 - Watch party client: watch together across TVs (`docs/watch-party.md`; needs the Worker deployed).
 
-### Secretary Nest (launcher)
-
-- Clock, weather, installed TV apps, cross-app Continue Watching, Raptor Hunt.
-- **Ask Nest**: an assistant panel ("play dune", "something for tonight"), reminders and the Daylight theme
-  (`docs/launcher.md`).
-- **SmartThings from the TV, no server**: real scenes and lights, movie lights in the catalog apps, home status toasts,
-  and "turn off the couch light" by name (`docs/smartthings.md`).
-
 ### Home server (`packages/server`)
 
 Implemented:
@@ -67,7 +73,7 @@ Implemented:
 - `/resolve/<hash>`: picks the right file (episode matching, absolute anime numbers) and redirects to the debrid link.
 - `/cloud`: the files already in your debrid cloud.
 - `/search`: one search across films, shows and anime.
-- `/resume` and `/handoff`: progress across apps, and "open this on the TV" from the phone.
+- `/resume` and `/handoff`: watch progress, and "open this on the TV" from the phone.
 - **Secretary Desk** (`/companion`, `/remote`): the phone web app with reminders and the assistant.
 - `/reminders`, `/ai/ask`, `/ai/state`, `/ai/transcribe`: reminders sync and the Secretary Bird assistant (Google
   Gemini, optional), with voice from a room microphone and spoken replies.
@@ -98,13 +104,13 @@ Upcoming:
 | --- | --- | --- |
 | `packages/core` (`@secretary/core`) | **Secretary Core** | Debrid cache checks and links, file choice, release ranking. Plain TypeScript. |
 | `packages/plugins` (`@secretary/plugins`) | **Secretary Plugins** | Runs Nuvio plugin repositories on the TV: manifests, one Worker per provider, id mapping, debrid for hashes. |
-| `packages/catalog-kit` (`@secretary/catalog-kit`) | **Secretary Catalog Kit** | The shared catalog engine: home, detail pages, search, sources, and the AVPlay player. |
-| `packages/app-movies`, `app-series`, `app-anime` | **Secretary Cinema**, **Secretary Shows**, **Secretary Anime** | Thin Tizen app shells over the catalog kit. |
-| `packages/launcher` (`@secretary/launcher`) | **Secretary Nest** | The home screen. |
+| `packages/launcher` (`@secretary/launcher`) | **Secretary** | The app: the home screen, with the catalog and the player inside. The only thing deployed to the TV. |
+| `packages/catalog-kit` (`@secretary/catalog-kit`) | **Secretary Catalog Kit** | The catalog screens Secretary embeds: rows, title pages, search, sources, settings, and the AVPlay player. Not an app of its own. |
 | `packages/server` (`@secretary/server`) | **Secretary Desk & Server** | The home server and the phone companion. |
 | `packages/nuvio` (`@secretary/nuvio`) | **Secretary Nuvio** | Nuvio Cloud client: auth, profiles, library, progress, collections. |
 | `packages/party` (`@secretary/party`) | **Secretary Party** | Watch-party rooms: a Cloudflare Worker and Durable Object, signed in with Nuvio Cloud. |
-| `packages/tv-kit` (`@secretary/tv-kit`) | **Secretary TV Kit** | Focus grid, remote keys, glass components, perf marks, the Tizen build plugin, deploy and inspector scripts. |
+| `packages/tv-kit` (`@secretary/tv-kit`) | **Secretary TV Kit** | Focus grid, remote keys, glass components, row looks, perf marks, the Tizen build plugin, deploy and inspector scripts. |
+| `packages/design` (`@secretary/design`) | **Secretary Design** | The desktop workbench (`pnpm design`): Secretary's screens and components at 1920x1080 with the TV rules linter. |
 
 ## Run it
 
@@ -116,8 +122,8 @@ pnpm install
 cp .env.example .env              # debrid keys, BASE_URL (this computer's LAN address), optional extras
 pnpm --filter @secretary/server start
 
-cp .env.tizen.example .env.tizen  # signing profile, TV address, package ids, SECRETARY_TV_SERVER_URL, metadata keys
-cd packages/app-movies && node ../tv-kit/scripts/tizen.mjs deploy
+cp .env.tizen.example .env.tizen  # signing profile, TV address, Secretary's package id, SECRETARY_TV_SERVER_URL, metadata keys
+cd packages/launcher && node ../tv-kit/scripts/tizen.mjs deploy
 ```
 
 `deploy` builds, signs, installs and launches. `node ../tv-kit/scripts/tizen.mjs debug` prints the inspector port for
@@ -138,7 +144,8 @@ pnpm typecheck
 - `docs/addons.md`: Stremio-protocol addons.
 - `docs/nuvio-cloud.md`: accounts, profiles and sync.
 - `docs/watch-party.md`: watching together, and deploying the Worker.
-- `docs/launcher.md`: Secretary Nest, and why the Home button is not rebound.
+- `docs/launcher.md`: Secretary's home screen, and why the Home button is not rebound.
+- `docs/embedding-catalog.md`: how the catalog and the player live inside Secretary.
 - `docs/performance.md`: measured numbers and the reasoning behind them.
 - `docs/design.md`: the design workbench (`pnpm design`), tokens and the TV rules linter.
 - `docs/lessons.md`: what the TV does and does not allow.

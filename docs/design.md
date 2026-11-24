@@ -20,14 +20,15 @@ same screen.
   goes inside the Scroller (Back leaves) and cycles the wave's state. "Focus all" shows every focused state at once.
   A third group shows the line icon set (`glass/icons.ts`, drawn by `Icon`): every action and weather icon, and
   the icon buttons as the apps use them.
-- **Screens**: Nest's home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), Nest showing an answer,
-  and the catalog home (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime. The data is fixtures
+- **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
+  home showing an answer and the full chat; then the catalog pages Secretary opens inside itself: the catalog home
+  (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page and a show page (`ui/Detail.tsx`). The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.
 
 The toolbar switches the theme (Night, Daylight), the tint (orange, blue, rose), the glass mode (fake, flat, live), the
-safe-area and grid overlays, and fit or 1:1 scale. The catalog home draws its own glass (fake, in its app's tint), so
-the theme and mode switches apply to Nest and the other pages only.
+safe-area and grid overlays, and fit or 1:1 scale. The catalog pages draw their own glass (fake, in the section's
+tint), so the theme and mode switches apply to the home screen and the other pages only.
 
 ## Desktop remote
 

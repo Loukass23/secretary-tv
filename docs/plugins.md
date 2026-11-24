@@ -1,6 +1,6 @@
 # Streams from Nuvio plugins
 
-The catalog apps find streams on the TV with [Nuvio](https://github.com/NuvioMedia) plugin repositories, the same
+Secretary finds streams on the TV with [Nuvio](https://github.com/NuvioMedia) plugin repositories, the same
 repositories the official Nuvio apps install. This project ships none: you add a repository's manifest URL in
 **Settings › Sources** (or put it in your gitignored `.env.tizen`), and you are responsible for what it finds.
 

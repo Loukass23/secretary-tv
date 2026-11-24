@@ -1,14 +1,13 @@
-# Secretary Nest & the In-App Hub
+# Secretary's home screen and the Hub
 
-`packages/launcher` (**Secretary Nest**) is a small home-screen app in the glass style (below): a clock, a strip of installed
-apps that it opens through `tizen.application`, reminders and a briefing from `@secretary/server`, cross-app Continue
-Watching, a lights scene button, and **Raptor Hunt** unified search. It is a normal app on the TV. It does not
-replace Smart Hub and does not change any TV setting.
+`packages/launcher` is **Secretary**, the one TV app. Its home screen is in the glass style (below): a clock, cards for
+Continue watching, films, shows and anime, the installed TV apps it opens through `tizen.application`, reminders, the
+weather, the lights, the assistant and **Raptor Hunt** unified search. It is a normal app on the TV. It does not replace
+Smart Hub and does not change any TV setting. ("Nest" is the home screen's name in the code: `nest-nav.ts`, `NEST_*`.)
 
-Nest is the one dashboard. Every catalog app (`app-movies`, `app-series`, `app-anime`) has the same glass top bar
-(`Nest | Cinema | Shows | Anime`, Search, Settings): **Nest** and CH+ open Secretary Nest (the catalog app stays alive
-behind it, so coming back is instant), and the in-app Hub (`HubOverlay.tsx`) keeps only Search and Settings. Opening
-Nest needs the launcher's id at build time (`SECRETARY_TV_LAUNCHER_ID`); without it the catalog app says so.
+Films, shows and anime open inside Secretary (`docs/embedding-catalog.md`). The catalog's top bar
+(`Home | Cinema | Shows | Anime`, Search, Settings) follows the home screen's header. **Home** and CH+ go back to the
+home screen, and the catalog's Hub (`HubOverlay.tsx`) keeps only Search and Settings.
 
 ## Why not Samsung Smart Hub Preview or Samsung Universal Search?
 
@@ -30,18 +29,15 @@ bar) and Universal/Bixby Search—that were evaluated and rejected in favor of o
      any standard web browser with zero vendor-specific APIs.
 3. **Zero App-Switching Latency**:
    - Launching a separate Tizen widget via `tizen.application.launch()` takes 2–3 seconds of cold boot.
-   - By embedding the **Search & Hub Overlay** and in-place catalog switching directly inside `catalog-kit`, opening
-     Search, browsing cross-category Continue Playing, or playing a Series/Anime from inside the Movies app happens
-     instantaneously in the same webview without invoking Tizen's application manager.
+   - Search, Continue watching, browsing and playing all happen inside Secretary, in the same webview, without
+     invoking Tizen's application manager.
 
 ## What was verified on the reference TV (GU43DU7199UXZG, Tizen 9)
 
 - `tizen.application.getAppsInfo` returns 472 entries; most are internal services. The filter in `src/apps.ts`
   (store-style ids, no service/worker/agent/e-manual names, `show !== false`) leaves 9 real apps on this TV, with icons.
   Icon paths load straight into `<img>`.
-- `tizen.application.launch(id)` opens another app: pressing OK on the Movies tile sent the launcher to `hidden`.
-- Movies can launch the launcher again (`application.launch` privilege), so Back at Movies' root returns to the launcher
-  when the build knows the launcher's id (`SECRETARY_TV_LAUNCHER_ID`, which becomes `<id>.Launcher`).
+- `tizen.application.launch(id)` opens another app: pressing OK on an app's tile sent Secretary to `hidden`.
 - Netflix, Prime and Disney+ do not appear in `getAppsInfo` on this TV. Pin them by id in `src/config.ts` if you find
   theirs; a pin bypasses the filters. The TV's Settings (`com.samsung.tv.coba.setting.networksettings`) is pinned.
 - Size: 7.4 KB of JS gzipped, 21.5 KB `dist/`.
@@ -53,14 +49,15 @@ cd packages/launcher
 SECRETARY_TV_LAUNCHER_ID=ScrtLaunch node ../tv-kit/scripts/tizen.mjs deploy
 ```
 
-Put `SECRETARY_TV_LAUNCHER_ID=ScrtLaunch` in `.env.tizen` to make it permanent. Rebuild Movies afterwards so its Back
-returns here. Uninstalling the launcher removes it cleanly; nothing else on the TV was touched.
+Put `SECRETARY_TV_LAUNCHER_ID=ScrtLaunch` in `.env.tizen` to make it permanent. The app id on the TV stays
+`<id>.Launcher`, so a deploy updates the installed app in place and keeps its data. Uninstalling it removes it cleanly;
+nothing else on the TV was touched.
 
 ## Autorun (you do this in the TV's own settings)
 
 Samsung's menu names vary by firmware. Look for a start-up option along the lines of
 Settings > General (or Smart Features) > Start-up options, and choose "Autorun Last App". The TV then opens whichever app
-was running when it was switched off; leave the launcher (or any catalog app) running when you turn the TV off. Turn
+was running when it was switched off; leave Secretary running when you turn the TV off. Turn
 "Autorun Smart Hub" off if it is separate. To undo, set the option back. I did not change this on your TV.
 
 ## Home button redirect: not done
@@ -84,17 +81,16 @@ launcher, and have a way back that does not depend on the launcher (a second `sd
 
 ## Where this leaves the idea
 
-- **In-app Hub (Search and Settings)**: Always available inside Movies, Series, and Anime (CH- or the Search button)
-  with cross-category Continue Playing and Unified Search, zero Tizen lock-in, and no app switch. The dashboard
-  itself is Nest (CH+).
-- **Boot into the launcher or last catalog app**: Workable with Autorun Last App, no system changes.
+- **The Hub (Search and Settings)**: always available in the catalog (CH- or the Search button), with Continue
+  watching and unified search, zero Tizen lock-in, and no app switch. CH+ goes back to the home screen.
+- **Boot into Secretary**: Workable with Autorun Last App, no system changes.
 - **Home key to the launcher**: Unproven on this TV and risky; keep using CH+ and "Autorun Last App" instead.
 
 ## Glass components and the lab
 
 `packages/tv-kit/src/glass` holds the floating translucent ("glass") components for the home screen: `GlassRoot`,
 `Glass`, `Segmented`, `IconButton`, `DateChip`, `ListCard`, `MediaTile`, `Avatar`, `Fab` and `Scroller`. Import them by path
-(`@secretary/tv-kit/src/glass/index.ts`) so the catalog apps do not load their CSS. The blur is faked: `blurBackdrop()` blurs
+(`@secretary/tv-kit/src/glass/index.ts`), so a screen loads only the CSS it uses. The blur is faked: `blurBackdrop()` blurs
 the page backdrop once and each surface shows its own piece of it, because a live `backdrop-filter` runs at about 15 fps on
 the reference TV. Measurements are in `performance.md`.
 
@@ -124,9 +120,9 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Continue · Cinema | a tall poster (the card's style) | opens the card: every film; a film resumes or opens; with nothing in progress, tonight's picks |
 | Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
 | Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
-| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them. Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows (Cinemeta genres; Kitsu for anime), the stack sliding up by transform; OK on a title opens its page (inside Nest with `NEST_EMBED_CATALOG=1` or `NEST_EMBED_PLAYER=1`, else in the catalog app); Up from the picks folds the card |
+| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them. Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows , the stack sliding up by transform; OK on a title opens its page inside Secretary; Down from the last row reaches the end bar (Back to top, Browse all: the catalog home for that kind); Up from the picks folds the card |
 | YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
-| Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog app that fits it (the launch payload's `folder`; the app opens it once its collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
+| Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog inside Secretary (`folder`; it shows once the collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
 | Apps | the TV's other apps, two to a line | opens the app |
@@ -179,7 +175,7 @@ in the Nuvio profile (every episode's progress row) and on the home server (`for
 `removeResume` in catalog-kit).
 
 Each row has its own look, set from the title menu's last line ("Row look", Left and Right or OK change it at once,
-kept per row on the TV, `src/row-look.ts`): Poster, Landscape, Square, Highlight 4:3 (the catalog apps' card shapes,
+kept per row on the TV, `src/row-look.ts`): Poster, Landscape, Square, Highlight 4:3 (the catalog's row looks, `tv-kit/src/row-look.ts`,
 `collectionlayout.ts`) and Ranking (big numerals beside the posters, the idea of Nuvio Legacy's ranking view; ideas only,
 no code from it). Landscape and 4:3 tiles are as tall as the poster and as wide as their art (16:9, 4:3), so a still fits whole; they use
 the title's background art (the artwork service's when the catalog has none).

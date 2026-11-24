@@ -160,7 +160,7 @@ export function PartyOverlay({ session, view, open, onClose, onLeave }: Props) {
             <div class="pty-qr-box">{view.joinUrl && <QrCode text={view.joinUrl} size={260} />}</div>
             <span class="ply-state">Party code</span>
             <b class="pty-code">{view.code}</b>
-            <span class="ply-dim">Nest › 👥 Watch together on the other TV, then type this code.</span>
+            <span class="ply-dim">Home › 👥 Watch together on the other TV, then type this code.</span>
           </div>
           <div class="pty-main">
             <span class="ply-state">{partyLine(view)}</span>

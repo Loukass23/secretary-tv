@@ -59,10 +59,10 @@ type TopBarAction =
 const TOP_BAR_ITEMS: readonly TopBarAction[] = [
   { id: "search_bar", label: "Search movies, series, anime…", short: "Search", icon: "⌕" },
   { id: "voice_ime", label: "Voice / TV Keyboard", short: "Voice", icon: "🎤" },
-  { id: "nest", label: "Secretary Nest", short: "Nest", icon: "🪶" },
-  { id: "cat_movie", label: "Secretary Cinema", short: "Cinema", icon: "🎬", type: "movie" },
-  { id: "cat_series", label: "Secretary Shows", short: "Shows", icon: "📺", type: "series" },
-  { id: "cat_anime", label: "Secretary Anime", short: "Anime", icon: "⛩", type: "anime" },
+  { id: "nest", label: "Home", short: "Home", icon: "🪶" },
+  { id: "cat_movie", label: "Cinema", short: "Cinema", icon: "🎬", type: "movie" },
+  { id: "cat_series", label: "Shows", short: "Shows", icon: "📺", type: "series" },
+  { id: "cat_anime", label: "Anime", short: "Anime", icon: "⛩", type: "anime" },
   { id: "settings", label: "Perch Settings", short: "Settings", icon: "⚙" },
 ];
 
@@ -626,7 +626,7 @@ export function HubOverlay({
           y={TOP_Y}
           w={560}
           h={68}
-          items={["Nest", "Cinema", "Shows", "Anime"]}
+          items={["Home", "Cinema", "Shows", "Anime"]}
           picked={sectionIdx + 1}
           focusIndex={focus.row === 0 && focus.col >= 2 && focus.col <= 5 ? focus.col - 2 : -1}
         />
@@ -637,7 +637,7 @@ export function HubOverlay({
           <>
             <div class="hub-title" style={{ left: `${PAD}px`, top: "150px" }}>
               Settings
-              <small>Playback, appearance, collections, lights and the sources streams come from. The dashboard lives in Secretary Nest.</small>
+              <small>Playback, appearance, collections, lights and the sources streams come from.</small>
             </div>
             <div class="sg-clip" style={{ left: `${PAD - 20}px`, top: "250px", width: "1800px", height: "830px" }}>
               <div class="sg-scroll" style={{ transform: `translate3d(20px,${20 - settingsShift}px,0)` }}>

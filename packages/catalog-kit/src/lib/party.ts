@@ -53,7 +53,7 @@ export const LEAVE_TEXT: Record<LeaveReason, string> = {
   replaced: "This profile joined the party on another TV.",
   ticket: "Could not get into the party. Try joining again.",
   protocol: "The party connection broke. Try joining again.",
-  auth: "Sign in to Nuvio in Nest first.",
+  auth: "Sign in to Nuvio on Secretary's home first.",
 };
 
 export interface ShownReaction {

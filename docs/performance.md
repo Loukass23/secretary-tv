@@ -461,6 +461,9 @@ Heat showed its synopsis, runtime, genres and resume bar inside the Detail panel
 synopsis at two lines with an explicit `max-height`: the TV's engine draws a sliver of a third line when `-webkit-line-clamp`
 sits in a flex item that is taller than the clamp.
 
+> Sections before 2026-11-20 measured the separate Cinema, Shows and Anime apps, retired since. Their numbers stay as
+> history; compare new work inside Secretary, against `main` deployed the same way.
+
 ## Smooth rows, a single Detail reveal and fading art (Secretary, 2026-11-24)
 
 Measured in Secretary (`packages/launcher`, catalog embedded) on the Samsung TV, against `main` deployed the same way

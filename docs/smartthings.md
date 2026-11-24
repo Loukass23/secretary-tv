@@ -8,14 +8,14 @@ any of it. The server's `/domotics` stays as a fallback for builds without Smart
 | | Where | How |
 | --- | --- | --- |
 | Scenes and lights | Nest's Lights button opens the Lights panel | OK runs a scene or switches a light. Matter lights show "Local · TV hub". |
-| Movie lights | Catalog apps, Settings → Lights → Movie lights | On Play the app runs the scene marked 🎬 in the Lights panel (Red on a scene); when the player closes, the scene marked ↩ (Green). |
+| Movie lights | Catalog settings, Settings → Lights → Movie lights | On Play Secretary runs the scene marked 🎬 in the Lights panel (Red on a scene); when the player closes, the scene marked ↩ (Green). |
 | Home status | Nest's home screen | A toast when the phone leaves or comes home, when the vacuum starts, finishes or gets stuck. |
 | Daylight | Nest, theme Automatic | Follows the TV's light sensor when the room is clearly bright (150 lux or more) or dark (under 60 lux), and the clock in between. |
 | By name | Ask Nest, typed or spoken | "turn off the couch light", "couch light to 30%", "dim the lights to 20%", "lights off", "run energetic lights", "start the vacuum", "send the robot home", "eco mode", "picture mode dynamic". It is matched on the TV against your device and scene names; anything else goes to the assistant as before. |
 | Cinema mode | Ask Nest "cinema mode", the Home card, the top-bar Lights button | Dims one light (the top side light, 15%) and switches every other shared light off in one step. The sound system is not a light and stays as it is. `nest.cinemaShow` (`{ keep, level }`, a name fragment and a level) changes the light that stays. |
 | Music mode | Ask Nest "music mode", the Home card, the Lights button | Switches the sound system on, then brings the side lights and the couch light up to 50% one after the other (about 0.2 s apart) and switches the kitchen light off. "Stop the music" switches the sound system off. `nest.musicMode` (`{ lights, off, level }`) changes the lights. Through Secretary Server it is the warm scene. |
 | Ripple | When Nest opens or comes back after 20 s or more away, and before Nest opens another app | A soft wave down the side lamp (Low, Mid, Top) that turns the lights on even when they are off: a faint cool tint, then a warm white (2700 K), then every light goes back exactly as it was (on or off, level, and its white temperature or colour; a light reporting over 75% saturation is taken to be showing a colour, as a 2700 K white itself reports about 66). Brightness follows the room: 15% in a dark room up to 75% in a bright one, from the TV's light sensor (28% at 42 lux, 50% at 150), a middle 35% without a reading; a light already on never dims for the wave. The slow one at open takes about 4 seconds in the background; the quick one before another app (about 2 s, measured on the reference home) finishes first, then the app opens, and never holds it up for more than 3 s. Steps go out on schedule and each light's commands stay in order, so the SmartThings round trip does not stretch the wave. A second ripple during the first restores to the first one's starting state, and a lights command in between (cinema, off) takes over. `nest.openRipple` set to `off` turns both off; as JSON it takes `{ lights }`. |
-| Light effects | Lights panel, top row (OK flips each) | Five switches, stored as `nest.lightFx`. **Light effects** is the master: off, nothing below runs, the ripples included (the old `nest.openRipple` still turns the ripples off too). **Splash & goodbye**: the secretary bird splash at start, and a warm swell (2700 K) played with it instead of the open ripple, which fades in four steps to a dim orange-yellow glow that stays on (a slow splash of about 5 s); off shows the plain crest. When Nest is left (Back twice) the glow fades out in three steps and the side lights go off, before the app exits (never waiting more than 4 s). When something starts playing from Nest (a title with play, not browsing), the side lights ease down to the cinema level first, keeping their colour and never raising a light, instead of the launch ripple. **Music dance**: Music mode, once the room is warm, chases colours along the side lights and the couch light (a new colour on the next light every 1.4 s, the one before easing back) for about twenty minutes, until another lights command replaces it. **Poster colour**: the metallic background takes the focused poster's colour once focus rests on it (a 32x18 sample, hue buckets weighted by chroma, skin tones discounted, grey and black-and-white art ignored, then held in OKLCh ranges so a loud poster gives a calm background). **Side lights match** (off until chosen): the side lights take the same colour, sent as hue and saturation (at least 45 so it reads as colour) at the room-following brightness, at most one change every 4 s and only for a hue shift of 5 or more; when focus leaves the posters for 3 s, or the switch goes off, they go back as they were. The catalog apps have their own "Poster colour" switch in Settings, Lights (they do not hold the SmartThings token, so they never move the lights). |
+| Light effects | Lights panel, top row (OK flips each) | Five switches, stored as `nest.lightFx`. **Light effects** is the master: off, nothing below runs, the ripples included (the old `nest.openRipple` still turns the ripples off too). **Splash & goodbye**: the secretary bird splash at start, and a warm swell (2700 K) played with it instead of the open ripple, which fades in four steps to a dim orange-yellow glow that stays on (a slow splash of about 5 s); off shows the plain crest. When Nest is left (Back twice) the glow fades out in three steps and the side lights go off, before the app exits (never waiting more than 4 s). When something starts playing from Nest (a title with play, not browsing), the side lights ease down to the cinema level first, keeping their colour and never raising a light, instead of the launch ripple. **Music dance**: Music mode, once the room is warm, chases colours along the side lights and the couch light (a new colour on the next light every 1.4 s, the one before easing back) for about twenty minutes, until another lights command replaces it. **Poster colour**: the metallic background takes the focused poster's colour once focus rests on it (a 32x18 sample, hue buckets weighted by chroma, skin tones discounted, grey and black-and-white art ignored, then held in OKLCh ranges so a loud poster gives a calm background). **Side lights match** (off until chosen): the side lights take the same colour, sent as hue and saturation (at least 45 so it reads as colour) at the room-following brightness, at most one change every 4 s and only for a hue shift of 5 or more; when focus leaves the posters for 3 s, or the switch goes off, they go back as they were. The catalog has its own "Poster colour" switch in Settings, Lights, for its own pages. |
 | Ripple tests | Ask Nest, or this PC | Say or type "ripple test" (the slow one) or "launch ripple" (the quick one) to Ask Nest to play it on request, even with the ripples switched off. From this PC, with the same code and a personal token in `.env`: `pnpm lights status` (the lights, the sensor, the brightness the ripple would use), `pnpm lights levels` (the brightness for a range of room light), and `pnpm lights ripple open|launch [--dry] [--lux N]`, which prints the steps, plays them (`--dry` only prints; `--lux` pretends the sensor reads N), then reads the lights again and says whether each is back as it was. |
 | Sound button | Nest's top bar, between Picture and the bell | OK switches the sound system on or off. The icon is a hi-fi speaker with sound arcs when it is on and a slash when it is off, and flips at once while SmartThings confirms. |
 | Independent lights | Every mode, scene and "all the lights" prompt | The computer desk is never switched by a mode; naming it still works ("turn off the computer desk"). `nest.independentLights` (name fragments) changes the list. |
@@ -63,14 +63,14 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
 
 ## How it works
 
-- **`packages/smartthings`** is a `fetch`-only client shared by Nest and the catalog apps:
+- **`packages/smartthings`** is a `fetch`-only client used by Secretary, its home screen and its catalog:
   - `devices()` returns every device with its status in one call (`GET /devices?includeStatus=true`);
   - `command()`, `scenes()`, `runScene()`, `rooms()`;
   - OAuth: `authorizeUrl`, `exchangeCode`, and `oauthTokens`, a refreshing token source;
   - pure helpers: `homeAlerts` (what changed between two polls), `homeAction` (prompts that name a device or scene),
     and `roomLux`.
 - **The side lights follow the screen** (`packages/smartthings/src/lights-controller.ts`, one controller for Nest and the
-  catalog apps; Lights panel switches apply):
+  catalog; Lights panel switches apply):
   - Browsing: with *sync* on, the side lights take the accent of the poster in focus, in Nest and in Cinema, Shows and
     Anime (the apps read `home.lights` in the launch payload). Nothing changes while sync is off, and nothing is sent
     when the TV's light sensor reads 150 lux or more, where the colour could not be seen.
@@ -84,10 +84,10 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
 - **Only Nest holds the refresh token** (`localStorage["nest.smartthings"]`).
   - A refresh token works once, and every refresh is saved before its access token is used. Refreshes run one at a
     time and start an hour before expiry.
-  - The catalog apps are separate packages with their own storage. If they refreshed too, they would cancel Nest's
+  - (History: the catalog apps were separate packages with their own storage.) If they refreshed too, they would cancel Nest's
     token. Instead Nest puts its current access token (good for up to 24 h) and the two scenes in the launch payload
     it already sends (`home` in `packages/nuvio/src/handoff.ts`).
-  - A catalog app opened some other way, or after the token expired, falls back to the server's 15 % cinema preset.
+  - The catalog, after the token expired, falls back to the server's 15 % cinema preset.
 - **No CORS on the TV.** Tizen packaged apps apply no CORS (`docs/lessons.md`), so Nest calls `api.smartthings.com`
   directly.
 - **Polling.** Nest asks for device status every 15 s while its home screen or the Lights panel is up, and not while
@@ -103,7 +103,7 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
   - Tizen web apps get no local hub API, so commands for local devices also go through the cloud, which hands them to
     the TV's hub.
 - **The TV doesn't report our playback.** It exposes `mediaPlayback`, but `playbackStatus` was `null`, so a
-  SmartThings Rule on the TV can't follow playback in our apps. Movie lights run from the catalog apps instead.
+  SmartThings Rule on the TV can't follow playback in our app. Movie lights run from Secretary's catalog instead.
 - **The TV's light sensor** reports `illuminanceMeasurement`: 35 lux at night with a few lamps on.
 - **The only camera** is the POWERbot vacuum's (`imageCapture`), so there are no snapshot alerts.
 - **No push without a server.** Device events reach only a SmartApp webhook on a public server, which is why Nest
@@ -145,7 +145,7 @@ None of this is in SmartThings' docs. It took these fixes before the reference a
 
 **Shimmer and easing.** The Lights panel's "Shimmer" switch (Nest) slides three soft metallic bands over the
 background (`tv-kit/src/glass/sheen.tsx`: transform-only layers, paused while keys are pressed), tinted with the
-poster's accent pulled toward savanna gold. "Poster colour" (and, in the catalog apps, the setting of the same name) gates it
+poster's accent pulled toward savanna gold. "Poster colour" (and, in the catalog, the setting of the same name) gates it
 there. The background crossfades over 2.6 s, and the side lights reach a very different poster colour by way of the
 halfway colour (`moodMidpoint`, 0.9 s) instead of snapping; the least gap between colour changes is 2.5 s. The cost of
 the sliding bands on the TV is not measured yet: run `cdp.mjs walk` with Shimmer on and off and record it in `docs/performance.md`.

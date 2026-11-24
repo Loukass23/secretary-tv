@@ -1,6 +1,6 @@
 # Nuvio Cloud
 
-Nest and the catalog apps are moving their accounts and sync from `@secretary/server` to Nuvio Cloud. Nuvio Cloud is the
+Secretary is moving its accounts and sync from `@secretary/server` to Nuvio Cloud. Nuvio Cloud is the
 Supabase-compatible API behind the official Nuvio apps, at `https://api.nuvio.tv`. Signing in to the same account and profile
 shares Continue Watching, watched history, the library, addons and plugin repositories with the official apps. The server
 stays in the repo as a dev and test backend (`SYNC_BACKEND=secretary`).
@@ -64,7 +64,8 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
   - A second anonymous session started its own login, and Nest's session approved it. The poll then said `approved`
     and the exchange gave a session for the same user with a **different `session_id`**.
   - Both refresh tokens then renewed independently (200 / 200), and Nest's session kept working.
-  - Plan: each catalog app opens its own login on first run and hands the code to Nest; Nest approves it.
+  - (The plan for separate catalog apps to log in through Nest was dropped with the apps: the catalog uses
+    Secretary's own session.)
 - [x] `start_device_login_session` exists too. It returns `{device_code, user_code (6 chars, e.g. 9G84RX),
       verification_uri: https://nuvio.tv/link, verification_uri_complete, expires_at}`. The site approves it with
       `approve_device_login_session {p_user_code}` and reads it with `get_device_login_session {p_user_code}`. The short
@@ -123,7 +124,8 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
 - `SYNC_BACKEND=secretary` in `.env.tizen` turns all of this off (dev and tests against the home server).
 
 ## Watch sync (phase 3)
-- Each catalog app has its own client (`catalog-kit/src/lib/cloud.ts`). On start and on every wake, `takeLaunch` reads
+- The catalog uses Secretary's client (`shareCloud` in `catalog-kit/src/lib/cloud.ts`). What follows describes the
+  retired apps, which each had their own. On start and on every wake, `takeLaunch` reads
   Nest's payload once (by its `at`).
   - A grant for another account or profile replaces the app's session and clears the local lists
     (`clearLocalResume`).
@@ -188,7 +190,7 @@ approved the QR code on their phone. Every write went to profile 3 ("Frenchie"),
 - **Addons** use the addon store's existing `synced()` / `replace()`.
 - **Sharing profile 1's lists:** a profile with `uses_primary_plugins` / `uses_primary_addons` reads profile 1's list
   and never writes it.
-- All three apps read the same profile lists, so a repository added in one app reaches the others on their next wake.
+- The lists live on the profile, so a repository added on one TV reaches Secretary on another on its next wake.
 - **Checked on the TV (profile 3, which has `uses_primary_plugins: true`):**
   - Movies and Shows both showed profile 1's plugin repository and wrote nothing to it.
   - Frenchie's two addons came down to both apps.

@@ -7,13 +7,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readApplicationId, renderManifest } from "./manifest.mjs";
 
-// Run from an app folder (packages/<app>): that folder is the app, the repo root holds .env.tizen.
+// Run from packages/launcher (Secretary, the one app): that folder is the app, the repo root holds .env.tizen.
 const KIT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APP = process.cwd();
 const REPO = resolve(APP, "../..");
 const appPkg = JSON.parse(readFileSync(join(APP, "package.json"), "utf8"));
-// Each app has its own package id, named by "tizen.packageIdEnv" in its package.json.
-const ID_ENV = appPkg.tizen?.packageIdEnv ?? "SECRETARY_TV_PACKAGE_ID";
+// The package id's variable is named by "tizen.packageIdEnv" in the app's package.json (SECRETARY_TV_LAUNCHER_ID).
+const ID_ENV = appPkg.tizen?.packageIdEnv;
+if (!ID_ENV) throw new Error(`${appPkg.name} has no tizen.packageIdEnv: run this from packages/launcher`);
 const DIST = join(APP, "dist");
 // tz treats the folder as a project and writes these into it.
 const PACKAGING = ["Debug", "tizen_web_project.yaml", ".tizen-rds"];

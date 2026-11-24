@@ -45,16 +45,13 @@ const ROWS_ABOVE = 1;
 const END_H = 120;
 const END_ACTIONS = ["↑ Back to top", "⌕ Browse all"] as const;
 const INFO = { x: PAD, y: 150, w: 880, h: 330 };
-const SEG = { x: 650, y: 52, w: 620, h: 68 };
-const ICON_W = 120;
-const ICON_X = [1580, 1720];
 /** Inside Secretary Nest the top bar takes Nest's header: the pill at the left, then the time and two quiet buttons at the
  *  right, at Nest's own size and height (launcher/src/home.tsx). */
 const NEST_HEAD = { y: 44, h: 78, iconW: 88, gap: 28, pad: PAD, seg: { x: PAD, w: 620 } };
 const NEST_ICONS_X = 1920 - NEST_HEAD.pad - 2 * NEST_HEAD.iconW - NEST_HEAD.gap;
 
 /** The top bar, left to right: the section pill, then Search and Settings. */
-export const SECTIONS = ["Nest", "Cinema", "Shows", "Anime"] as const;
+export const SECTIONS = ["Home", "Cinema", "Shows", "Anime"] as const;
 const SECTION_TYPES: readonly (CatalogType | null)[] = [null, "movie", "series", "anime"];
 const TOP_LENGTH = SECTIONS.length + 2;
 const TOP_SEARCH = SECTIONS.length;
@@ -90,8 +87,6 @@ interface Props {
   onDwell(title: Title): void;
   onOpenHub(tab?: OverlayTab, autoVoice?: boolean): void;
   onOpenNest(): void;
-  /** Inside Nest: the top bar follows Nest's header. */
-  embedded?: boolean;
   onSwitchType(type: CatalogType): void;
   onBack(): void;
 }
@@ -130,7 +125,6 @@ export function Home({
   onDwell,
   onOpenHub,
   onOpenNest,
-  embedded,
   onSwitchType,
   onBack,
 }: Props) {
@@ -346,7 +340,7 @@ export function Home({
     <GlassRoot mode="fake" wallpaper={backdrop?.wallpaper} frost={frost} sheen={sheen} mood={mood} class="cat-home">
       <HeroLayers hero={hero} shade={shade} />
 
-      {embedded ? (
+      {/* Secretary's header: the section pill at the left, then the time and two quiet buttons. */}
         <>
           <Segmented x={NEST_HEAD.seg.x} y={NEST_HEAD.y} w={NEST_HEAD.seg.w} h={NEST_HEAD.h} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
           <div class="nest-head" style={{ right: `${1920 - NEST_ICONS_X + 48}px`, top: `${NEST_HEAD.y}px` }}>
@@ -357,16 +351,6 @@ export function Home({
           <IconButton x={NEST_ICONS_X} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
           <IconButton x={NEST_ICONS_X + NEST_HEAD.iconW + NEST_HEAD.gap} y={NEST_HEAD.y} w={NEST_HEAD.iconW} h={NEST_HEAD.h} class="nest-quiet" icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
         </>
-      ) : (
-        <>
-          <div class="cat-clock" style={{ left: `${PAD}px`, top: "56px" }}>
-            {clockText}
-          </div>
-          <Segmented {...SEG} items={SECTIONS} picked={sectionIdx} focusIndex={topIdx !== null && topIdx < SECTIONS.length ? topIdx : -1} />
-          <IconButton x={ICON_X[0]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="search" />} focused={topIdx === TOP_SEARCH} />
-          <IconButton x={ICON_X[1]} y={SEG.y} w={ICON_W} h={SEG.h} icon={<Icon name="settings" />} focused={topIdx === TOP_SETTINGS} />
-        </>
-      )}
 
       <Glass {...INFO} class="cat-info">
         <span class="cat-kicker">{kicker}</span>
@@ -376,7 +360,7 @@ export function Home({
         {current && (
           <div class="cat-hint">
             <span class="cat-ok">{isContinue ? "▶ OK to resume" : current.folder ? "OK to open the folder · hold OK for the row's look" : "OK for details · hold OK for the row's look"}</span>
-            <span>CH- search · CH+ Nest</span>
+            <span>CH- search · CH+ home</span>
           </div>
         )}
       </Glass>

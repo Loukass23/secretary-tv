@@ -17,7 +17,7 @@ import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { encode } from "uqr";
-import { cloud, resetGrants } from "./cloud.ts";
+import { cloud } from "./cloud.ts";
 
 /** The QR as one SVG path of dark modules (crisp at any size, no canvas). */
 function QrCode({ text, size }: { text: string; size: number }) {
@@ -202,7 +202,6 @@ export function Profiles({ onPicked, onSignedOut, onClose }: { onPicked: (p: Pro
       if (p) return void pick(p);
       if (focus === count - 1) {
         void signOut(cloud).then(() => {
-          resetGrants();
           onSignedOut();
         });
       }
@@ -238,7 +237,7 @@ export function Profiles({ onPicked, onSignedOut, onClose }: { onPicked: (p: Pro
           <small>of this TV</small>
         </div>
       )}
-      <div class="nest-signin-status nest-profiles-note">{note ?? (profiles ? "OK picks · Back returns to Nest" : "Loading profiles…")}</div>
+      <div class="nest-signin-status nest-profiles-note">{note ?? (profiles ? "OK picks · Back returns home" : "Loading profiles…")}</div>
     </Glass>
   );
 }

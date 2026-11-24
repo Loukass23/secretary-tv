@@ -2,13 +2,8 @@ import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
 import { tizenBuild, tizenHtml } from "../tv-kit/src/vite.ts";
 
-// Option B (docs/embedding-catalog.md): NEST_EMBED_CATALOG=1 browses the catalog inside Nest. The catalog's own keys then
-// travel in this package too; without the flag they stay out of it.
-// The player and catalog run inside Nest by default (docs/embedding-catalog.md); NEST_EMBED_PLAYER=0 builds the old
-// launcher that opens the catalog apps.
-const embedPlayer = process.env.NEST_EMBED_PLAYER !== "0";
-const embed = embedPlayer || process.env.NEST_EMBED_CATALOG === "1";
-const only = (name: string) => JSON.stringify(embed ? (process.env[name] ?? "") : "");
+// The catalog and its player run inside Secretary (docs/embedding-catalog.md), so the catalog's keys travel in this build.
+const key = (name: string) => JSON.stringify(process.env[name] ?? "");
 
 export default defineConfig({
   ...tizenBuild,
@@ -37,18 +32,13 @@ export default defineConfig({
     // The side lights following the poster in focus (docs/smartthings.md): ms between the moves, and ms of rest first.
     __MOOD_STEP_MS__: JSON.stringify(process.env.NEST_MOOD_STEP_MS ?? ""),
     __MOOD_SETTLE_MS__: JSON.stringify(process.env.NEST_MOOD_SETTLE_MS ?? ""),
-    __EMBED_CATALOG__: JSON.stringify(embed),
-    __EMBED_PLAYER__: JSON.stringify(embedPlayer),
-    __TMDB_API_KEY__: only("TMDB_API_KEY"),
-    __TVDB_API_KEY__: only("TVDB_API_KEY"),
-    __TRAKT_CLIENT_ID__: only("TRAKT_CLIENT_ID"),
-    __FANART_API_KEY__: only("FANART_API_KEY"),
-    __PLUGIN_REPOS__: only("SECRETARY_TV_PLUGIN_REPOS"),
-    __TORBOX_API_KEY__: only("TORBOX_API_KEY"),
-    __PM_API_KEY__: only("PM_API_KEY"),
+    __TMDB_API_KEY__: key("TMDB_API_KEY"),
+    __TVDB_API_KEY__: key("TVDB_API_KEY"),
+    __TRAKT_CLIENT_ID__: key("TRAKT_CLIENT_ID"),
+    __FANART_API_KEY__: key("FANART_API_KEY"),
+    __PLUGIN_REPOS__: key("SECRETARY_TV_PLUGIN_REPOS"),
+    __TORBOX_API_KEY__: key("TORBOX_API_KEY"),
+    __PM_API_KEY__: key("PM_API_KEY"),
     __SYNC_BACKEND__: JSON.stringify(process.env.SYNC_BACKEND || "nuvio"),
-    __MOVIES_ID__: JSON.stringify(`${process.env.SECRETARY_TV_PACKAGE_ID || "ScrtMovies"}.Movies`),
-    __SERIES_ID__: JSON.stringify(`${process.env.SECRETARY_TV_SERIES_ID || "ScrtSeries"}.Series`),
-    __ANIME_ID__: JSON.stringify(`${process.env.SECRETARY_TV_ANIME_ID || "ScrtAnimes"}.Anime`),
   },
 });

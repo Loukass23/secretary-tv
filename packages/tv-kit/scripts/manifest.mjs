@@ -3,7 +3,7 @@
 const PACKAGE_ID = /^[A-Za-z0-9]{10}$/;
 const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 
-export function renderManifest(template, { packageId, version, idName = "SECRETARY_TV_PACKAGE_ID" }) {
+export function renderManifest(template, { packageId, version, idName = "SECRETARY_TV_LAUNCHER_ID" }) {
   if (!PACKAGE_ID.test(packageId ?? "")) {
     throw new Error(
       `${idName} must be exactly 10 letters or digits; the TV rejects anything else with 'Load archive info fail [118,-4]'`,
