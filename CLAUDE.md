@@ -13,7 +13,7 @@ One Preact app for Samsung Tizen TVs, **Secretary**, plus its home server and ph
 - Secretary Cinema, Shows and Anime were separate apps until November 2026. They are retired and deleted; there is no
   fallback that launches another app.
 - **Every TV deploy, test and measurement goes through `packages/launcher`.** Reach catalog screens the way a viewer
-  does, from Secretary's cards (Browse all on a card's end bar opens the catalog home). In the design workbench, check
+  does, from Secretary's cards (See all on a card's end bar opens the catalog home). In the design workbench, check
   the Secretary screens.
 - "Nest" survives in code names (`nest-nav.ts`, `NEST_*` env vars, CSS classes) for Secretary's home screen. What the
   viewer reads says Secretary.

@@ -4,6 +4,7 @@ import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
 import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
+import type { RecState } from "@secretary/launcher/src/recommend.ts";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
 import { type Art, TITLES } from "./art.ts";
 
@@ -59,8 +60,8 @@ const title = (art: Art, i: number): Title => ({
   background: art.backgrounds[i % art.backgrounds.length],
 });
 
-/** A media card's titles: the first `going` in progress, the rest picks. */
-function media(art: Art, from: number, n: number, going: number, sub: (i: number) => string): MediaItem[] {
+/** A media card's titles: the first `going` in progress, the rest picks, ranked on the day's list (`list`). */
+function media(art: Art, from: number, n: number, going: number, sub: (i: number) => string, list?: string): MediaItem[] {
   return Array.from({ length: n }, (_, k) => {
     const i = (from + k) % TITLES.length;
     return {
@@ -68,29 +69,53 @@ function media(art: Art, from: number, n: number, going: number, sub: (i: number
       still: art.stills[i],
       title: TITLES[i],
       sub: sub(k),
+      rating: (6 + ((i * 3) % 30) / 10).toFixed(1),
       about: "A placeholder synopsis drawn by the design workbench, long enough to show how three lines of a title's description sit under its name on the opened card.",
       ...(k < going ? { resume: true, progress: 0.25 + 0.15 * k } : k === going ? { badge: "Top pick" } : {}),
+      ...(k >= going && list ? { rank: `No. ${k - going + 1} in ${list}` } : {}),
     };
   });
 }
 
+/** The end bar's "Recommend me" in each state, as the cards show it: Cinema asked nothing, Shows is asking, Anime has picks. */
+const RECS: Record<string, RecState | undefined> = {
+  cinema: undefined,
+  shows: { status: "loading" },
+  anime: {
+    status: "ready",
+    items: TITLES.slice(5, 13).map((name, k) => ({ type: "anime", title: { id: `dz:rec${k}`, name, year: "2023", rating: "7.8" } })),
+    reply: "Here are top anime worth a look.",
+  },
+};
+
 /** Today's styles unless the workbench's own menu changed them (`styles`). */
 export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): RowColumn[] {
-  const card = (key: string, name: string, unit: string, label: string, items: MediaItem[]): RowColumn => ({
+  // As app.tsx builds them: Continue watching first (landscape stills), then the picks, My List, the genres, and on
+  // Anime the assistant's picks above the end bar.
+  const card = (key: string, name: string, unit: string, label: string, all: MediaItem[], going: number): RowColumn => ({
     kind: "media",
     key,
     name,
     unit,
     label,
-    items,
+    items: going ? all.slice(0, going) : all,
+    small: going ? all : undefined,
+    heading: going ? "Continue watching" : "Tonight's picks",
+    wide: going > 0,
     style: styleFor(styles, key),
     run: noop,
-    // Under the picks once the card is opened (Down): My List, then genre rows.
-    more: ["My List", `Action ${unit}`, `Comedy ${unit}`].map((label, r) => ({
-      label,
-      items: media(art, r * 3, 10, 0, () => "2024 · ★ 7.4"),
-      run: noop,
-    })),
+    recommend: noop,
+    seeAll: noop,
+    recs: RECS[key],
+    more: [
+      ...(going ? [{ label: "Tonight's picks", items: all.slice(going), run: noop }] : []),
+      ...["My List", `Action ${unit}`, `Comedy ${unit}`].map((label, r) => ({
+        label,
+        items: media(art, r * 3, 10, 0, () => "2024"),
+        run: noop,
+      })),
+      ...(RECS[key]?.status === "ready" ? [{ label: "Picked for you", items: media(art, 5, 8, 0, () => "2023"), run: noop }] : []),
+    ],
   });
   return [
     {
@@ -103,9 +128,9 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     },
     { kind: "weather", key: "weather", label: "Weather", run: noop, weather: WEATHER },
     { kind: "calendar", key: "calendar", label: "Calendar", run: noop, date: new Date(2026, 10, 20) },
-    card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 8, 2, (k) => (k < 2 ? "42 min left" : "Drama · 2019"))),
-    card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 6, 2, (k) => `S0${k + 1} · E0${k + 3}`)),
-    card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 1, () => "12 episodes")),
+    card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 10, 2, (k) => (k < 2 ? "42 min left" : "2019"), "today's popular films"), 2),
+    card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 8, 3, (k) => (k < 3 ? `S0${k + 1} · E0${k + 3}  An episode` : "2022"), "today's popular shows"), 3),
+    card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 0, () => "12 episodes", "today's trending anime"), 0),
     {
       kind: "videos",
       key: "youtube",

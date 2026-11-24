@@ -11,7 +11,8 @@ import {
   HEADER_PROFILE,
   HEADER_SEARCH,
   HEADER_SOUND,
-  END_BROWSE,
+  END_ALL,
+  END_RECOMMEND,
   END_TOP,
   LAUNCH,
   type Column,
@@ -141,9 +142,13 @@ test("an opened card of several rows: Down and Up move between rows, the sides s
   assert.deepEqual(step(inside(0, 12), "Down", len), inside(0, 17));
   assert.deepEqual(step(inside(0, 19), "Down", len), inside(0, END_TOP), "Down from the last row reaches the end bar, not the assistant");
   assert.deepEqual(step(inside(0, END_TOP), "Down", len), inside(0, END_TOP), "the end bar is the end");
-  assert.deepEqual(step(inside(0, END_TOP), "Right", len), inside(0, END_BROWSE));
-  assert.deepEqual(step(inside(0, END_BROWSE), "Left", len), inside(0, END_TOP));
-  assert.deepEqual(step(inside(0, END_BROWSE), "Up", len), inside(0, 14), "Up goes back to the last row");
+  assert.deepEqual(step(inside(0, END_TOP), "Right", len), inside(0, END_RECOMMEND));
+  assert.deepEqual(step(inside(0, END_RECOMMEND), "Right", len), inside(0, END_ALL), "See all is last");
+  assert.deepEqual(step(inside(0, END_ALL), "Right", len), inside(0, END_ALL));
+  assert.deepEqual(step(inside(0, END_ALL), "Left", len), inside(0, END_RECOMMEND));
+  assert.deepEqual(step(inside(0, END_RECOMMEND), "Left", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_TOP), "Left", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_ALL), "Up", len), inside(0, 14), "Up goes back to the last row");
   assert.deepEqual(clamp(inside(0, END_TOP), len), inside(0, END_TOP), "the end bar survives a layout change");
   assert.deepEqual(step(inside(0, 19), "Up", len), inside(0, 13), "clamped to the shorter row above");
   assert.deepEqual(step(inside(0, 12), "Up", len), inside(0, 3));
@@ -152,4 +157,11 @@ test("an opened card of several rows: Down and Up move between rows, the sides s
   assert.deepEqual(step(inside(0, 13), "Right", len), inside(0, 13), "the end of a row stays");
   assert.deepEqual(step(inside(0, 13), "Left", len), inside(0, 12));
   assert.deepEqual(step(inside(0, 9), "Left", len), inside(0, 9), "the sides stay in their row");
+});
+
+test("an opened weather card keeps the remote: Down stays, Up folds it", () => {
+  const len: Layout = { ask: 1, cols: [{ count: 1, across: 1, hold: true }], menu: 0 };
+  assert.deepEqual(step(inside(0, 0), "Down", len), inside(0, 0));
+  assert.deepEqual(step(inside(0, 0), "Up", len), card(0));
+  assert.deepEqual(step(inside(0, 0), "Down", { ...len, cols: [{ count: 1, across: 1 }] }), { area: "ask", i: 0 }, "a folded card still goes to the assistant");
 });

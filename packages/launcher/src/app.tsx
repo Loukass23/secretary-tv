@@ -62,8 +62,10 @@ import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
+import { recommend, type RecState } from "./recommend.ts";
 import { type CardMenu, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
+  atEnd,
   clamp,
   enter,
   type Focus,
@@ -76,7 +78,8 @@ import {
   HEADER_SETTINGS,
   HEADER_SOUND,
   type Layout,
-  END_BROWSE,
+  END_ALL,
+  END_RECOMMEND,
   END_TOP,
   leave,
   rowAt,
@@ -187,11 +190,14 @@ function loadablePosters(items: SearchResult[]): Promise<SearchResult[]> {
 }
 
 /** The media cards, in row order: what fills each and how it is named (cards.tsx, card-style.ts). */
+// `list` names the day's list the picks are ranked on, for their caption ("No. 3 in today's popular films").
 const MEDIA = [
-  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film" },
-  { key: "shows", kind: "series", name: "Shows", unit: "shows", going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series" },
-  { key: "anime", kind: "anime", name: "Anime", unit: "titles", going: "Anime", picks: "Anime", pickBadge: undefined },
+  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film", list: "today's popular films" },
+  { key: "shows", kind: "series", name: "Shows", unit: "shows", going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series", list: "today's popular shows" },
+  { key: "anime", kind: "anime", name: "Anime", unit: "titles", going: "Anime", picks: "Anime", pickBadge: undefined, list: "today's trending anime" },
 ] as const;
+/** The row "Recommend me" fills; it is the last row, just above the end bar. */
+const PICKED_ROW = "Picked for you";
 /** Titles an opened media card holds at most. */
 const MEDIA_MAX = 8;
 const NO_TRENDING: Trending = { movie: [], series: [], anime: [] };
@@ -324,6 +330,10 @@ export function App() {
   const [dismissed, setDismissed] = useState<string[]>(() => loadDismissed(storage));
   /** How each row of an opened media card draws its tiles (title menu, "Row look"), by `<card>/<row>`. */
   const [rowLooks, setRowLooks] = useState<Record<string, RowShape>>(() => loadRowLooks(storage));
+  /** "Recommend me" on each media card's end bar, by card key: where the assistant's answer is, and how often it was asked. */
+  const [recs, setRecs] = useState<Record<string, { state: RecState; n: number }>>({});
+  /** The card whose picks just arrived, so focus can move onto them once the row is drawn. */
+  const [recFocus, setRecFocus] = useState<string | null>(null);
   /** The menu on a title tile of an opened media card (a long OK), with what it acts on. */
   const [tileMenu, setTileMenu] = useState<{ menu: TileMenu; target: TileTarget } | null>(null);
   /** When OK went down on something a long press does more with; the hold pill shows from it (null: not holding). */
@@ -1036,6 +1046,15 @@ export function App() {
   // Settings › Playback › Resume from Continue watching: play at once, or open the title's page first.
   const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title, loadSettings().playback.resumeAtOnce);
   const openHit = (r: SearchResult) => browse({ type: r.type, open: { type: r.type, title: r.title } });
+  /** "Recommend me" on a media card's end bar: the assistant's picks of its kind become a row on the card (recommend.ts). */
+  const askRecommend = (key: string, kind: CatalogKind, shown: ReadonlySet<string>) => {
+    const n = recs[key]?.n ?? 0;
+    setRecs((r) => ({ ...r, [key]: { state: { status: "loading" }, n } }));
+    void recommend(kind, n, shown, (intent) => discoverCatalog(intent.kind, intent.genre)).then((state) => {
+      setRecs((r) => ({ ...r, [key]: { state, n: n + 1 } }));
+      if (state.status === "ready") setRecFocus(key);
+    });
+  };
   /** Shows the catalog inside Secretary, on its home or on what `entry` names. */
   const browse = (entry: CatalogEntry) => {
     setCatalog(entry);
@@ -1094,7 +1113,8 @@ export function App() {
     key: "weather",
     label: "Weather",
     weather,
-    run: () => flash(weather ? `${weather.tempC}° ${weather.label}${weather.place ? ` in ${weather.place}` : ""}` : "No weather yet"),
+    // OK opens the forecast across the screen (cards.tsx); inside it there is nothing more to do.
+    run: () => undefined,
   });
   push({ kind: "calendar", key: "calendar", label: "Calendar", date: new Date(), run: () => focusReminders(0) });
   if (recent.length) {
@@ -1112,7 +1132,7 @@ export function App() {
     });
   }
   // Cinema, Shows and Anime: what is in progress first, then tonight's picks. The card shows as many as its style
-  // holds; OK opens it into all of them and the app's Open tile (card-style.ts, cards.tsx).
+  // holds; OK opens it into its rows, Continue watching first, then the picks (card-rows.ts, cards.tsx).
   for (const m of MEDIA) {
     // What the assistant just recommended takes the card's place until it is left.
     const mine = found?.kind === m.kind ? found : null;
@@ -1120,47 +1140,64 @@ export function App() {
     // Titles without a poster would be blank slots, so a recommendation keeps only those that have one.
     const picks = mine
       ? (mine.items.some((r) => r.title.poster) ? mine.items.filter((r) => r.title.poster) : mine.items).slice(0, MEDIA_MAX)
-      : onlyKind(m.kind, trending[m.kind], animeIds).filter((r) => !going.some((e) => e.title.id === r.title.id) && !dismissed.includes(r.title.id)).slice(0, MEDIA_MAX - going.length);
+      : onlyKind(m.kind, trending[m.kind], animeIds).filter((r) => !going.some((e) => e.title.id === r.title.id) && !dismissed.includes(r.title.id)).slice(0, MEDIA_MAX);
     if (!going.length && !picks.length) continue;
-    // Under the picks (Down in the opened card): the profile's My List for this kind, then its genre rows.
+    // Under the first row (Down in the opened card): tonight's picks when Continue watching leads, the profile's My List
+    // for this kind, its genre rows, then what "Recommend me" brought.
     const tile = (r: SearchResult): MediaItem => ({
       poster: posterUrl(r.title),
       still: backdropUrl(r),
       title: r.title.name,
-      sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
+      sub: r.title.year || undefined,
+      rating: r.title.rating || undefined,
       about: r.title.description,
     });
+    const goingItems: MediaItem[] = going.map((e) => ({
+      poster: posterUrl(e.title),
+      still: backdropUrl(e),
+      title: e.title.name,
+      sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "Continue watching",
+      resume: true,
+      progress: progressOf(e),
+      rating: e.title.rating || undefined,
+      about: e.title.description,
+    }));
+    // The day's list ranks the picks; the assistant's own picks have no ranking.
+    const ranked = mine ? [] : onlyKind(m.kind, trending[m.kind], animeIds);
+    const pickItems: MediaItem[] = picks.map((r, k) => {
+      const place = ranked.findIndex((t) => t.title.id === r.title.id);
+      return {
+        ...tile(r),
+        badge: k === 0 && !going.length && !mine ? m.pickBadge : undefined,
+        rank: place >= 0 ? `No. ${place + 1} in ${m.list}` : undefined,
+      };
+    });
+    const pickTarget = (i: number): TileTarget | null =>
+      picks[i] ? { type: picks[i].type, title: picks[i].title, resume: false, suggestion: !mine, row: `${m.key}/picks` } : null;
     const listedHere = mylistItems(onlyKind(m.kind, myList, animeIds), MEDIA_MAX * 2).map((l) => ({ type: m.kind, title: l.item.title }));
+    const rec = recs[m.key];
+    const recHits = rec?.state.status === "ready" ? onlyKind(m.kind, rec.state.items, animeIds) : [];
     const rowsHere: { label: string; hits: SearchResult[] }[] = [
       { label: "My List", hits: listedHere },
       ...DISCOVER.filter((d) => d.kind === m.kind).map((d) => ({ label: d.label, hits: onlyKind(m.kind, discover[d.key] ?? [], animeIds).filter((r) => r.title.poster).slice(0, MEDIA_MAX) })),
+      { label: PICKED_ROW, hits: recHits },
     ].filter((r) => r.hits.length);
-    const more: MoreRow[] = rowsHere.map((r) => ({
-      label: r.label,
-      items: r.hits.map(tile),
-      shape: rowShape(rowLooks, `${m.key}/${r.label}`),
-      run: (i) => r.hits[i] && openHit(r.hits[i]),
-      target: (i) => (r.hits[i] ? { type: r.hits[i].type, title: r.hits[i].title, resume: false, row: `${m.key}/${r.label}` } : null),
-    }));
-    const items: MediaItem[] = [
-      ...going.map((e) => ({
-        poster: posterUrl(e.title),
-        still: backdropUrl(e),
-        title: e.title.name,
-        sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "Continue watching",
-        resume: true,
-        progress: progressOf(e),
-        about: e.title.description,
-      })),
-      ...picks.map((r, k) => ({
-        poster: posterUrl(r.title),
-        still: backdropUrl(r),
-        title: r.title.name,
-        sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
-        badge: k === 0 && !going.length && !mine ? m.pickBadge : undefined,
-        about: r.title.description,
+    const more: MoreRow[] = [
+      // With Continue watching first, the picks get a row of their own under it.
+      ...(going.length && picks.length
+        ? [{ label: "Tonight's picks", items: pickItems, shape: rowLooks[`${m.key}/picks`], run: (i: number) => picks[i] && openHit(picks[i]), target: pickTarget }]
+        : []),
+      ...rowsHere.map((r) => ({
+        label: r.label,
+        items: r.hits.map(tile),
+        shape: rowLooks[`${m.key}/${r.label}`],
+        run: (i: number) => r.hits[i] && openHit(r.hits[i]),
+        target: (i: number): TileTarget | null => (r.hits[i] ? { type: r.hits[i].type, title: r.hits[i].title, resume: false, row: `${m.key}/${r.label}` } : null),
       })),
     ];
+    const items = going.length ? goingItems : pickItems;
+    // Everything the card already shows, so the assistant's picks bring something new.
+    const shownIds = new Set([...going.map((e) => e.title.id), ...picks.map((r) => r.title.id), ...rowsHere.flatMap((r) => r.hits.map((h) => h.title.id))]);
     push(
       {
         kind: "media",
@@ -1169,19 +1206,25 @@ export function App() {
         unit: m.unit,
         label: mine ? `For you · ${m.name}` : going.length ? m.going : m.picks,
         items,
+        // Folded, the card shows what is in progress first, then the picks.
+        small: going.length ? [...goingItems, ...pickItems] : undefined,
         style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
-        heading: mine ? "For you" : going.length && picks.length ? "Continue watching · Tonight's picks" : going.length ? "Continue watching" : "Tonight's picks",
-        shape: rowShape(rowLooks, `${m.key}/picks`),
+        heading: mine ? "For you" : going.length ? "Continue watching" : "Tonight's picks",
+        // Continue watching draws landscape stills unless the viewer picked another look for it.
+        shape: rowLooks[going.length ? `${m.key}/continue` : `${m.key}/picks`],
+        wide: going.length > 0,
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
-        run: (i) => (i < going.length ? resume(going[i]) : openHit(picks[i - going.length])),
-        browseAll: () => browse({ type: m.kind }),
+        run: (i) => (going.length ? going[i] && resume(going[i]) : picks[i] && openHit(picks[i])),
+        recommend: () => askRecommend(m.key, m.kind, shownIds),
+        recs: rec?.state,
+        seeAll: () => browse({ type: m.kind }),
         target: (i) =>
-          i < going.length
-            ? { type: going[i].type, title: going[i].title, resume: true, row: `${m.key}/picks` }
-            : picks[i - going.length]
-              ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false, suggestion: !mine, row: `${m.key}/picks` }
-              : null,
+          going.length
+            ? going[i]
+              ? { type: going[i].type, title: going[i].title, resume: true, row: `${m.key}/continue` }
+              : null
+            : pickTarget(i),
       },
       // The opened card's art runs across all its rows (the picks, then My List and the genres), like focus.i does.
       [...items, ...more.flatMap((r) => r.items)].map((it) => ({ src: it.poster, type: m.kind })),
@@ -1417,6 +1460,17 @@ export function App() {
     if (c >= 0) setFocus(goto.inside ? { area: "row", col: c, i: 0, inside: true } : { area: "row", col: c, i: 0 });
   }, [goto, idle, rowSettled]);
 
+  // The assistant's picks arrived on a card whose end bar still has the remote: focus moves to the first of them.
+  useEffect(() => {
+    if (!recFocus) return;
+    setRecFocus(null);
+    const c = columns.findIndex((k) => k.key === recFocus);
+    const col = columns[c];
+    if (col?.kind !== "media" || focus.area !== "row" || focus.col !== c || !focus.inside || !atEnd(focus.i)) return;
+    const rows = expandedRows(col);
+    setFocus({ ...focus, i: rows.slice(0, -1).reduce((s, n) => s + n, 0) });
+  }, [recFocus]);
+
   // The recommendation goes back to the card's usual titles once it was opened and left, or after a minute.
   const foundKey = found ? MEDIA.find((m) => m.kind === found.kind)?.key : undefined;
   const foundSeen = useRef(false);
@@ -1560,9 +1614,10 @@ export function App() {
       // On the Assistant card, OK opens the full chat.
       if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
       const col = columns[focus.col ?? 0];
-      // The bar under an opened media card's last row: back to its first title, or the whole catalog.
+      // The bar under an opened media card's last row: back to its first title, the assistant's picks, or the catalog.
       if (col?.kind === "media" && i === END_TOP) return setFocus({ ...focus, i: 0 });
-      if (col?.kind === "media" && i === END_BROWSE) return col.browseAll?.();
+      if (col?.kind === "media" && i === END_RECOMMEND) return col.recs?.status === "loading" ? undefined : col.recommend?.();
+      if (col?.kind === "media" && i === END_ALL) return col.seeAll?.();
       // A row under the picks (My List, a genre): its own item.
       if (col?.kind === "media" && i >= col.items.length) {
         const { r, x } = rowAt(expandedRows(col), i);
@@ -1618,13 +1673,15 @@ export function App() {
     }).filter((l) => l.id !== "restart" && l.id !== "sources" && l.id !== "timeline");
     if (target.suggestion) lines.push({ id: "dismiss", label: "✕ Remove from suggestions" });
     if (target.resume) lines.push({ id: "unresume", label: "⊘ Remove from Continue" });
-    lines.push(lookLine(rowShape(rowLooks, target.row)));
+    lines.push(lookLine(lookOf(target.row)));
     setTileMenu({ menu: { name: target.title.name, lines, at: 0 }, target });
   }, undefined, setHoldSince);
   /** The menu's "Row look" line: Left and Right (or OK) change how the whole row draws, at once. */
   const lookLine = (shape: RowShape) => ({ id: "look", label: `▦ Row look  ‹ ${ROW_SHAPE_LABEL[shape]} ›` });
+  /** A row's look: the one picked for it, else stills for Continue watching, else posters. */
+  const lookOf = (row: string): RowShape => rowLooks[row] ?? (row.endsWith("/continue") ? "landscape" : rowShape(rowLooks, row));
   const stepLook = (m: { menu: TileMenu; target: TileTarget }, dir: 1 | -1) => {
-    const next = stepShape(rowShape(rowLooks, m.target.row), dir);
+    const next = stepShape(lookOf(m.target.row), dir);
     const looks = { ...rowLooks, [m.target.row]: next };
     setRowLooks(looks);
     saveRowLooks(storage, looks);
