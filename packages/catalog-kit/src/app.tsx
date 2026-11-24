@@ -9,7 +9,7 @@ import {
 import { contentApp, normalizeCode, partyErrorText } from "@secretary/party/src/client.ts";
 import { targetPos, type Timeline } from "@secretary/party/src/protocol.ts";
 import { checkOwner, cloud, cloudEnabled, nuvioCollections, nuvioLibrary, nuvioRemote, partyApi, shareCloud, startListSync, takeLaunch } from "./lib/cloud.ts";
-import { runMovieScene } from "./lib/home.ts";
+import { playbackLights, runMovieScene } from "./lib/home.ts";
 import { createPartySession, LEAVE_TEXT, type PartySession, releaseOf, type SocketLike, streamFor } from "./lib/party.ts";
 import { clearLocalLibrary, loadLibrary, setLibraryRemote, syncLibrary } from "./lib/library.ts";
 import { episodeLabel, fileHintFor, nextEpisode } from "./lib/episodes.ts";
@@ -614,14 +614,15 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
   };
 
   const triggerCinemaAutoDim = () => {
-    if (settings.domotics.cinemaAutoDim) void runMovieScene("movie", serverUrl);
+    // The side lights go off (Nest's grant); without one, the movie scene or the server's cinema preset dims as before.
+    if (settings.domotics.cinemaAutoDim) void playbackLights.start().then((took) => took || runMovieScene("movie", serverUrl));
   };
 
   // Leaving the player brings the room back (Nest's restore scene); moving on to the next episode stays in it.
   const wasPlaying = useRef(false);
   useEffect(() => {
     const playing = view.name === "player";
-    if (wasPlaying.current && !playing && settings.domotics.cinemaAutoDim) void runMovieScene("restore", serverUrl);
+    if (wasPlaying.current && !playing && settings.domotics.cinemaAutoDim) void playbackLights.stop().then((took) => took || runMovieScene("restore", serverUrl));
     wasPlaying.current = playing;
   }, [view.name]);
 
@@ -809,6 +810,7 @@ export function CatalogApp({ type, heading, serverUrl, returnTo, embedded, open,
       {view.name === "player" && (
         <PlayerView
           key={view.episode?.id ?? view.title.id}
+          onPlayState={(playing) => (settings.domotics.cinemaAutoDim ? (playing ? playbackLights.resume() : playbackLights.pause()) : undefined)}
           type={view.itemType}
           title={view.title}
           episode={view.episode}

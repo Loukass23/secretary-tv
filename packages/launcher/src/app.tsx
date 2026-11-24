@@ -92,6 +92,7 @@ import {
   lastPictureMode,
   noteStatus,
   dimForMedia,
+  mediaReleased,
   playFarewell,
   playOpenRipple,
   playRippleTest,
@@ -971,6 +972,7 @@ export function App() {
     let hiddenAt = 0;
     const onVisible = () => {
       if (document.visibilityState === "hidden") return void (hiddenAt = Date.now());
+      mediaReleased();
       if (hiddenAt && Date.now() - hiddenAt > RIPPLE_AWAY_MS) playOpenRipple().catch((e) => console.warn("[nest] open ripple", e));
       hiddenAt = 0;
     };
@@ -1195,7 +1197,8 @@ export function App() {
               ? { type: picks[i - going.length].type, title: picks[i - going.length].title, resume: false, suggestion: !mine, row: `${m.key}/picks` }
               : null,
       },
-      items.map((it) => ({ src: it.poster, type: m.kind })),
+      // The opened card's art runs across all its rows (the picks, then My List and the genres), like focus.i does.
+      [...items, ...more.flatMap((r) => r.items)].map((it) => ({ src: it.poster, type: m.kind })),
     );
   }
   // The YouTube card: what is popular (with a key), or one way into the app; OK opens the video there.

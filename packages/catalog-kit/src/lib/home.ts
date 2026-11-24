@@ -2,7 +2,7 @@
 // access token Nest put in the launch payload. Without one (an old token, a build without SmartThings) the server's
 // "cinema" preset dims instead, as before.
 import type { HomeGrant } from "@secretary/nuvio";
-import { smartThings, staticToken } from "@secretary/smartthings";
+import { createLights, type LightsController, smartThings, staticToken, type StDevice } from "@secretary/smartthings";
 import { readJson, writeJson } from "@secretary/tv-kit";
 
 const HOME = "sectv.home";
@@ -35,4 +35,57 @@ export async function runMovieScene(which: "movie" | "restore", serverUrl: strin
     }).catch(() => {});
   }
   return false;
+}
+
+// --- the side lights, from the grant ---
+
+let lights: { token: string; ctl: LightsController } | null = null;
+
+/**
+ * The side-light controller for the grant Nest sent (docs/smartthings.md), or null without one, or with every effect
+ * off in Nest's Lights panel. Built once per token, so its memory of the room (what to put back) survives between calls.
+ */
+export function sideLights(now = Date.now()): LightsController | null {
+  const g = homeGrant(now);
+  if (!g?.lights?.enabled) return null;
+  if (lights?.token === g.token) return lights.ctl;
+  const l = g.lights;
+  const ctl = createLights({
+    home: smartThings({ token: staticToken(g.token) }),
+    configured: () => true,
+    fx: () => ({ enabled: true, splash: false, sync: l.sync }),
+    side: () => ({ lights: l.side }),
+    independent: () => l.independent,
+    pauseLevel: () => l.level,
+    moodStepMs: l.stepMs,
+    moodSettleMs: l.settleMs,
+    warn: () => {},
+  });
+  if (Array.isArray(l.restore) && l.restore.length) ctl.hold(l.restore as StDevice[]);
+  lights = { token: g.token, ctl };
+  return ctl;
+}
+
+/**
+ * Playback's lights: off when it starts, soft when it pauses, off again when it resumes, as they were when it ends.
+ * True when the side lights took it (no scene or server preset is then needed); false when there is no grant.
+ */
+export const playbackLights = {
+  start: () => sideLights()?.playbackOff().then(() => true) ?? Promise.resolve(false),
+  pause: () => void sideLights()?.playbackPause(),
+  resume: () => void sideLights()?.playbackResume(),
+  stop: () => sideLights()?.playbackStop().then(() => true) ?? Promise.resolve(false),
+};
+
+/** True when Nest's grant asks for the side lights to follow the poster in focus (its Lights panel, sync). */
+export const lightsFollowFocus = (now = Date.now()): boolean => homeGrant(now)?.lights?.sync === true;
+
+/** The side lights take a poster's accent, or go back when null; nothing without a grant. */
+export const syncSideLights = (rgb: readonly [number, number, number] | null): void => sideLights()?.syncMood(rgb);
+
+// The app leaves the screen (Back to Nest, another app): the side lights go back to how they were.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") syncSideLights(null);
+  });
 }

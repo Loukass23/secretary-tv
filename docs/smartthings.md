@@ -69,6 +69,18 @@ again": a refresh token unused for 29 days expires, and reinstalling Nest wipes 
   - OAuth: `authorizeUrl`, `exchangeCode`, and `oauthTokens`, a refreshing token source;
   - pure helpers: `homeAlerts` (what changed between two polls), `homeAction` (prompts that name a device or scene),
     and `roomLux`.
+- **The side lights follow the screen** (`packages/smartthings/src/lights-controller.ts`, one controller for Nest and the
+  catalog apps; Lights panel switches apply):
+  - Browsing: with *sync* on, the side lights take the accent of the poster in focus, in Nest and in Cinema, Shows and
+    Anime (the apps read `home.lights` in the launch payload). Nothing changes while sync is off, and nothing is sent
+    when the TV's light sensor reads 150 lux or more, where the colour could not be seen.
+  - Playback: the side lights fade off when it starts, come back softly (the cinema level) while it is paused, go off
+    again on resume, and return to how they were when the player closes. Without the payload the movie scene or the
+    server's cinema preset dims as before.
+  - Opening: the splash leaves a dim glow; when the sensor (read before the wave) says 150 lux or more (`BRIGHT_LUX`, the
+    line Daylight uses), the glow fades out instead of staying.
+  - How it feels is set in `.env.tizen`: `NEST_MOOD_STEP_MS` (default 500) is the time between the three moves of a
+    colour change, `NEST_MOOD_SETTLE_MS` (default 700) how long focus rests before the lights start.
 - **Only Nest holds the refresh token** (`localStorage["nest.smartthings"]`).
   - A refresh token works once, and every refresh is saved before its access token is used. Refreshes run one at a
     time and start an hour before expiry.

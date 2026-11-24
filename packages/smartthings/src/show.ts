@@ -109,6 +109,12 @@ const GLOW_SHARE = 0.45;
 /** How many steps the splash takes to fade from the swell to the glow. */
 const SETTLE_STAGES = 4;
 
+/** The level the splash leaves the lights at, from the ripple's brightness. */
+const glowLevelFor = (base: number) => Math.max(8, Math.round(base * GLOW_SHARE));
+
+/** The level the splash's glow sits at in a room with this much light (lux), for fading it out afterwards. */
+export const glowLevel = (lux: number | null): number => glowLevelFor(rippleLevel(lux));
+
 /** The wave's colours: a soft cool tint (hue and saturation, 0-100), then a warm white in kelvin. */
 const COOL = { hue: 62, saturation: 35 };
 const WARM = { kelvin: 2700 };
@@ -182,7 +188,7 @@ export function rippleShow(
   const back = (d: StDevice): StCommand[] => restoreCommands(d);
   // The glow the splash leaves, reached in stages so the lights fade down together instead of dropping: the first stage turns
   // the colour from warm white to orange-yellow, each next one lowers the level a step, all lights in the same step.
-  const glowLevel = Math.max(8, Math.round(base * GLOW_SHARE));
+  const glowLevel = glowLevelFor(base);
   const settleStages = (gap: number): ShowStep[] =>
     Array.from({ length: SETTLE_STAGES }, (_, k) => {
       const level = Math.round(base + ((glowLevel - base) * (k + 1)) / SETTLE_STAGES);
@@ -247,9 +253,20 @@ export function moodShow(
   independent: readonly string[] = INDEPENDENT_DEFAULT,
   lux: number | null = roomLux(devices),
 ): { steps: ShowStep[]; undo: ShowStep } | null {
+  const { hue, saturation } = stColour(rgb);
+  return moodShowHs(devices, hue, saturation, cfg, independent, lux);
+}
+
+function moodShowHs(
+  devices: readonly StDevice[],
+  hue: number,
+  saturation: number,
+  cfg: RippleConfig,
+  independent: readonly string[],
+  lux: number | null,
+): { steps: ShowStep[]; undo: ShowStep } | null {
   const lights = pickAll(sharedLights(devices, independent), cfg.lights);
   if (!lights.length) return null;
-  const { hue, saturation } = stColour(rgb);
   const level = rippleLevel(lux);
   const targets = lights.map((d): ShowTarget => ({
     device: d,
@@ -260,6 +277,53 @@ export function moodShow(
     ],
   }));
   return { steps: [{ targets, after: 0 }], undo: { targets: lights.map((d) => ({ device: d, commands: restoreCommands(d) })), after: 0 } };
+}
+
+/** A colour in SmartThings terms (hue and saturation, 0-100), the start of a glide: a light that is showing white has no hue worth gliding from. */
+export interface MoodTint {
+  hue: number;
+  saturation: number;
+}
+
+/** Under this saturation a colour has no hue worth gliding from: the glide fades the saturation in at the new hue instead. */
+const GLIDE_GREY = 20;
+
+/** The colour a fraction `t` (0-1) of the way from `from` to `to`: the hue turns the short way round the wheel (it is 0-100), the saturation follows. */
+export function glideTint(from: MoodTint, to: MoodTint, t: number): MoodTint {
+  const fromHue = from.saturation < GLIDE_GREY ? to.hue : from.hue;
+  let dh = to.hue - fromHue;
+  if (dh > 50) dh -= 100;
+  if (dh < -50) dh += 100;
+  const k = Math.max(0, Math.min(1, t));
+  return { hue: Math.round((((fromHue + dh * k) % 100) + 100) % 100), saturation: Math.round(from.saturation + (to.saturation - from.saturation) * k) };
+}
+
+/**
+ * The side lights gliding from one colour to another, in `steps` small moves `gap` ms apart: the hue turns the short way
+ * round the wheel, the saturation and the level follow, so the room slides to the poster's colour instead of switching.
+ * The last step is the colour itself. `undo` puts every light back as it was. Null when the home has none of the lights.
+ */
+export function moodGlide(
+  devices: readonly StDevice[],
+  from: MoodTint,
+  to: MoodTint,
+  steps = 5,
+  gap = 600,
+  cfg: RippleConfig = RIPPLE_DEFAULT,
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+  lux: number | null = roomLux(devices),
+): { steps: ShowStep[]; undo: ShowStep } | null {
+  const n = Math.max(1, Math.round(steps));
+  let undo: ShowStep | null = null;
+  const out: ShowStep[] = [];
+  for (let k = 1; k <= n; k++) {
+    const tint = glideTint(from, to, k / n);
+    const one = moodShowHs(devices, tint.hue, tint.saturation, cfg, independent, lux);
+    if (!one) return null;
+    undo = one.undo;
+    out.push({ ...one.steps[0], after: k === n ? 0 : gap });
+  }
+  return { steps: out, undo: undo! };
 }
 
 /**
@@ -292,6 +356,39 @@ export function fadeShow(
     if (targets.length) steps.push({ targets, after: last ? 0 : gap });
   }
   return steps.length ? steps : null;
+}
+
+/** The room is clearly bright from this reading (lux) up: the same line Daylight uses, and the point where a dim side light cannot be seen. */
+export const BRIGHT_LUX = 150;
+
+/** True when the TV's sensor says the side lights would not show. No reading counts as dark, so the room is never left unlit unasked. */
+export function roomIsBright(lux: number | null): boolean {
+  return lux !== null && !Number.isNaN(lux) && lux >= BRIGHT_LUX;
+}
+
+/**
+ * Playback paused: the side lights come back softly at `level` percent, in the colour they last had (a light that is off
+ * keeps its colour, so only the level and on are sent). One step; null when the home has none of the lights.
+ */
+export function pauseShow(
+  devices: readonly StDevice[],
+  level: number,
+  cfg: RippleConfig = RIPPLE_DEFAULT,
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+): ShowStep[] | null {
+  const lights = pickAll(sharedLights(devices, independent), cfg.lights);
+  if (!lights.length) return null;
+  return [{ targets: lights.map((d) => on(d, Math.max(1, Math.min(100, level)))), after: 0 }];
+}
+
+/** The side lights off, together, in one step (playback resumed after a pause). Null when the home has none of them. */
+export function offShow(
+  devices: readonly StDevice[],
+  cfg: RippleConfig = RIPPLE_DEFAULT,
+  independent: readonly string[] = INDEPENDENT_DEFAULT,
+): ShowStep[] | null {
+  const lights = pickAll(sharedLights(devices, independent), cfg.lights);
+  return lights.length ? [{ targets: lights.map(off), after: 0 }] : null;
 }
 
 /** The colours the lights dance through: hue and saturation, 0-100 (orange, magenta, violet, cyan, gold, green). */

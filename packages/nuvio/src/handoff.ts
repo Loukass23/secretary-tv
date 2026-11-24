@@ -52,6 +52,25 @@ export interface HomeGrant {
   movie?: string;
   /** Scene run when the player closes. */
   restore?: string;
+  /** The side lights, for an app that colours them while browsing and takes them off for playback itself. */
+  lights?: HomeLights;
+}
+
+export interface HomeLights {
+  /** The lights follow the focused poster (Nest's Lights panel, sync). */
+  sync: boolean;
+  /** Every effect is off when false: the app leaves the lights alone. */
+  enabled: boolean;
+  /** Name fragments of the side lights and of the lights no mode touches. */
+  side: string[];
+  independent: string[];
+  /** The level the room softens to when playback pauses (percent). */
+  level: number;
+  /** Colour changes: ms between the three moves, and ms focus must rest first (Nest's NEST_MOOD_* settings). */
+  stepMs?: number;
+  settleMs?: number;
+  /** The side lights as they were before Nest dimmed them for this launch: the way back when playback ends. */
+  restore?: unknown[];
 }
 
 export interface LaunchPayload {

@@ -34,6 +34,9 @@ export default defineConfig({
     __WEATHER_LAT__: JSON.stringify(process.env.WEATHER_LAT ?? ""),
     __WEATHER_LON__: JSON.stringify(process.env.WEATHER_LON ?? ""),
     __WEATHER_CITY__: JSON.stringify(process.env.WEATHER_CITY ?? ""),
+    // The side lights following the poster in focus (docs/smartthings.md): ms between the moves, and ms of rest first.
+    __MOOD_STEP_MS__: JSON.stringify(process.env.NEST_MOOD_STEP_MS ?? ""),
+    __MOOD_SETTLE_MS__: JSON.stringify(process.env.NEST_MOOD_SETTLE_MS ?? ""),
     __EMBED_CATALOG__: JSON.stringify(embed),
     __EMBED_PLAYER__: JSON.stringify(embedPlayer),
     __TMDB_API_KEY__: only("TMDB_API_KEY"),

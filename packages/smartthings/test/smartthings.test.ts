@@ -8,11 +8,14 @@ import {
   homeAction,
   homeAlerts,
   isIndependent,
+  glideTint,
+  moodGlide,
   moodMidpoint,
   moodShow,
   musicShow,
   nextPictureMode,
   oauthTokens,
+  pauseShow,
   pictureScene,
   type RawDevice,
   resolvePictureMode,
@@ -20,6 +23,7 @@ import {
   rippleLevel,
   rippleShow,
   runShow,
+  roomIsBright,
   roomLux,
   sharedLights,
   type ShowStep,
@@ -526,6 +530,20 @@ test("the farewell fades lights that are on to off, together, and leaves the oth
   assert.equal(fadeShow(LAMP.map((d) => ({ ...d, on: false })), 0), null, "nothing to fade when all are off");
 });
 
+test("the room counts as bright from 150 lux, and without a reading as dark", () => {
+  assert.deepEqual([null, 0, 149, 150, 900].map(roomIsBright), [false, false, false, true, true]);
+  assert.equal(roomIsBright(Number.NaN), false);
+});
+
+test("a pause brings the side lights back softly, with nothing sent but on and the level", () => {
+  const off = LAMP.map((d) => ({ ...d, on: false }));
+  const steps = pauseShow(off, 15)!;
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].targets.length, LAMP.length);
+  assert.ok(steps[0].targets.every((t) => t.commands.some((c) => c.command === "on") && !t.commands.some((c) => c.capability === "colorControl")));
+  assert.equal(pauseShow([], 15), null);
+});
+
 test("dimming for media only lowers: a light under the target keeps its level", () => {
   const lit = LAMP.map((d, i) => ({ ...d, on: true, level: i === 0 ? 10 : 80 }));
   const steps = fadeShow(lit, 15, undefined, undefined, 2, 500)!;
@@ -545,4 +563,24 @@ test("the dance is a chase: one light takes the next colour each beat while the 
   assert.ok(steps[1].targets.length === 2 && steps[1].targets[1].device.id === "low", "the previous light eases back");
   assert.ok(steps.every((s) => s.after >= 1000), "a beat cloud calls can keep up with");
   assert.equal(danceShow([], ["side light low"]), null);
+});
+
+test("a mood glide turns the hue the short way round in steps and ends on the colour", () => {
+  const hueOf = (s: ShowStep) => (s.targets[0].commands.find((c) => c.command === "setColor")?.arguments?.[0] as { hue: number }).hue;
+  const g = moodGlide(LAMP, { hue: 90, saturation: 80 }, { hue: 10, saturation: 80 }, 4, 500)!;
+  assert.equal(g.steps.length, 4);
+  assert.deepEqual(g.steps.map((s) => s.after), [500, 500, 500, 0]);
+  const hues = g.steps.map(hueOf);
+  assert.equal(hues[3], 10);
+  assert.ok(hues[0] > 90 || hues[0] < 5, `across the top of the wheel, not back through the middle (${hues})`);
+  // From a white the hue is the new one at once, with the saturation coming up.
+  const w = moodGlide(LAMP, { hue: 66, saturation: 5 }, { hue: 30, saturation: 85 }, 3)!;
+  assert.deepEqual(w.steps.map(hueOf), [30, 30, 30]);
+  assert.equal(moodGlide([], { hue: 0, saturation: 0 }, { hue: 50, saturation: 80 }), null);
+});
+
+test("glideTint goes the short way round the wheel and keeps to its ends", () => {
+  assert.deepEqual(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 0.5), { hue: 0, saturation: 60 });
+  assert.deepEqual(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 1), { hue: 10, saturation: 40 });
+  assert.equal(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 0).hue, 90);
 });

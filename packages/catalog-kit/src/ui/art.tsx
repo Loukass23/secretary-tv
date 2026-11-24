@@ -5,6 +5,7 @@
 import { artPalette, type Backdrop, backdropFor, type Palette, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { frostFor, preload, shadeImage } from "../lib/hero.ts";
+import { lightsFollowFocus, syncSideLights } from "../lib/home.ts";
 import { loadSettings } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import "./art.css";
@@ -27,9 +28,26 @@ export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdr
   const [shade, setShade] = useState<string | null>(null);
   const [mood, setMood] = useState<Palette | null>(null);
   useEffect(() => {
-    if (!moodSrc || !loadSettings().domotics.moodBackground) return;
+    const wantBackground = loadSettings().domotics.moodBackground;
+    const wantLights = lightsFollowFocus();
+    if (!moodSrc || !(wantBackground || wantLights)) {
+      // Focus left the art: the side lights go back, but not for a passing visit elsewhere.
+      if (!moodSrc && wantLights) {
+        const t = setTimeout(() => syncSideLights(null), 3000);
+        return () => clearTimeout(t);
+      }
+      return;
+    }
     let live = true;
-    const t = setTimeout(() => void artPalette(moodSrc).then((p) => live && setMood(p)), DWELL_MS);
+    const t = setTimeout(
+      () =>
+        void artPalette(moodSrc).then((p) => {
+          if (!live) return;
+          if (wantBackground) setMood(p);
+          if (wantLights) syncSideLights(p ? p.accent : null);
+        }),
+      DWELL_MS,
+    );
     return () => {
       live = false;
       clearTimeout(t);

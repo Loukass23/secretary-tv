@@ -1,3 +1,5 @@
+import { MOOD_SETTLE_MS, MOOD_STEP_MS, moodMs } from "@secretary/smartthings";
+
 declare const __SERVER_URL__: string | undefined;
 declare const __MOVIES_ID__: string | undefined;
 declare const __SERIES_ID__: string | undefined;
@@ -18,6 +20,8 @@ declare const __YOUTUBE_ID__: string | undefined;
 declare const __WEATHER_LAT__: string | undefined;
 declare const __WEATHER_LON__: string | undefined;
 declare const __WEATHER_CITY__: string | undefined;
+declare const __MOOD_STEP_MS__: string | undefined;
+declare const __MOOD_SETTLE_MS__: string | undefined;
 
 export const SERVER_URL = (typeof __SERVER_URL__ !== "undefined" ? __SERVER_URL__ : "").replace(/\/$/, "");
 
@@ -53,6 +57,15 @@ export const EMBED_PLAYER = typeof __EMBED_PLAYER__ !== "undefined" && __EMBED_P
 /** The YouTube card: a Data API key for what is popular (empty: the card is a way into the app), and the TV's YouTube app id. */
 export const YOUTUBE_API_KEY = typeof __YOUTUBE_KEY__ !== "undefined" ? __YOUTUBE_KEY__ : "";
 export const YOUTUBE_APP_ID = typeof __YOUTUBE_ID__ !== "undefined" && __YOUTUBE_ID__ ? __YOUTUBE_ID__ : "111299001912";
+
+/**
+ * How the side lights follow the poster in focus (docs/smartthings.md): ms between the three moves of a colour change
+ * (`NEST_MOOD_STEP_MS`, 100-5000) and ms focus must rest before it starts (`NEST_MOOD_SETTLE_MS`, 0-10000).
+ */
+export const MOOD_TIMING = {
+  stepMs: moodMs(typeof __MOOD_STEP_MS__ !== "undefined" ? __MOOD_STEP_MS__ : "", MOOD_STEP_MS, 100, 5_000),
+  settleMs: moodMs(typeof __MOOD_SETTLE_MS__ !== "undefined" ? __MOOD_SETTLE_MS__ : "", MOOD_SETTLE_MS, 0, 10_000),
+};
 
 /** Where the weather is for when SmartThings has no location: coordinates, or a city looked up once. */
 export const WEATHER_ENV = {
