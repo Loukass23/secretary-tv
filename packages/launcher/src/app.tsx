@@ -1054,6 +1054,8 @@ export function App() {
   const embeddedHost = {
     // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
     cloud,
+    // The catalog home draws Secretary's header too, with the same person top left.
+    person: { name: me?.name ?? "Secretary", color: me?.color, img: me?.img },
     onExit: () => {
       setCatalog(null);
       setView("home");

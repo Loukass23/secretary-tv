@@ -154,6 +154,7 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       active
       status={null}
       heading={type === "movie" ? "Cinema" : type === "series" ? "Shows" : "Anime"}
+      person={{ name: "Robin", color: "#5b52e6" }}
       onFocus={setFocus}
       onOpen={noop}
       onOpenFolder={noop}
@@ -162,8 +163,6 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       onRowStyle={(id, style) => setRowStyles((s) => ({ ...s, [id]: style }))}
       onDwell={noop}
       onOpenHub={noop}
-      onOpenNest={noop}
-      onSwitchType={noop}
       onBack={noop}
     />
   );
