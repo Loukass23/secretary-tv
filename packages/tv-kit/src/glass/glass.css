@@ -497,3 +497,107 @@
 @keyframes sgLoaderIn { to { opacity: 1; } }
 .sg-loader.is-calm { animation: none; opacity: 1; }
 .sg-loader.is-calm .sg-b-spikes, .sg-loader.is-calm .sg-b-in, .sg-loader.is-calm .sg-b-out, .sg-loader.is-calm .sg-b-head { animation: none; }
+
+/* --- header (Header.tsx): the person, the clock and the quiet buttons. Collapsed (a title page), only the clock stays,
+   slid to the right edge by transform; the rest fades out as one layer, then stops being drawn. --- */
+.sg-root > .sg-head-items { left: 0; top: 0; transition: opacity var(--sg-fade) var(--sg-ease), visibility 0s; will-change: opacity; }
+.sg-head-items.is-away { opacity: 0; visibility: hidden; transition: opacity var(--sg-fade) var(--sg-ease), visibility 0s var(--sg-fade); }
+.sg-head-clock {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  height: 78px;
+  text-align: right;
+  transition: transform var(--sg-move) var(--sg-ease);
+  will-change: transform;
+}
+.sg-head-clock b { display: block; font-size: 38px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+/* Header buttons: no fill or hairline until focused, so the top stays quiet. */
+.sg-glass.sg-quiet::after { opacity: 0; }
+.sg-glass.sg-quiet { font-size: 38px; }
+
+/* --- shared pieces (pieces.tsx): the home screen's type, spacing and focus for the catalog screens --- */
+.sg-kicker {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent, #ff5a26);
+}
+.sg-row-label { position: absolute; font-size: 26px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
+.sg-row-label em { margin-left: 14px; font-size: 22px; font-style: normal; font-weight: 500; }
+
+/* Info panel: the opened card's caption (28px name, 23px line, 24px synopsis); on glass, a title page's panel. */
+.sg-info { position: absolute; overflow: hidden; }
+.sg-info.is-glass { padding: 36px 40px; }
+.sg-info .sg-kicker { margin-bottom: 10px; }
+.sg-info-title { display: block; font-size: 28px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-info small.sg-info-meta { margin-top: 4px; font-size: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-info-about {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.38;
+  color: var(--sg-ink-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+/* Buttons: the home card's pill, a hairline and the white sheet fading in on focus with a small lift. */
+.sg-btn-row { display: flex; gap: 16px; margin-top: 28px; }
+.sg-root > .sg-btn-row.is-placed { margin-top: 0; }
+.sg-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 60px;
+  padding: 0 28px;
+  border-radius: 30px;
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  font-size: 27px;
+  font-weight: 600;
+  white-space: nowrap;
+  isolation: isolate;
+  transition: transform 180ms var(--sg-ease);
+  will-change: transform;
+}
+.sg-btn.is-primary { background: var(--sg-raised); }
+.sg-btn::before,
+.sg-tab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--sg-focus);
+  opacity: 0;
+  transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
+}
+.sg-btn.is-focus,
+.sg-tab.is-focus { color: var(--sg-focus-ink); }
+.sg-btn.is-focus { transform: scale(1.05); }
+.sg-btn.is-focus::before,
+.sg-tab.is-focus::before { opacity: 1; }
+
+/* Tabs: one width each, the run scrolled by transform; picked is raised, focus the white sheet. */
+.sg-tabs { position: absolute; height: 60px; overflow: hidden; }
+.sg-tabs-run { position: absolute; left: 0; top: 0; height: 100%; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
+.sg-tab {
+  position: absolute;
+  top: 0;
+  width: 176px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 30px;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--sg-ink-dim);
+  white-space: nowrap;
+  isolation: isolate;
+}
+.sg-tab.is-picked { background: var(--sg-raised); color: var(--sg-ink); }

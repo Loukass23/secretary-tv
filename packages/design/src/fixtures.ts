@@ -139,14 +139,17 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
       run: noop,
       kind: "apps",
       apps: [
-        { icon: art.icons[0], label: "Cinema" },
-        { icon: art.icons[1], label: "Shows" },
-        { icon: art.icons[2], label: "Anime" },
-        { icon: art.icons[3], label: "Music" },
+        // The TV's other apps. Cinema, Shows and Anime are cards inside Secretary, never apps here.
+        { icon: art.icons[0], label: "Music" },
+        { icon: art.icons[1], label: "Browser" },
+        { icon: art.icons[2], label: "Gallery" },
+        { icon: art.icons[3], label: "User Guide" },
         { label: "Photos" },
-        { label: "Weather" },
+        { label: "Workspace" },
       ],
     },
+    // Last, as on the TV: it puts back the cards taken off the home row (none here).
+    { key: "add", label: "Add to home", run: noop, kind: "list", items: [], add: "Everything is on the home screen" },
   ];
 }
 

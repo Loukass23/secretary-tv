@@ -18,7 +18,7 @@ export interface PageProps {
 }
 
 const PAGES = ["tokens", "components", "screens"] as const;
-const GROUPS = ["Controls and cards", "Media and motion", "Icons"];
+const GROUPS = ["Controls and cards", "Media and motion", "Icons", "Header and panels", "Catalog tiles"];
 const MODES: readonly GlassMode[] = ["fake", "flat", "live"];
 const TINT_NAMES = Object.keys(TINTS) as TintName[];
 
@@ -155,7 +155,7 @@ export function App() {
       <header class="dz-bar">
         <b class="dz-brand">Secretary Design</b>
         <Choice items={PAGES} value={s.page} label={(p) => p[0].toUpperCase() + p.slice(1)} onPick={(page) => set({ page })} />
-        {s.page === "components" && <Choice items={[0, 1, 2]} value={s.group} label={(g) => GROUPS[g]} onPick={(group) => set({ group })} />}
+        {s.page === "components" && <Choice items={GROUPS.map((_, i) => i)} value={s.group} label={(g) => GROUPS[g]} onPick={(group) => set({ group })} />}
         {s.page === "screens" && <Choice items={SCREENS.map((_, i) => i)} value={s.screen} label={(i) => SCREENS[i]} onPick={(screen) => set({ screen })} />}
         <span class="dz-sep" />
         <Choice items={["night", "day"] as Theme[]} value={s.theme} label={(t) => (t === "day" ? "Daylight" : "Night")} onPick={(theme) => set({ theme })} />
