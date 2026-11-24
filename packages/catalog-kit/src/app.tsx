@@ -83,6 +83,8 @@ export interface EmbeddedHost {
   cloud?: import("@secretary/nuvio").NuvioClient;
   /** The root Back and CH+: give the screen back to Secretary's home. */
   onExit(): void;
+  /** The search keys and buttons: Secretary's one search (launcher/src/search.tsx) takes the screen. */
+  onSearch?(query?: string): void;
   /** The person Secretary's header shows top left; the catalog home draws the same header (tv-kit Header). */
   person?: import("@secretary/tv-kit/src/glass/Header.tsx").HeaderPerson;
   /** Secretary's header, which title pages draw collapsed to the clock (host.ts). Absent: the clock alone. */
@@ -94,7 +96,7 @@ declare const __TRAKT_CLIENT_ID__: string | undefined;
 type View =
   | { name: "home" }
   | { name: "folder" }
-  | { name: "hub"; query?: string; tab?: OverlayTab; autoVoice?: boolean }
+  | { name: "hub"; tab?: OverlayTab }
   | {
       name: "timeline";
       collection: SagaDef;
@@ -227,8 +229,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   // Global Channel Rocker (CH- / CH+) and Search shortcuts when inside Detail or Timeline views.
   useKeys(view.name === "detail" || view.name === "timeline", (key) => {
     if (key === "ChannelDown" || key === "Search" || key === "SearchVoice") {
-      void syncAllResume().then(setResume);
-      setView({ name: "hub", tab: "search", autoVoice: key === "SearchVoice" });
+      embedded.onSearch?.();
       return true;
     }
     return false;
@@ -384,9 +385,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         const col = getSagaById(sagaId);
         if (col) setView({ name: "timeline", collection: col, initialFocusTitleId });
       },
-      openHub: (query = "", autoVoice = false) => {
-        setView({ name: "hub", query, tab: query || autoVoice ? "search" : undefined, autoVoice });
-      },
+      openHub: (query = "") => (query ? embedded.onSearch?.(query) : setView({ name: "hub" })),
       openSettings: () => {
         setView({ name: "hub", tab: "settings" });
       },
@@ -618,9 +617,9 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           // A series' episode sources depend on the episode, so only movies look up on dwell.
           if (itemType === "movie") void streams.get(title.id, undefined, "movie").catch(() => {});
         }}
-        onOpenHub={(tab, autoVoice) => {
-          void syncAllResume().then(setResume);
-          setView({ name: "hub", tab, autoVoice });
+        onOpenHub={(tab) => {
+          if (tab !== "settings") return embedded.onSearch?.();
+          setView({ name: "hub", tab });
         }}
         onBack={homeBack}
       />
@@ -642,16 +641,9 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
       <HubOverlay
         active={view.name === "hub"}
         activeType={activeType}
-        serverUrl={serverUrl}
-        continueItems={resume}
         settings={settings}
         onUpdateSettings={setSettings}
-        initialQuery={view.name === "hub" ? view.query : undefined}
-        initialTab={view.name === "hub" ? view.tab : undefined}
-        autoVoice={view.name === "hub" ? view.autoVoice : undefined}
-        onSelectTitle={(itemType, title, autoPlay) =>
-          setView({ name: "detail", itemType, title, autoPlay })
-        }
+        onSearch={() => embedded.onSearch?.()}
         onOpenNest={openNest}
         onClose={goHome}
       />

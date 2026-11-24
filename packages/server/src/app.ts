@@ -14,6 +14,7 @@ import {
   VOICE_TYPES,
 } from "./companion.ts";
 import { type EpisodeHint, episodeHint, pickFile } from "./files.ts";
+import { createTypingStore, renderTypeHtml, TYPE_CODE } from "./phone-keys.ts";
 import { discoverCatalog, rankSearch, searchCatalogs, type SearchResult } from "./search.ts";
 import { type Weather, fetchWeather, type WeatherPlace } from "./weather.ts";
 import {
@@ -139,6 +140,7 @@ export function createApp(cfg: AppConfig) {
   );
   const weatherCache = ttlCache<Weather | null>(WEATHER_TTL_MS, now);
   const state = createStateStore(cfg.stateFile, now);
+  const typing = createTypingStore(now);
   const torbox = createTorbox({ apiKey: cfg.apiKey, fetch: f });
 
   const streams = async (type: string, id: string): Promise<Response> =>
@@ -424,6 +426,23 @@ export function createApp(cfg: AppConfig) {
       if (m && isCatalogKind(m[1]) && req.method === "GET") {
         const hit = state.consumeHandoffEntry(m[1]);
         return json({ title: hit?.title ?? null, autoPlay: Boolean(hit?.autoPlay) });
+      }
+      // Secretary Desk's phone keyboard for the TV's search (phone-keys.ts).
+      m = pathname.match(/^\/type\/([^/]+)(\/text)?$/);
+      if (m && TYPE_CODE.test(m[1])) {
+        const code = m[1];
+        if (!m[2] && req.method === "GET") {
+          return new Response(renderTypeHtml(cfg.baseUrl, code), {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...CORS },
+          });
+        }
+        if (m[2] && req.method === "GET") return json(typing.get(code));
+        if (m[2] && req.method === "POST") {
+          const body = (await req.json().catch(() => null)) as { text?: unknown } | null;
+          if (typeof body?.text !== "string") return json({ error: "invalid text" }, 400);
+          return json(typing.put(code, body.text));
+        }
       }
       if (pathname === "/search" && req.method === "GET") {
         const q = (searchParams.get("q") ?? "").trim();

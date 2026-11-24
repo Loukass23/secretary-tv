@@ -1,7 +1,7 @@
 # The catalog inside Secretary
 
 Secretary (`packages/launcher`) is the only TV app. Films, shows and anime are browsed and played inside it: the
-catalog screens of `packages/catalog-kit` (home rows, title pages, collection folders, the Hub with search and
+catalog screens of `packages/catalog-kit` (home rows, title pages, collection folders, the Hub with its
 settings, saga timelines, and the AVPlay player with the island and the control centre) mount as one view of
 Secretary. There is no app switch, and no other app to fall back to.
 
@@ -28,6 +28,10 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
     clock, the person, the buttons and what OK on each does. It shows collapsed to the clock, top right, and Up from
     the top of the page expands it (`tv-kit/src/glass/header-nav.ts`). Picture and Sound act in place; the other
     buttons give the screen back to Secretary first.
+- **Search.** The catalog has no search of its own: CH-, the Search keys, the catalog home's Search button and the
+  header's search button on title pages call `EmbeddedHost.onSearch`, and Secretary's one search
+  (`launcher/src/search.tsx`) takes the screen. A result opens its page in the catalog again; Back with nothing typed
+  reopens the catalog screen Secretary had opened.
 - **Ways out.** Back at the catalog's home, Back from a page that Secretary opened, and CH+ all call
   `EmbeddedHost.onExit`. Secretary then shows its home again and reads Continue watching, My List and the collections
   again (`refreshCloud`).

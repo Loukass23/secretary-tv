@@ -7,7 +7,8 @@ Smart Hub and does not change any TV setting. ("Nest" is the home screen's name 
 
 Films, shows and anime open inside Secretary (`docs/embedding-catalog.md`). The catalog's top bar
 (`Home | Cinema | Shows | Anime`, Search, Settings) follows the home screen's header. **Home** and CH+ go back to the
-home screen, and the catalog's Hub (`HubOverlay.tsx`) keeps only Search and Settings.
+home screen. There is one search for the whole app (`launcher/src/search.tsx`, below); the catalog's Hub
+(`HubOverlay.tsx`) keeps only Settings, and its search pill and search keys open Secretary's search.
 
 ## Why not Samsung Smart Hub Preview or Samsung Universal Search?
 
@@ -81,10 +82,36 @@ launcher, and have a way back that does not depend on the launcher (a second `sd
 
 ## Where this leaves the idea
 
-- **The Hub (Search and Settings)**: always available in the catalog (CH- or the Search button), with Continue
-  watching and unified search, zero Tizen lock-in, and no app switch. CH+ goes back to the home screen.
+- **One search**: from the home screen and from inside the catalog (CH-, the Search key or the header's search
+  button), zero Tizen lock-in, and no app switch. CH+ goes back to the home screen.
 - **Boot into Secretary**: Workable with Autorun Last App, no system changes.
 - **Home key to the launcher**: Unproven on this TV and risky; keep using CH+ and "Autorun Last App" instead.
+
+## Search
+
+One search screen for the whole app (`src/search.tsx`), opened by the header's search button, the Search key and CH-,
+on the home screen and inside the catalog (`EmbeddedHost.onSearch`). Back with nothing typed returns where it was
+opened from: the home screen, or the catalog screen Secretary had opened (as first opened, never playing).
+
+- **Layout**: the shared header on top (its search button carries the small bar); a compact keyboard in a glass panel
+  on the right (six keys a row, letters then digits, then Space, Delete and Clear); on the left, the results as a grid
+  of posters, four a row, with the focused title's name and line above them. Before anything is typed, the left side
+  lists the recent searches (`sectv:recent-searches:v1`, seven at most) and "Clear recent searches".
+- **As you type** (`src/live-search.ts`): from two characters on, at most one request every 300 ms while typing, and
+  always one for the last text. Starting a request aborts the one before it, and an answer that comes back after a
+  newer request started is dropped. An answer for an earlier text stays on screen ("updating") until the latest
+  arrives. The last 24 answers are kept, so Delete back shows earlier results at once. Requests go to the server's
+  `/search` (cached there), or straight to the catalogs without a server or when it does not answer.
+- **Only the rows around focus** are rendered (the focused row, two above, two below); the grid scrolls by transform.
+- **Navigation** (`src/search-nav.ts`): Left off the keyboard goes to the results (or the recent searches), Right off
+  the results comes back to the keyboard row the remote was on; Up from the top goes to the header. OK on a header
+  button leaves the search and does what it does on the home screen. Back clears the text first, then leaves. The
+  microphone key still opens the TV's own keyboard, which can dictate.
+- **Phone keyboard**: with a server, the panel shows a QR code for Secretary Desk's `/type/<code>` page (`server/src/
+  phone-keys.ts`). The code is random for each time the search opens; the phone sends its text there (at most every
+  250 ms), and the TV reads it back about once a second while the search is open (`src/phone-keys.ts`) and puts it in
+  the field. The server keeps the last 32 codes in memory for 30 minutes. On a hosted server the QR code carries the
+  server key, like Desk's own address.
 
 ## Glass components and the lab
 
@@ -261,7 +288,7 @@ The answers live in `packages/assistant` (`route()`), which the server and Nest 
   the server's.
 - **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
-- **Watch prompts and Spotlight Search** ask the catalogs straight from the TV.
+- **Watch prompts and the search** ask the catalogs straight from the TV.
 - **The weather** ("what's the weather", "do I need an umbrella") is answered from the forecast, with no Gemini call.
 - **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has
   its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`

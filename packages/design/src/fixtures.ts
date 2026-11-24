@@ -1,6 +1,7 @@
 // Fixture data for the real screens, typed against their own props so `pnpm typecheck` catches drift.
 // Invented titles and places only (CLAUDE.md: no sources).
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
+import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
 import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
@@ -192,6 +193,39 @@ export function catalogRows(art: Art): HomeRow[] {
   fresh.items = fresh.items.map((t, k) => (k % 3 === 1 ? { ...t, watched: true } : t));
   return [cont, row("popular", "Popular", 4, 12), fresh, row("mylist", "My list", 6, 6)];
 }
+
+/**
+ * The search screen's finder (launcher/src/search.tsx): the invented titles, in films, shows and anime, matched by
+ * word start after a short wait, as a server would answer. Honours the abort, as the real one does.
+ */
+export function searchFixture(art: Art): (q: string, signal: AbortSignal) => Promise<SearchResult[]> {
+  const kinds = ["movie", "series", "anime"] as const;
+  const all: SearchResult[] = Array.from({ length: 36 }, (_, i) => ({
+    type: kinds[i % 3],
+    title: {
+      id: `dz:s${i}`,
+      name: i < TITLES.length ? TITLES[i] : `${TITLES[i % TITLES.length]} ${["II", "Returns", "Stories"][Math.floor(i / TITLES.length) - 1]}`,
+      year: String(1996 + ((i * 5) % 29)),
+      rating: (6 + ((i * 7) % 35) / 10).toFixed(1),
+      poster: art.posters[i % art.posters.length],
+    },
+  }));
+  return (q, signal) =>
+    new Promise((resolve, reject) => {
+      const words = q.toLowerCase().split(" ").filter(Boolean);
+      const t = setTimeout(
+        () => resolve(all.filter((r) => words.every((w) => r.title.name.toLowerCase().split(" ").some((n) => n.startsWith(w))))),
+        180 + Math.random() * 220,
+      );
+      signal.addEventListener("abort", () => {
+        clearTimeout(t);
+        reject(new DOMException("aborted", "AbortError"));
+      });
+    });
+}
+
+/** Recent searches for the empty search screen. */
+export const RECENT_SEARCHES = ["northern lights", "night ferry", "copper"];
 
 // The lights panel (launcher/src/lights.tsx): a made-up home of four rooms, a few devices in none, and enough routines
 // to scroll. Ids are invented; nothing here reaches SmartThings.
