@@ -27,9 +27,11 @@ export function CatalogHost({ entry, host, serverUrl }: { entry: CatalogEntry; h
   }, []);
   if (!App) return <div class="nest-catalog-loading"><BirdLoader /></div>;
   // The catalog comes in by opacity, on its own layer, so it feels like the card opening rather than a new page.
+  // Keyed by what it opened on: the header's Settings button, pressed on a title page, opens the catalog anew on the Hub.
+  const key = `${entry.type}|${entry.open?.title.id ?? ""}|${entry.folder?.folderId ?? ""}|${entry.hub?.tab ?? ""}`;
   return (
     <div class="nest-catalog-in">
-      <App type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} embedded={host} open={entry.open} folder={entry.folder} hub={entry.hub} />
+      <App key={key} type={entry.type} heading={HEADING[entry.type]} serverUrl={serverUrl} embedded={host} open={entry.open} folder={entry.folder} hub={entry.hub} />
     </div>
   );
 }

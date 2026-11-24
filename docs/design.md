@@ -24,7 +24,8 @@ same screen.
   "Catalog tiles" the poster and landscape tiles under the collapsed header (`glass/Header.tsx`, `glass/pieces.tsx`).
 - **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
   home showing an answer and the full chat; then the catalog pages Secretary opens inside itself: the catalog home
-  (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page and a show page (`ui/Detail.tsx`). The data is fixtures
+  (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page (with its cast) and a show page
+  (`ui/Detail.tsx`), and the show page with spoiler protection on. Up from a title page's buttons expands the header. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.
 

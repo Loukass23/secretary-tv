@@ -83,6 +83,8 @@ export interface EmbeddedHost {
   cloud?: import("@secretary/nuvio").NuvioClient;
   /** The root Back, CH+ and the home pill: give the screen back to Secretary's home. */
   onExit(): void;
+  /** Secretary's header, which title pages draw collapsed to the clock (host.ts). Absent: the clock alone. */
+  header?: import("./host.ts").HostHeader;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -700,6 +702,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           active={view.name === "detail"}
           autoPlay={view.name === "detail" && Boolean(view.autoPlay)}
           clockFormat={settings.general.clockFormat}
+          header={embedded.header}
+          spoilerProtection={settings.playback.spoilerProtection}
           startAfter={settings.playback.startAfter}
           limits={settings.playback}
           remember={settings.playback.rememberSource}

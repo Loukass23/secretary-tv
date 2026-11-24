@@ -93,6 +93,25 @@ export interface RawMeta {
   poster?: string;
   background?: string;
   videos?: RawVideo[];
+  cast?: string[];
+  director?: string[] | string;
+  /** Newer metas carry the people as links, `category` "Cast" or "Directors". */
+  links?: { name?: string; category?: string }[];
+}
+
+const names = (list: unknown): string[] | undefined => {
+  const arr = typeof list === "string" ? list.split(",") : Array.isArray(list) ? list : [];
+  const out = arr.filter((n): n is string => typeof n === "string").map((n) => n.trim()).filter(Boolean);
+  return out.length ? [...new Set(out)] : undefined;
+};
+
+/** The cast and the directors of a meta: its own fields, else its links. */
+export function peopleOf(m: Pick<RawMeta, "cast" | "director" | "links">): { cast?: string[]; director?: string[] } {
+  const linked = (cat: string) => names(m.links?.filter((l) => l.category?.toLowerCase() === cat).map((l) => l.name));
+  const cast = names(m.cast) ?? linked("cast");
+  const director = names(m.director) ?? linked("directors");
+  // Only the fields there are, so a title without people stays as it was.
+  return { ...(cast ? { cast } : {}), ...(director ? { director } : {}) };
 }
 
 export function toVideo(v: RawVideo): Video | null {
@@ -174,6 +193,7 @@ export function toTitle(m: RawMeta): Title | null {
     poster: keepArt ? m.poster : undefined,
     background: keepArt ? m.background : undefined,
     videos: videos?.length ? videos : undefined,
+    ...peopleOf(m),
   };
 }
 
@@ -383,6 +403,8 @@ interface TmdbMovieDetail {
   backdrop_path?: string;
   genres?: { name?: string }[];
   belongs_to_collection?: { id?: number; name?: string } | null;
+  /** With `append_to_response=credits`. */
+  credits?: { cast?: { name?: string }[]; crew?: { name?: string; job?: string }[] };
 }
 
 interface TmdbEpisode {
@@ -425,7 +447,7 @@ export async function fetchTmdbMeta(
   if (type === "movie") {
     const hit = findData.movie_results?.[0];
     if (!hit?.id) return null;
-    const res = await f(`${TMDB}/movie/${hit.id}?api_key=${encodeURIComponent(tmdbKey)}`);
+    const res = await f(`${TMDB}/movie/${hit.id}?api_key=${encodeURIComponent(tmdbKey)}&append_to_response=credits`);
     if (!res.ok) return null;
     const m = (await res.json()) as TmdbMovieDetail;
     const name = m.title || m.original_title || hit.title;
@@ -440,6 +462,8 @@ export async function fetchTmdbMeta(
       runtime: m.runtime ? `${m.runtime} min` : undefined,
       poster: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : undefined,
       background: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : undefined,
+      cast: names(m.credits?.cast?.slice(0, 12).map((c) => c.name)),
+      director: names(m.credits?.crew?.filter((c) => c.job === "Director").map((c) => c.name)),
       tmdbCollection:
         m.belongs_to_collection?.id && m.belongs_to_collection?.name
           ? { id: m.belongs_to_collection.id, name: m.belongs_to_collection.name }
@@ -611,7 +635,7 @@ export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch =
   const hit = f === fetch ? metaCache.get(key) : undefined;
   if (hit) return hit;
   let title = await withTimeout(fetchMetaFirst(type, id, f));
-  if (title && (empty(title.description) || empty(title.runtime) || empty(title.genre))) {
+  if (title && (empty(title.description) || empty(title.runtime) || empty(title.genre) || (type === "movie" && empty(title.cast)))) {
     const extra = await withTimeout(fetchCinemetaMeta(type, id, f).catch(() => null));
     if (extra) {
       title = {
@@ -620,6 +644,8 @@ export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch =
         runtime: empty(title.runtime) ? extra.runtime : title.runtime,
         genre: empty(title.genre) ? extra.genre : title.genre,
         year: empty(title.year) ? extra.year : title.year,
+        cast: empty(title.cast) ? extra.cast : title.cast,
+        director: empty(title.director) ? extra.director : title.director,
       };
     }
   }

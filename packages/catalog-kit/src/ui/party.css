@@ -43,3 +43,4 @@
 .pty-card h2 { margin: 0; font-size: 36px; font-weight: 700; }
 .pty-card p { margin: 0; font-size: 20px; color: var(--sg-ink-dim); }
 .pty-card .pty-actions { margin-top: auto; }
+.pty-card .sg-btn-row { margin-top: auto; }

@@ -1,6 +1,24 @@
 import { type Dir, type Focus, getTvInputBridge, move, useKeys, windowOf } from "@secretary/tv-kit";
-import { Glass, GlassRoot, ListCard, MediaTile, Scroller, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  ButtonRow,
+  Glass,
+  GlassRoot,
+  Header,
+  type HeaderAt,
+  headerStart,
+  InfoPanel,
+  LANDSCAPE,
+  LandscapeTile,
+  ListCard,
+  POSTER,
+  PosterTile,
+  RowLabel,
+  Scroller,
+  Segmented,
+  stepHeader,
+  Tabs,
+} from "@secretary/tv-kit/src/glass/index.ts";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { backgroundUrl, fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, similarUrl } from "../lib/cinemeta.ts";
 import { searchSummary } from "../lib/searchsummary.ts";
 import { LoadingScreen } from "./Loading.tsx";
@@ -22,6 +40,9 @@ import {
   watchedEpisodes,
 } from "../lib/resume.ts";
 import { audioLangsOf, type ClockFormat, subLangsOf } from "../lib/settings.ts";
+import type { HostHeader } from "../host.ts";
+import { creditLines, episodePanel, episodeTag, isSpoiler, type SpoilerState } from "../lib/titlepage.ts";
+import { BLANK, blurredStill } from "./stillblur.ts";
 import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
 import { releaseOf } from "../lib/party.ts";
@@ -50,18 +71,21 @@ const REVEAL_CAP_MS = 900;
 const VEIL_FADE_MS = 360;
 const LOADER_OUT_MS = 320;
 const PAD = 80;
-const EP_W = 320;
-const EP_H = 180;
-const EP_STRIDE = EP_W + 28;
-/** The info panel: taller for films, shorter for series to leave room for seasons and episodes. */
-const INFO_MOVIE = { x: PAD, y: 120, w: 1060, h: 520 };
-const INFO_SERIES = { x: PAD, y: 110, w: 1060, h: 470 };
-const SEASONS_Y = 610;
-const EPS_Y = 706;
+/** Episodes are the home row's landscape tiles (tv-kit pieces), the title on the art. */
+const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
+/**
+ * The info panel, under the collapsed header (the clock alone, top right): taller for films, which list their people,
+ * shorter for series to leave room for the season tabs and the episodes.
+ */
+const INFO_MOVIE = { x: PAD, y: 140, w: 1000, h: 540 };
+const INFO_SERIES = { x: PAD, y: 140, w: 1000, h: 440 };
+const SEASONS_Y = 616;
+const EPS_Y = 712;
 /** How long the page waits for a title's details before it shows what it has. */
 const META_WAIT_MS = 6000;
-/** "More like this" under a film's panel: a label, then a row of small posters. */
-const SIM = { labelY: 668, y: 716, w: 180, h: 270, stride: 204 };
+/** "More like this" under a film's panel: a row label, then the home row's posters, smaller. */
+const SIM_SCALE = 0.68;
+const SIM = { labelY: 708, y: 752, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
 /** The sources sheet, on the right; rows scroll inside it. */
 const SHEET = { x: 1060, y: 60, w: 800, h: 960 };
 const SOURCE_H = 112;
@@ -85,6 +109,10 @@ interface Props {
   active: boolean;
   autoPlay?: boolean;
   clockFormat?: ClockFormat;
+  /** Secretary's header (host.ts): drawn collapsed to the clock, expanded by Up from the top of the page. */
+  header?: HostHeader;
+  /** Settings › Playback "Spoiler protection": unwatched episodes' stills and synopses are blurred (lib/titlepage.ts). */
+  spoilerProtection?: boolean;
   /** Settings › Playback: how long Play waits for slower providers (lib/autoplay.ts). */
   startAfter?: StartAfter;
   /** Settings › Playback size limits, which autoplay prefers to stay inside (lib/rules.ts). */
@@ -166,6 +194,57 @@ function SourceDetails({
   );
 }
 
+/**
+ * One episode, as the home row's landscape tiles: the still with the title and its place on the art. With spoiler
+ * protection on an unwatched episode, the still is swapped for its pre-blurred copy (ui/stillblur.ts): the title stays.
+ */
+function EpisodeTile({
+  x,
+  v,
+  fallback,
+  blur,
+  progress,
+  watched,
+  focused,
+}: {
+  x: number;
+  v: Video;
+  fallback: string;
+  blur: boolean;
+  progress?: number;
+  watched: boolean;
+  focused: boolean;
+}) {
+  const src = v.thumbnail ?? fallback;
+  const [shown, setShown] = useState(() => (blur ? BLANK : src));
+  useEffect(() => {
+    if (!blur) return void setShown(src);
+    let live = true;
+    setShown(BLANK);
+    blurredStill(src).then(
+      (u) => live && setShown(u),
+      () => live && setShown(BLANK),
+    );
+    return () => {
+      live = false;
+    };
+  }, [src, blur]);
+  const aired = hasAired(v);
+  return (
+    <LandscapeTile
+      x={x}
+      y={0}
+      src={shown}
+      title={v.name}
+      sub={aired ? episodeTag(v) : `${episodeTag(v)} · soon`}
+      progress={progress}
+      watched={watched}
+      focused={focused}
+      class={`det-ep${aired ? "" : " is-soon"}${blur ? " is-spoiler" : ""}`}
+    />
+  );
+}
+
 export function Detail({
   type,
   title,
@@ -174,6 +253,8 @@ export function Detail({
   active,
   autoPlay,
   clockFormat = "24h",
+  header,
+  spoilerProtection = false,
   startAfter = "5",
   limits,
   remember = true,
@@ -230,6 +311,11 @@ export function Detail({
   // Why the sheet opened by itself, shown in its heading until it closes.
   const [sheetNote, setSheetNote] = useState<string | null>(null);
   const [focus, setFocus] = useState<Focus>({ row: 0, col: 0 });
+  // The header has the remote (Up from the top of the page): it is drawn expanded, else collapsed to the clock.
+  const [head, setHead] = useState<HeaderAt | null>(null);
+  useEffect(() => {
+    if (!active) setHead(null);
+  }, [active]);
   const [autoPlayed, setAutoPlayed] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [sourceIdx, setSourceIdx] = useState(0);
@@ -536,29 +622,24 @@ export function Detail({
     actionSpecs.push({ id: "play", label: "No episodes" });
   } else {
     const what = series && target ? ` ${episodeLabel(target)}` : "";
-    actionSpecs.push({ id: "play", label: `▶ ${startSec > 0 ? "Resume" : "Play"}${what}` });
-    if (startSec > 0) actionSpecs.push({ id: "restart", label: "↺ Start over" });
+    actionSpecs.push({ id: "play", label: `${startSec > 0 ? "Resume" : "Play"}${what}` });
+    if (startSec > 0) actionSpecs.push({ id: "restart", label: "Start over" });
   }
 
-  actionSpecs.push({
-    id: "sources",
-    label: listed && ready ? `☰ Sources (${listed.length})` : "☰ Sources",
-  });
+  // One label whatever the search finds, so the row never reflows: the count is on the line under the buttons.
+  actionSpecs.push({ id: "sources", label: "Sources" });
 
-  if (party) actionSpecs.push({ id: "together", label: "👥 Watch together" });
+  if (party) actionSpecs.push({ id: "together", label: "Watch together" });
 
-  actionSpecs.push({
-    id: "watched",
-    label: watched ? "✓ Watched" : "☐ Mark Watched",
-  });
+  actionSpecs.push({ id: "watched", label: watched ? "✓ Watched" : "Mark watched" });
 
-  actionSpecs.push({ id: "mylist", label: saved ? "✓ My List" : "＋ My List" });
+  actionSpecs.push({ id: "mylist", label: saved ? "✓ My List" : "My List" });
 
   // Last, since the saga lookup can answer after the page is up: arriving, it never pushes the other pills along.
   if (sagaCol) {
     actionSpecs.push({
       id: "timeline",
-      label: `❖ Timeline (${sagaCol.steps.length})`,
+      label: `Timeline (${sagaCol.steps.length})`,
     });
   }
 
@@ -576,6 +657,22 @@ export function Detail({
       live = false;
     };
   }, [type, genre0, meta.id, series]);
+
+  // The actions row scrolls when its buttons are wider than the panel: one read of the focused button's box per move.
+  const actionsRun = useRef<HTMLDivElement>(null);
+  const [actShift, setActShift] = useState(0);
+  const actAt = focus.row === 0 ? focus.col : 0;
+  const actKey = actionSpecs.map((a) => a.label).join("|");
+  useLayoutEffect(() => {
+    const run = actionsRun.current;
+    const b = run?.querySelectorAll<HTMLElement>(".sg-btn")[actAt];
+    if (!run || !b) return;
+    const view = run.parentElement?.clientWidth ?? 0;
+    let at = actShift;
+    if (b.offsetLeft < at) at = b.offsetLeft;
+    if (b.offsetLeft + b.offsetWidth - at > view) at = b.offsetLeft + b.offsetWidth - view;
+    if (at !== actShift) setActShift(Math.max(0, at));
+  }, [actAt, actKey]);
 
   const lengths = series ? [actionSpecs.length, seasons.length, episodes.length] : similar.length ? [actionSpecs.length, similar.length] : [actionSpecs.length];
 
@@ -749,9 +846,21 @@ export function Detail({
       return false;
     }
 
+    // The header: Left and Right along it, OK acts (Secretary does), Down and Back collapse it again.
+    if (head != null) {
+      if (key === "Enter") return void header?.press(head);
+      const r = stepHeader(head, key, Boolean(header?.person), header?.buttons.length ?? 0);
+      setHead(r === "leave" ? null : r);
+      return;
+    }
     if (key === "Back") {
       if (pending) return void setPending(null);
       return void onBack();
+    }
+    if (key === "Up" && focus.row === 0) {
+      const at = header ? headerStart(Boolean(header.person), header.buttons.length) : null;
+      if (at != null) setHead(at);
+      return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       let next = move(lengths, focus, key.toLowerCase() as Dir);
@@ -836,11 +945,23 @@ export function Detail({
   const chipsY = tabs.length ? 196 : 132;
   const listTop = chipsY + 62;
 
-  // Seasons as a glass pill; many seasons get short labels so the pill still fits the page.
-  const short = seasons.length > 6;
-  const segW = Math.min(1760, seasons.length * (short ? 96 : 170));
-  const seasonLabel = (s: number) => (s === 0 ? (short ? "SP" : "Specials") : short ? `S${s}` : `Season ${s}`);
+  // Seasons as tabs (tv-kit pieces): one width each, the row scrolls to keep the focused one in view.
+  const seasonLabel = (s: number) => (s === 0 ? "Specials" : `Season ${s}`);
   const info = series ? INFO_SERIES : INFO_MOVIE;
+  // A show's panel follows the focused episode (else the one Play would start); a film's is the film's.
+  const spoilers: SpoilerState = { on: spoilerProtection, watched: epWatched, resumeId: resume?.episode?.id, titleWatched: watched };
+  const panel = series && target ? episodePanel(meta, target, spoilers) : null;
+  const credits = series ? [] : creditLines(meta);
+  const kicker = series
+    ? `${meta.name} · ${seasons.length} season${seasons.length === 1 ? "" : "s"}`
+    : sagaCol
+      ? `Film · ${sagaCol.title}`
+      : typeLabel(type, meta) === "Anime" ? "Anime film" : "Film";
+  const metaLine = panel
+    ? [...panel.meta, target && epWatched.has(episodeKey(target)) ? "✓ Watched" : ""]
+    : [meta.rating && `IMDb ${meta.rating}`, meta.year, meta.runtime, meta.genre?.slice(0, 3).join(", "), watched && "✓ Watched"].filter((x): x is string => Boolean(x));
+  const about = panel ? (panel.hidden ? undefined : panel.about) : meta.description;
+  const aboutEmpty = !about && !panel?.hidden ? (metaState === "loading" ? "Loading synopsis…" : "No synopsis for this title.") : undefined;
   // The sheet's lines (ui/sheet.ts): headers and sources, laid out top to bottom; only sources take focus.
   const ys: number[] = [];
   sheetItems.reduce((y, it) => (ys.push(y), y + (it.kind === "header" ? HEADER_STRIDE : SOURCE_STRIDE)), 0);
@@ -854,9 +975,10 @@ export function Detail({
 
   return (
     <div class={`detail-glass${waiting ? " is-waiting" : ""}`} style={active ? undefined : "display:none"}>
-      <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class="det">
+      <GlassRoot mode="fake" wallpaper={base.backdrop?.wallpaper} frost={hero.frost ?? base.backdrop?.frost} class={`det${series ? " is-series" : ""}`}>
         <HeroLayers hero={hero} shade={base.shade} />
-        <div class="det-clock">{clockText}</div>
+        {/* Secretary's one header (host.ts): the clock alone, top right, so the art stays clear; Up expands it. */}
+        <Header time={header?.time ?? clockText} expanded={head != null} person={header?.person} buttons={header?.buttons ?? []} focus={head} />
         {(waiting || loaderOut) && (
           <div class={`det-loading${waiting ? "" : " is-out"}`}>
             <LoadingScreen
@@ -867,27 +989,29 @@ export function Detail({
           </div>
         )}
 
-        <Glass {...info} class="det-info">
-          <span class="cat-kicker">
-            {series
-              ? `${typeLabel(type, meta)} · ${seasons.length} season${seasons.length === 1 ? "" : "s"} · ${videos.length} episodes`
-              : sagaCol
-                ? `Film · ${sagaCol.title}`
-                : "Film"}
-          </span>
-          <h1>{meta.name}</h1>
-          <div class="cat-meta">
-            {[meta.rating && `IMDb ${meta.rating}`, meta.year, meta.runtime, meta.genre?.slice(0, 3).join(" · "), watched && "✓ Watched"]
-              .filter(Boolean)
-              .join("  ·  ")}
-          </div>
-          {meta.description ? (
-            <p class={series ? "det-plot short" : progress ? "det-plot snug" : "det-plot"}>{meta.description}</p>
-          ) : (
-            <p class={`${series ? "det-plot short" : "det-plot"} det-plot-empty`}>
-              {metaState === "loading" ? "Loading synopsis…" : "No synopsis available for this title."}
-            </p>
+        <InfoPanel
+          {...info}
+          glass
+          kicker={kicker}
+          title={panel ? panel.title : meta.name}
+          meta={metaLine}
+          about={about ?? aboutEmpty}
+          lines={series ? 3 : progress ? 3 : 4}
+        >
+          {panel?.hidden && (
+            // Spoiler protection: the synopsis is drawn as soft bars, flat fills, never the text under a filter.
+            <div class="det-redact">
+              <i />
+              <i />
+              <small>Spoiler protection · the synopsis shows once you have watched it</small>
+            </div>
           )}
+          {credits.map((c) => (
+            <small key={c.label} class="det-credit">
+              <em>{c.label}</em>
+              {c.names}
+            </small>
+          ))}
           {progress && (
             <div class="det-progress">
               <span class="det-progress-bar">
@@ -896,16 +1020,14 @@ export function Detail({
               <span>{progress}</span>
             </div>
           )}
+          {/* One row of buttons, scrolled by transform to keep the focused one in view when they outrun the panel. */}
           <div class="det-actions">
-            {actionSpecs.map((act, i) => {
-              const primary = act.id === "play";
-              const foc = focus.row === 0 && i === focus.col && !sourcesOpen;
-              return (
-                <span key={act.id} class={`cat-btn det-act-${act.id}${primary ? " is-primary" : ""}${foc ? " is-focus" : ""}`}>
-                  {act.label}
-                </span>
-              );
-            })}
+            <div ref={actionsRun} class="det-actions-run" style={{ transform: `translate3d(${-actShift}px,0,0)` }}>
+              <ButtonRow
+                items={actionSpecs.map((a) => ({ id: a.id, label: a.label, primary: a.id === "play", icon: a.id === "together" ? ("party" as const) : undefined }))}
+                focusIndex={focus.row === 0 && head == null && !sourcesOpen && !ctx ? focus.col : -1}
+              />
+            </div>
           </div>
           <div class="det-will" key={ready && topParsed ? "will" : "status"}>
             {ready && topParsed ? (
@@ -918,7 +1040,7 @@ export function Detail({
                 ))}
                 {topParsed.size && <span>{topParsed.size}</span>}
                 <span class="det-will-dim">
-                  ⚡ cached · {ready.length} source{ready.length === 1 ? "" : "s"}
+                  cached · {ready.length} source{ready.length === 1 ? "" : "s"}
                 </span>
               </>
             ) : (
@@ -928,27 +1050,23 @@ export function Detail({
               </>
             )}
           </div>
-          {!series && <div class="det-hint">Hold OK for options · Back to return</div>}
-        </Glass>
+        </InfoPanel>
 
         {!series && similar.length > 0 && (
           <>
-            <span class="det-sim-k" style={{ left: `${PAD}px`, top: `${SIM.labelY}px` }}>
-              More like this
-            </span>
-            <div class="sg-clip" style={{ left: "0px", top: `${SIM.y - 20}px`, width: "1920px", height: `${SIM.h + 40}px` }}>
+            <RowLabel x={PAD} y={SIM.labelY} label="More like this" count={similar.length} />
+            <div class="sg-clip" style={{ left: "0px", top: `${SIM.y - 20}px`, width: "1920px", height: `${Math.round(POSTER.h * SIM_SCALE) + 40}px` }}>
               <div class="sg-scroll" style={{ transform: `translate3d(${PAD - (focus.row === 1 ? Math.max(0, focus.col - 1) * SIM.stride : 0)}px,20px,0)` }}>
                 {(() => {
-                  const [sf, st] = windowOf(focus.row === 1 ? focus.col : 0, similar.length, 2, 8);
+                  const [sf, st] = windowOf(focus.row === 1 ? focus.col : 0, similar.length, 2, 10);
                   return similar.slice(sf, st).map((t, k) => (
-                    <MediaTile
+                    <PosterTile
                       key={t.id}
                       x={(sf + k) * SIM.stride}
                       y={0}
-                      w={SIM.w}
-                      h={SIM.h}
+                      scale={SIM_SCALE}
                       src={posterUrl(t)}
-                      focused={focus.row === 1 && sf + k === focus.col && !sourcesOpen}
+                      focused={focus.row === 1 && sf + k === focus.col && head == null && !sourcesOpen}
                     />
                   ));
                 })()}
@@ -958,38 +1076,34 @@ export function Detail({
         )}
 
         {series && seasons.length > 0 && (
-          <Segmented
+          <Tabs
             x={PAD}
             y={SEASONS_Y}
-            w={segW}
-            h={64}
+            w={1920 - 2 * PAD}
             items={seasons.map(seasonLabel)}
             picked={Math.max(0, seasons.indexOf(shownSeason))}
-            focusIndex={focus.row === 1 && !sourcesOpen ? focus.col : -1}
+            focusIndex={focus.row === 1 && head == null && !sourcesOpen ? focus.col : -1}
           />
         )}
 
         {series && (
-          <div class="sg-clip" style={{ left: "0px", top: `${EPS_Y - 20}px`, width: "1920px", height: `${EP_H + 110}px` }}>
+          <div class="sg-clip" style={{ left: "0px", top: `${EPS_Y - 20}px`, width: "1920px", height: `${LANDSCAPE.h + 40}px` }}>
             <div class="sg-scroll" style={{ transform: `translate3d(${PAD - shift}px,20px,0)` }}>
+              {/* Only the episodes around focus are rendered (a season can have a hundred). */}
               {episodes.slice(from, to).map((v, k) => {
                 const c = from + k;
-                const aired = hasAired(v);
                 return (
-                  <div key={v.id} class={`det-ep${aired ? "" : " is-soon"}`} style={{ left: `${c * EP_STRIDE}px` }}>
-                    <MediaTile
-                      x={0}
-                      y={0}
-                      w={EP_W}
-                      h={EP_H}
-                      src={v.thumbnail ?? artSrc}
-                      badge={aired ? episodeLabel(v) : `${episodeLabel(v)} · soon`}
-                      progress={resume?.episode?.id === v.id && resume.durSec > 0 ? resume.posSec / resume.durSec : undefined}
-                      watched={epWatched.has(episodeKey(v))}
-                      focused={focus.row === 2 && c === focus.col && !sourcesOpen}
-                    />
-                    <span class="det-ep-name">{v.name}</span>
-                  </div>
+                  <EpisodeTile
+                    key={v.id}
+                    x={c * EP_STRIDE}
+                    v={v}
+                    fallback={artSrc}
+                    // The show's own art is no spoiler: only an episode's still is blurred.
+                    blur={Boolean(v.thumbnail) && isSpoiler(v, spoilers)}
+                    progress={resume?.episode?.id === v.id && resume.durSec > 0 ? resume.posSec / resume.durSec : undefined}
+                    watched={epWatched.has(episodeKey(v))}
+                    focused={focus.row === 2 && c === focus.col && head == null && !sourcesOpen}
+                  />
                 );
               })}
             </div>
@@ -1111,13 +1225,13 @@ export function Detail({
               Start a party and share its code: every TV plays the same release from its own debrid account, with play,
               pause and seek shared. Or join a friend's party with the code their TV shows.
             </p>
-            <div class="pty-actions">
-              {["Start a party", "Join with a code"].map((label, i) => (
-                <span key={label} class={`cat-btn${i === 0 ? " is-primary" : ""}${partyCard === i ? " is-focus" : ""}`}>
-                  {label}
-                </span>
-              ))}
-            </div>
+            <ButtonRow
+              items={[
+                { id: "start", label: "Start a party", primary: true, icon: "party" },
+                { id: "join", label: "Join with a code" },
+              ]}
+              focusIndex={partyCard}
+            />
           </Glass>
         )}
         {!veilGone && <div class={`det-veil${revealed ? " is-off" : ""}`} />}

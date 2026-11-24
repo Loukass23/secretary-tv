@@ -32,6 +32,10 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
   checks that its local lists belong to the signed-in profile (`checkOwner`), and drops them if they don't.
 - **Cinema lights.** Secretary writes its SmartThings grant to `sectv.home` as the catalog opens, and every 20 minutes
   while it is open. The movie scene then runs when a film starts, and the restore scene when it ends.
+- **The header.** Secretary lends its one header to the catalog (`EmbeddedHost.header`, `catalog-kit/src/host.ts`):
+  the clock, the person, the buttons and what OK on each does. A title page draws it collapsed to the clock, top
+  right, and Up from the top of the page expands it (`tv-kit/src/glass/header-nav.ts`). Picture and Sound act in
+  place; the other buttons give the screen back to Secretary first.
 - **Watch together.** Secretary's header looks up a room code and opens the room's title in the catalog
   (`CatalogConfig.open.room`), which joins the room.
 - **Keys and config.**
