@@ -23,7 +23,8 @@ same screen.
   it to the clock, as a title page does, and expands it again, as Up does) with the info panel, buttons and tabs, and
   "Catalog tiles" the poster and landscape tiles under the collapsed header (`glass/Header.tsx`, `glass/pieces.tsx`).
 - **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
-  home showing an answer and the full chat; then the catalog pages Secretary opens inside itself: the catalog home
+  home showing an answer and the full chat; the one search (`launcher/src/search.tsx`), empty on its recent searches
+  and with results, on fixture titles that answer after a short wait (type with the panel's keys); then the catalog pages Secretary opens inside itself: the catalog home
   (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page and a show page (`ui/Detail.tsx`). The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.

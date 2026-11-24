@@ -1,7 +1,7 @@
 # The catalog inside Secretary
 
 Secretary (`packages/launcher`) is the only TV app. Films, shows and anime are browsed and played inside it: the
-catalog screens of `packages/catalog-kit` (home rows, title pages, collection folders, the Hub with search and
+catalog screens of `packages/catalog-kit` (home rows, title pages, collection folders, the Hub with its
 settings, saga timelines, and the AVPlay player with the island and the control centre) mount as one view of
 Secretary. There is no app switch, and no other app to fall back to.
 
@@ -20,6 +20,9 @@ apps were then retired, and their packages and launch fallbacks were deleted on 
   - a Nuvio collection folder opens the folder (`folder`);
   - the header's Settings button opens the Hub on Settings (`hub`);
   - **Browse all** on the end bar of an opened Cinema, Shows or Anime card opens the catalog home for that kind.
+- **Search.** The catalog has no search of its own: CH-, the Search keys and its search buttons call
+  `EmbeddedHost.onSearch`, and Secretary's one search (`launcher/src/search.tsx`) takes the screen. A result opens its
+  page in the catalog again; Back with nothing typed reopens the catalog screen Secretary had opened.
 - **Ways out.** Back at the catalog's home, Back from a page that Secretary opened, CH+, and the Home pill all call
   `EmbeddedHost.onExit`. Secretary then shows its home again and reads Continue watching, My List and the collections
   again (`refreshCloud`).

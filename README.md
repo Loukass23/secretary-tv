@@ -73,6 +73,7 @@ Implemented:
 - `/resolve/<hash>`: picks the right file (episode matching, absolute anime numbers) and redirects to the debrid link.
 - `/cloud`: the files already in your debrid cloud.
 - `/search`: one search across films, shows and anime.
+- `/type/<code>`: Secretary Desk's phone keyboard for the TV's search (the TV shows its QR code).
 - `/resume` and `/handoff`: watch progress, and "open this on the TV" from the phone.
 - **Secretary Desk** (`/companion`, `/remote`): the phone web app with reminders and the assistant.
 - `/reminders`, `/ai/ask`, `/ai/state`, `/ai/transcribe`: reminders sync and the Secretary Bird assistant (Google

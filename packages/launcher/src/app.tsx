@@ -1,4 +1,4 @@
-import { type Dir, exitApp, type Focus as GridFocus, getTvInputBridge, move, useKeys, useOkHold } from "@secretary/tv-kit";
+import { exitApp, getTvInputBridge, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
@@ -109,16 +109,14 @@ import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titleme
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
 import { LightsPanel } from "./lights.tsx";
 import { WatchTogether } from "./party.tsx";
-import { KEY_ROWS, RECENT_ROW, Search } from "./search.tsx";
+import { SearchScreen } from "./search.tsx";
+import { headerButtons } from "./header-buttons.ts";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
 import { AssistantUnavailable, discoverCatalog, searchCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
-const SEARCH_DEBOUNCE_MS = 250;
-const RECENT_SEARCH_KEY = "sectv:recent-searches:v1";
-const MAX_RECENT_SEARCHES = 8;
 const THEME_KEY = "nest.theme";
 const SPEAK_KEY = "nest.speak";
 /** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
@@ -249,38 +247,23 @@ function collectionOwner(): string | null {
   return s && !s.anonymous ? `${s.userId}:${cloud.session.profile()}` : null;
 }
 
-function loadRecent(): string[] {
+/**
+ * One search request for the search screen: the home server when there is one (it caches), else the catalogs straight
+ * from the TV, as also when the server does not answer.
+ */
+async function findTitles(q: string, signal: AbortSignal): Promise<SearchResult[]> {
+  const direct = () => searchCatalogs(q, (input, init) => fetch(input, { ...init, signal }));
+  if (!SERVER_URL) return direct();
+  let body: { results?: SearchResult[] };
   try {
-    const raw = localStorage.getItem(RECENT_SEARCH_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, MAX_RECENT_SEARCHES);
-  } catch {
-    return [];
+    const res = await fetch(`${SERVER_URL}/search?q=${encodeURIComponent(q)}`, { signal });
+    if (!res.ok) return direct();
+    body = (await res.json()) as { results?: SearchResult[] };
+  } catch (e) {
+    if (signal.aborted) throw e;
+    return direct();
   }
-}
-
-function saveRecent(term: string): string[] {
-  const clean = term.trim();
-  if (clean.length < 2) return loadRecent();
-  const prev = loadRecent().filter((item) => item.toLowerCase() !== clean.toLowerCase());
-  const next = [clean, ...prev].slice(0, MAX_RECENT_SEARCHES);
-  try {
-    localStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(next));
-  } catch {
-    // ignore
-  }
-  return next;
-}
-
-function clearRecent(): string[] {
-  try {
-    localStorage.removeItem(RECENT_SEARCH_KEY);
-  } catch {
-    // ignore
-  }
-  return [];
+  return body.results ?? [];
 }
 
 export function App() {
@@ -309,6 +292,8 @@ export function App() {
   );
   // The catalog browsed inside Secretary (catalog-host.tsx): what it opened on.
   const [catalog, setCatalog] = useState<CatalogEntry | null>(null);
+  /** The catalog screen the search was opened from, to go back to with Back; null: the home. */
+  const [searchFrom, setSearchFrom] = useState<CatalogEntry | null>(null);
   const [me, setMe] = useState<{ name: string; color?: string; img?: string } | null>(null);
   const [focus, setFocus] = useState<Focus>({ area: "row", col: 0, i: 0 });
   /** The latest focus, for callbacks that outlive a render. */
@@ -341,12 +326,8 @@ export function App() {
       return NO_TRENDING;
     }
   });
-  const [searchFocus, setSearchFocus] = useState<GridFocus>({ row: 0, col: 0 });
+  /** What the search screen opens with (the assistant's and the CDP scripts' searches). */
   const [query, setQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecent());
-  const [imeActive, setImeActive] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   /** The sound system's state just asked for, shown until SmartThings reports it (a few seconds at most). */
   const [soundSet, setSoundSet] = useState<boolean | null>(null);
@@ -407,31 +388,11 @@ export function App() {
     toastTimer.current = setTimeout(() => setToast(null), EXIT_WINDOW_MS);
   };
 
-  const openSearch = () => {
-    setSearchFocus({ row: 0, col: 0 });
+  /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog. */
+  const openSearch = (q = "") => {
+    setQuery(q);
+    setSearchFrom(null);
     setView("search");
-  };
-
-  const summonTvKeyboard = (seedQuery = query) => {
-    const bridge = getTvInputBridge();
-    setView("search");
-    setImeActive(true);
-    const opened = bridge.open(seedQuery, {
-      onChange: (val) => setQuery(val),
-      onCommit: (val) => {
-        setImeActive(false);
-        setQuery(val);
-        if (val.trim().length >= 2) setRecentSearches(saveRecent(val));
-        setSearchFocus({ row: RECENT_ROW, col: 0 });
-      },
-      onCancel: () => setImeActive(false),
-    });
-    if (!opened) {
-      setImeActive(false);
-      setSearchFocus({ row: 0, col: 0 });
-    } else {
-      flash("🎤 Speak into the remote or type on the TV keyboard");
-    }
   };
 
   const applyReminders = (state: { items: Reminder[]; aiSummary?: string }) => {
@@ -1051,9 +1012,23 @@ export function App() {
     const t = setInterval(put, 20 * 60_000);
     return () => clearInterval(t);
   }, [view]);
+  /** Back from the search: to the catalog screen it was opened from (as first opened, never playing), else home. */
+  const closeSearch = () => {
+    const from = searchFrom;
+    setSearchFrom(null);
+    if (from) browse({ ...from, open: from.open && { ...from.open, autoPlay: false, room: undefined } });
+    else setView("home");
+  };
   const embeddedHost = {
     // One Nuvio client for the page: the catalog uses Nest's, so there is one session in memory and one refresh.
     cloud,
+    // The catalog's search keys and buttons open Secretary's one search, in place of the catalog.
+    onSearch: (q = "") => {
+      const from = catalog;
+      setCatalog(null);
+      openSearch(q);
+      setSearchFrom(from);
+    },
     onExit: () => {
       setCatalog(null);
       setView("home");
@@ -1336,47 +1311,10 @@ export function App() {
       // A reply's WAV through the real playback (envelope, speakerphone, wave), when the speech model is out of quota.
       play: (wav: Uint8Array) => play(wav, setWaveLevel),
       theme: (pref: ThemePref) => pickTheme(pref),
-      openSearch: (q = "") => {
-        setQuery(q);
-        openSearch();
-      },
+      openSearch: (q = "") => openSearch(q),
     };
   }, [continueItems, reminders, assistant]);
 
-  useEffect(() => {
-    if (view !== "search") return;
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    let live = true;
-    setSearching(true);
-    const t = setTimeout(() => {
-      // Without a server the TV searches the catalogs itself.
-      const found: Promise<SearchResult[]> = SERVER_URL
-        ? fetch(`${SERVER_URL}/search?q=${encodeURIComponent(q)}`)
-            .then((r) => (r.ok ? r.json() : { results: [] }))
-            .then((body: { results?: SearchResult[] }) => body.results ?? [])
-        : searchCatalogs(q);
-      found
-        .then((list) => {
-          if (!live) return;
-          setResults(list);
-          setSearching(false);
-        })
-        .catch(() => {
-          if (!live) return;
-          setResults([]);
-          setSearching(false);
-        });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      live = false;
-      clearTimeout(t);
-    };
-  }, [view, query]);
 
   const menuItems = [
     cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
@@ -1439,22 +1377,6 @@ export function App() {
     const next = clamp(focus, layout);
     if (next.area !== focus.area || next.i !== focus.i || next.col !== focus.col || next.inside !== focus.inside) setFocus(next);
   }, [layout]);
-
-  const showRecent = view === "search" && !query.trim() && recentSearches.length > 0;
-  const searchLengths = useMemo(
-    () => [
-      ...KEY_ROWS.map((r) => r.length),
-      ...(showRecent ? [recentSearches.length + 1] : []),
-      ...(results.length ? [results.length] : []),
-    ],
-    [showRecent, recentSearches.length, results.length],
-  );
-
-  useEffect(() => {
-    const r = Math.min(searchFocus.row, searchLengths.length - 1);
-    const c = Math.min(searchFocus.col, Math.max(0, (searchLengths[r] ?? 1) - 1));
-    if (r !== searchFocus.row || c !== searchFocus.col) setSearchFocus({ row: r, col: c });
-  }, [searchLengths]);
 
   /** OK on a Recent card: back to what that answer was about. */
   const openRecent = (card: RecentCard) => {
@@ -1532,28 +1454,30 @@ export function App() {
     toggleSpeech();
   };
 
+  /** OK on a header item, as nest-nav numbers them (also from the search screen's header). */
+  const runHeader = (i: number) => {
+    if (i === HEADER_PROFILE) {
+      setMenuOpen(true);
+      return setFocus({ area: "menu", i: 0 });
+    }
+    if (i === HEADER_PARTY) return void setView("party");
+    if (i === HEADER_SEARCH) return openSearch();
+    if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
+    if (i === HEADER_PICTURE) return togglePicture();
+    if (i === HEADER_SOUND) return toggleSoundButton();
+    // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
+    if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
+    if (i === HEADER_BELL) {
+      const due = reminders.findIndex((r) => !r.completed);
+      if (due < 0) return flash("No open reminders");
+      return focusReminders(due);
+    }
+  };
+
   const activate = () => {
     const { area, i } = focus;
     if (area === "menu") return runMenu(i);
-    if (area === "header") {
-      if (i === HEADER_PROFILE) {
-        setMenuOpen(true);
-        return setFocus({ area: "menu", i: 0 });
-      }
-      if (i === HEADER_PARTY) return void setView("party");
-      if (i === HEADER_SEARCH) return openSearch();
-      if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
-      if (i === HEADER_PICTURE) return togglePicture();
-      if (i === HEADER_SOUND) return toggleSoundButton();
-      // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
-      if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
-      if (i === HEADER_BELL) {
-        const due = reminders.findIndex((r) => !r.completed);
-        if (due < 0) return flash("No open reminders");
-        return focusReminders(due);
-      }
-      return;
-    }
+    if (area === "header") return runHeader(i);
     if (area === "ask" || area === "chat") return void listen();
     if (area === "row") {
       // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing.
@@ -1714,12 +1638,8 @@ export function App() {
       } else setStyleMenu(r);
       return;
     }
-    // Channel Down (CH-) or Search opens Spotlight Search from anywhere.
-    if (key === "ChannelDown" || key === "Search") {
-      openSearch();
-      flash("⌕ Spotlight Search · 🎤 for TV voice");
-      return;
-    }
+    // Channel Down (CH-) or Search opens the search.
+    if (key === "ChannelDown" || key === "Search") return openSearch();
     // The microphone key talks to Ask Nest on the home screen; Red flips the picture mode, Green cycles the theme, Blue
     // mutes spoken replies.
     if (key === "SearchVoice") return void listen();
@@ -1728,7 +1648,6 @@ export function App() {
     if (key === "Green") return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
     if (key === "ChannelUp") {
       getTvInputBridge().close();
-      setImeActive(false);
       setFocus({ area: "header", i: HEADER_SEARCH });
       return;
     }
@@ -1754,72 +1673,6 @@ export function App() {
     return false;
   });
 
-  useKeys(view === "search", (key) => {
-    if (key === "ChannelUp") return void setView("home");
-    if (key === "SearchVoice") return void summonTvKeyboard(query);
-    if (key === "Back") {
-      if (query.trim().length > 0) {
-        setQuery("");
-        setSearchFocus({ row: 0, col: 0 });
-        return;
-      }
-      setView("home");
-      return;
-    }
-    if (key === "Enter") {
-      const { row, col } = searchFocus;
-      if (row < KEY_ROWS.length) {
-        const k = KEY_ROWS[row]?.[col];
-        if (!k) return;
-        if (k === "SPACE") setQuery((q) => `${q} `);
-        else if (k === "⌫") setQuery((q) => q.slice(0, -1));
-        else if (k === "CLEAR") setQuery("");
-        else if (k.startsWith("🎤")) summonTvKeyboard(query);
-        else setQuery((q) => q + k.toLowerCase());
-        return;
-      }
-      if (showRecent && row === RECENT_ROW) {
-        if (col < recentSearches.length) {
-          const picked = recentSearches[col];
-          setQuery(picked);
-          setRecentSearches(saveRecent(picked));
-        } else {
-          setRecentSearches(clearRecent());
-          flash("Cleared recent searches");
-        }
-        return;
-      }
-      const hit = results[col];
-      if (hit) {
-        if (query.trim().length >= 2) setRecentSearches(saveRecent(query));
-        // The page opens inside Secretary, leaving the search for the catalog view.
-        browse({ type: hit.type, open: { type: hit.type, title: hit.title } });
-      }
-      return;
-    }
-    if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
-      const next = move(searchLengths, searchFocus, key.toLowerCase() as Dir);
-      if (next !== searchFocus) setSearchFocus(next);
-      return;
-    }
-    return false;
-  });
-
-  // A physical keyboard types into the search too.
-  useEffect(() => {
-    if (view !== "search" || imeActive) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        setQuery((q) => q.slice(0, -1));
-      } else if (e.key.length === 1 && /^[a-z0-9 ]$/i.test(e.key)) {
-        setQuery((q) => q + e.key.toLowerCase());
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [view, imeActive]);
-
   // Under the name, only what needs doing (an error, signing in); what the TV is connected to is a pair of icons,
   // and the words for it open with the profile menu.
   const status = error ?? (cloudEnabled && !me ? "OK to sign in to Nuvio" : "");
@@ -1831,11 +1684,6 @@ export function App() {
     cloudEnabled ? (me ? `Nuvio · synced as ${me.name}` : "Nuvio · not signed in") : "Nuvio sync off",
     SERVER_URL ? (serverOnline ? "Server online · CH- to search" : "Server offline · apps still work") : "No server configured",
   ];
-  const searchStatus = !query.trim()
-    ? "Hunt across films, shows and anime"
-    : searching
-      ? "Scouring the tall grass…"
-      : `${results.length} result${results.length === 1 ? "" : "s"}`;
 
   const lastAnswer = talk.turns[talk.turns.length - 1];
   const pending = talk.pending;
@@ -1894,15 +1742,26 @@ export function App() {
       ) : view === "lights" ? (
         <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
       ) : view === "search" ? (
-        <Search
-          focus={searchFocus}
+        <SearchScreen
+          key={query}
           time={time}
-          query={query}
-          imeActive={imeActive}
-          recent={recentSearches}
-          showRecent={showRecent}
-          results={results}
-          status={searchStatus}
+          person={{ name: me?.name ?? "Secretary", sub: status || undefined, color: me?.color, img: me?.img }}
+          buttons={headerButtons({ pictureMode: pictureSet ?? pictureTv(devices)?.pictureMode, soundOn: soundSet ?? devices.find((d) => d.kind === "audio")?.on, open: reminders.filter((r) => !r.completed).length })}
+          find={findTitles}
+          initialQuery={query}
+          desk={SERVER_URL}
+          // The page opens inside Secretary, leaving the search for the catalog view.
+          onOpen={(hit) => {
+            setSearchFrom(null);
+            browse({ type: hit.type, open: { type: hit.type, title: hit.title } });
+          }}
+          onHeader={(i) => {
+            setSearchFrom(null);
+            setView("home");
+            setFocus({ area: "header", i });
+            runHeader(i);
+          }}
+          onClose={closeSearch}
         />
       ) : (
         <Home

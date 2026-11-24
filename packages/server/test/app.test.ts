@@ -260,3 +260,25 @@ test("companion, reminders, Gemini AI assistant, and SmartThings domotics endpoi
   assert.ok(stCalls[0].url.includes("api.smartthings.com/v1/devices/st-living-main/commands"));
   assert.ok(stCalls[0].body.includes("15"));
 });
+
+test("phone keyboard: the phone's text reaches the TV's search through /type/<code>", async () => {
+  const code = "abcdefghjkmn2345";
+  const page = await app(new Request(`http://x/type/${code}`));
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), new RegExp(`http://tv/type/${code}/text`));
+
+  const empty = (await (await app(new Request(`http://x/type/${code}/text`))).json()) as { text: string; rev: number };
+  assert.deepEqual(empty, { text: "", rev: 0 });
+
+  const post = (text: unknown) =>
+    app(new Request(`http://x/type/${code}/text`, { method: "POST", body: JSON.stringify({ text }), headers: { "content-type": "application/json" } }));
+  assert.deepEqual(await (await post("the qu")).json(), { text: "the qu", rev: 1 });
+  assert.deepEqual(await (await post("the quiet")).json(), { text: "the quiet", rev: 2 });
+  assert.deepEqual(await (await app(new Request(`http://x/type/${code}/text`))).json(), { text: "the quiet", rev: 2 });
+
+  assert.equal((await post(42)).status, 400);
+  assert.equal((await post("x".repeat(500)).then((r) => r.json()) as { text: string }).text.length, 120);
+  // A code that is too short or has other characters is not a phone keyboard.
+  assert.equal((await app(new Request("http://x/type/short/text"))).status, 404);
+  assert.equal((await app(new Request("http://x/type/ABC<script>defghijk"))).status, 404);
+});

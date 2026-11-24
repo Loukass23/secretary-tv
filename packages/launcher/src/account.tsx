@@ -15,25 +15,9 @@ import {
 } from "@secretary/nuvio";
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass } from "@secretary/tv-kit/src/glass/index.ts";
-import { useEffect, useMemo, useState } from "preact/hooks";
-import { encode } from "uqr";
+import { useEffect, useState } from "preact/hooks";
 import { cloud } from "./cloud.ts";
-
-/** The QR as one SVG path of dark modules (crisp at any size, no canvas). */
-function QrCode({ text, size }: { text: string; size: number }) {
-  const { path, n } = useMemo(() => {
-    const { data } = encode(text, { ecc: "M", border: 2 });
-    let d = "";
-    data.forEach((row, y) => row.forEach((dark, x) => dark && (d += `M${x} ${y}h1v1h-1z`)));
-    return { path: d, n: data.length };
-  }, [text]);
-  return (
-    <svg class="nest-qr" width={size} height={size} viewBox={`0 0 ${n} ${n}`} shape-rendering="crispEdges">
-      <rect width={n} height={n} fill="#fff" />
-      <path d={path} fill="#101114" />
-    </svg>
-  );
-}
+import { QrCode } from "./qr.tsx";
 
 const PANEL = { x: 300, y: 150, w: 1320, h: 780 };
 const SIGNIN_BUTTONS = ["Use email & password", "Not now"] as const;

@@ -6,17 +6,10 @@ import { useRef } from "preact/hooks";
 import { Glass, Glow, Header, Icon, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, MOVE_LINE, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
-import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SETTINGS, HEADER_SOUND } from "./nest-nav.ts";
+import { HEADER_ORDER, headerButtons } from "./header-buttons.ts";
+import { type Focus, HEADER_PROFILE } from "./nest-nav.ts";
 
 const PAD = 80;
-/** The header buttons, left to right, as nest-nav numbers them. */
-const HEADER_ORDER = [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL];
-
-/** The picture button shows the mode the TV is on: a sun for Dynamic, a moon for Eco, a screen for anything else. */
-function pictureIcon(mode: string | undefined): IconName {
-  const m = (mode ?? "").toLowerCase();
-  return m.startsWith("dynamic") ? "clear" : m.startsWith("eco") ? "clear-night" : "partly";
-}
 /** The full screen width: the orb rests in the middle under the cards, and the ribbons run out to both edges. */
 const WAVE = { x: 0, y: 880, w: 1920, h: 72 };
 /** The cards start at the left edge, the assistant being the first of them. The row clips sideways; it is tall enough for
@@ -196,11 +189,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
       <Header
         time={time}
         person={{ name: me?.name ?? "Secretary", sub: status || <Links links={links} />, color: me?.color, img: me?.img }}
-        buttons={(["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "settings", "bell"] as const satisfies readonly IconName[]).map((icon, k) => ({
-          key: String(k),
-          icon,
-          badge: k === 6 ? open : undefined,
-        }))}
+        buttons={headerButtons({ pictureMode, soundOn, open })}
         focus={focus?.area !== "header" ? null : focus.i === HEADER_PROFILE ? "person" : HEADER_ORDER.indexOf(focus.i)}
       />
 

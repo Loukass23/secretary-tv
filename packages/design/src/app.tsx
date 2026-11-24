@@ -183,7 +183,7 @@ export function App() {
             </div>
           </div>
         </div>
-        {s.page === "screens" && SCREENS[s.screen] && !SCREENS[s.screen].startsWith("Home") && (
+        {s.page === "screens" && SCREENS[s.screen] && !SCREENS[s.screen].startsWith("Home") && !SCREENS[s.screen].startsWith("Search") && (
           <p class="dz-note">Secretary's catalog pages draw their own glass (fake, in the section's tint); the theme and mode switches apply to the home screen and the other pages.</p>
         )}
       </main>

@@ -18,11 +18,13 @@ import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns } from "../fixtures.ts";
+import { headerButtons } from "@secretary/launcher/src/header-buttons.ts";
+import { SearchScreen } from "@secretary/launcher/src/search.tsx";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, nestColumns, RECENT_SEARCHES, searchFixture } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
-export const SCREENS = ["Home", "Home · assistant", "Home · chat", "Cinema", "Shows", "Anime", "Film page", "Show page", "Film page · slim", "Film page · offline"] as const;
+export const SCREENS = ["Home", "Home · assistant", "Home · chat", "Cinema", "Shows", "Anime", "Film page", "Show page", "Film page · slim", "Film page · offline", "Search", "Search · results"] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
@@ -30,6 +32,7 @@ const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series",
 export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
+  if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
@@ -141,6 +144,44 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
 }
 
 const noop = () => {};
+
+/** A documentation-only address for the phone keyboard's QR code; its polling is answered here, never sent. */
+const DESK = "http://192.0.2.10:7000";
+
+/**
+ * The one search (launcher/src/search.tsx) on fixture titles: "Search" opens empty on the recent searches, "Search ·
+ * results" with a query typed. Type with the keyboard's letters or the panel's keys; the results follow.
+ */
+function SearchPage({ mode, theme, backdrop, art, results }: PageProps & { art: Art; results: boolean }) {
+  const find = useMemo(() => searchFixture(art), [art]);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    localStorage.setItem("sectv:recent-searches:v1", JSON.stringify(RECENT_SEARCHES));
+    const real = window.fetch;
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).startsWith(DESK) ? Promise.resolve(new Response(JSON.stringify({ text: "", rev: 0 }))) : real(input, init)) as typeof fetch;
+    setReady(true);
+    return () => {
+      window.fetch = real;
+    };
+  }, []);
+  if (!ready) return null;
+  return (
+    <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
+      <SearchScreen
+        time="16:20"
+        person={{ name: "Robin", color: "#5b52e6" }}
+        buttons={headerButtons({ open: 2 })}
+        find={find}
+        initialQuery={results ? "the" : ""}
+        desk={DESK}
+        onOpen={noop}
+        onHeader={noop}
+        onClose={noop}
+      />
+    </GlassRoot>
+  );
+}
 
 function Catalog({ type, art }: { type: CatalogType; art: Art }) {
   const rows = useMemo(() => catalogRows(art), [art]);
