@@ -32,6 +32,7 @@ import { matchPref } from "../lib/sourcepref.ts";
 import { type MenuLine, stepTitleMenu, type TitleAction, titleMenu } from "../lib/titlemenu.ts";
 import { deviceCapSet } from "../lib/device.ts";
 import { parseStreamInfo, type Stream, type StreamClient } from "../lib/streams.ts";
+import { typeLabel } from "../lib/animeguard.ts";
 import { type CatalogType, isSeries, streamType, type Title, type Video } from "../lib/types.ts";
 import { cancelPreload, deadLinks, preload, prepareAheadEnabled, sourcePrefs } from "../player/session.ts";
 import { HeroLayers, useBase, useHeroArt } from "./art.tsx";
@@ -869,7 +870,7 @@ export function Detail({
         <Glass {...info} class="det-info">
           <span class="cat-kicker">
             {series
-              ? `${type === "anime" ? "Anime" : "Series"} · ${seasons.length} season${seasons.length === 1 ? "" : "s"} · ${videos.length} episodes`
+              ? `${typeLabel(type, meta)} · ${seasons.length} season${seasons.length === 1 ? "" : "s"} · ${videos.length} episodes`
               : sagaCol
                 ? `Film · ${sagaCol.title}`
                 : "Film"}

@@ -103,6 +103,7 @@ import {
 } from "./home-control.ts";
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
+import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalog-kit/src/lib/animeguard.ts";
 import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
@@ -1060,8 +1061,16 @@ export function App() {
       void refreshCloud();
     },
   };
+  // The anime rule (catalog-kit lib/animeguard.ts): a title the catalog knows is anime shows only on the Anime card.
+  // The ids come from the anime catalogs, and from the Anime card's own picks and genre rows.
+  const [animeRev, setAnimeRev] = useState(0);
+  useEffect(() => void animeImdbIds().then(() => setAnimeRev((r) => r + 1), () => {}), []);
+  const animeIds = useMemo(() => {
+    noteAnime([...trending.anime, ...DISCOVER.filter((d) => d.kind === "anime").flatMap((d) => discover[d.key] ?? [])].map((r) => r.title.id));
+    return new Set(knownAnime());
+  }, [animeRev, trending, discover]);
   const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
-  const byKind = (k: CatalogKind) => continueItems.filter((e) => e.type === k);
+  const byKind = (k: CatalogKind) => onlyKind(k, continueItems, animeIds);
   const columns: RowColumn[] = [];
   /** The artwork behind each column's items, for the glow. */
   const art: ({ src: string; type: CatalogKind } | undefined)[][] = [];
@@ -1111,7 +1120,7 @@ export function App() {
     // Titles without a poster would be blank slots, so a recommendation keeps only those that have one.
     const picks = mine
       ? (mine.items.some((r) => r.title.poster) ? mine.items.filter((r) => r.title.poster) : mine.items).slice(0, MEDIA_MAX)
-      : trending[m.kind].filter((r) => !going.some((e) => e.title.id === r.title.id) && !dismissed.includes(r.title.id)).slice(0, MEDIA_MAX - going.length);
+      : onlyKind(m.kind, trending[m.kind], animeIds).filter((r) => !going.some((e) => e.title.id === r.title.id) && !dismissed.includes(r.title.id)).slice(0, MEDIA_MAX - going.length);
     if (!going.length && !picks.length) continue;
     // Under the picks (Down in the opened card): the profile's My List for this kind, then its genre rows.
     const tile = (r: SearchResult): MediaItem => ({
@@ -1121,10 +1130,10 @@ export function App() {
       sub: [r.title.year, r.title.rating ? `★ ${r.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
       about: r.title.description,
     });
-    const listedHere = mylistItems(myList.filter((l) => l.type === m.kind), MEDIA_MAX * 2).map((l) => ({ type: l.item.type, title: l.item.title }));
+    const listedHere = mylistItems(onlyKind(m.kind, myList, animeIds), MEDIA_MAX * 2).map((l) => ({ type: m.kind, title: l.item.title }));
     const rowsHere: { label: string; hits: SearchResult[] }[] = [
       { label: "My List", hits: listedHere },
-      ...DISCOVER.filter((d) => d.kind === m.kind).map((d) => ({ label: d.label, hits: (discover[d.key] ?? []).filter((r) => r.title.poster).slice(0, MEDIA_MAX) })),
+      ...DISCOVER.filter((d) => d.kind === m.kind).map((d) => ({ label: d.label, hits: onlyKind(m.kind, discover[d.key] ?? [], animeIds).filter((r) => r.title.poster).slice(0, MEDIA_MAX) })),
     ].filter((r) => r.hits.length);
     const more: MoreRow[] = rowsHere.map((r) => ({
       label: r.label,

@@ -2,34 +2,92 @@ import { fetchRow, rowsFor } from "./cinemeta.ts";
 import type { CatalogType, Title } from "./types.ts";
 
 /**
- * Cinemeta's series and movie lists hold anime too (they are IMDb titles), so Shows and Cinema listed them beside the
- * Anime app's own. The anime catalogs know which IMDb ids are anime; a title is dropped from Shows or Cinema when it is
- * an animation and one of those. Animation alone is not enough: western cartoons belong in Shows.
+ * The anime rule: a title the catalog knows is anime appears only under Anime, never under Shows or Cinema. This file
+ * is the one place that decides "is this title anime"; every surface asks `isAnime` / `kindFor`:
+ *
+ * - Shows and Cinema rows in the catalog (`withoutAnime`), and Secretary's Shows and Cinema cards (picks, genre rows,
+ *   My List).
+ * - Continue watching, in the catalog home (`loadAllResume` in resume.ts) and in Secretary's opened cards: an anime
+ *   entry saved or synced as a series moves to Anime (`asAnimeKind`).
+ * - The type label on a title page ("Anime", not "Series").
+ *
+ * Cinemeta's series and movie lists hold anime too (they are IMDb titles). A title is anime when it has a Kitsu id, or
+ * when its IMDb id is one the anime catalogs list. Animation alone is not enough: western cartoons belong in Shows. A
+ * title whose genres are known and include neither Animation nor Anime is never anime, whatever the id lists say.
  */
 let known: Promise<Set<string>> | null = null;
+/** The ids learnt so far, for the surfaces that decide at once (a render). Only grows. */
+const learnt = new Set<string>();
 
-/** IMDb ids of the anime in the Anime app's own rows, read once; an unreachable catalog adds nothing. */
+/** IMDb ids of the anime in the Anime catalog's own rows, read once; an unreachable catalog adds nothing. */
 export function animeImdbIds(f: typeof fetch = fetch): Promise<Set<string>> {
   known ??= Promise.all(rowsFor("anime").map((r) => fetchRow(r.url, f).catch(() => [] as Title[]))).then((rows) => {
     const ids = new Set<string>();
     for (const row of rows) for (const t of row) if (t.id.startsWith("tt")) ids.add(t.id);
     // An empty answer means the catalogs were unreachable: ask again next time.
     if (!ids.size) known = null;
+    noteAnime(ids);
     return ids;
   });
   return known;
 }
 
-const isAnimation = (t: Title) => t.genre?.some((g) => /^(animation|anime)$/i.test(g)) ?? false;
+/** Ids another anime list gave (Secretary's Anime picks and genre rows, an anime page that was opened). */
+export function noteAnime(ids: Iterable<string>): void {
+  for (const id of ids) if (id.startsWith("tt")) learnt.add(id);
+}
 
-/** `titles` without the anime, for the Shows and Cinema apps; the Anime app's rows pass through. */
+/** Every IMDb id known to be anime so far. */
+export const knownAnime = (): ReadonlySet<string> => learnt;
+
+const isAnimation = (t: Pick<Title, "genre">) => t.genre?.some((g) => /^(animation|anime)$/i.test(g)) ?? false;
+
+/** Whether the catalog knows `t` is anime. Pure given `ids`. */
+export function isAnime(t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): boolean {
+  if (t.id.startsWith("kitsu:")) return true;
+  if (!t.id.startsWith("tt") || !ids.has(t.id)) return false;
+  return !t.genre?.length || isAnimation(t);
+}
+
+/** The catalog a title belongs under: `type`, unless the title is anime. */
+export const kindFor = (type: CatalogType, t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): CatalogType =>
+  type === "anime" || isAnime(t, ids) ? "anime" : type;
+
+/** Continue watching (or any typed list) with anime entries moved to Anime. Entries already right are kept as they are. */
+export function asAnimeKind<E extends { type: CatalogType; title: Pick<Title, "id" | "genre"> }>(
+  list: readonly E[],
+  ids: ReadonlySet<string> = learnt,
+): E[] {
+  return list.map((e) => {
+    const type = kindFor(e.type, e.title, ids);
+    return type === e.type ? e : { ...e, type };
+  });
+}
+
+/** The entries of a typed list that belong under `kind` (a Secretary card's Continue watching, picks or My List). */
+export const onlyKind = <E extends { type: CatalogType; title: Pick<Title, "id" | "genre"> }>(
+  kind: CatalogType,
+  list: readonly E[],
+  ids: ReadonlySet<string> = learnt,
+): E[] => asAnimeKind(list, ids).filter((e) => e.type === kind);
+
+/** The word a title page shows for its kind. */
+export const typeLabel = (type: CatalogType, t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): string =>
+  type === "movie" ? "Film" : kindFor(type, t, ids) === "anime" ? "Anime" : "Series";
+
+/** `titles` without the anime, for the Shows and Cinema rows; the Anime rows pass through. */
 export async function withoutAnime(type: CatalogType, titles: Title[], f?: typeof fetch): Promise<Title[]> {
-  if (type === "anime" || !titles.some((t) => t.id.startsWith("tt") && isAnimation(t))) return titles;
-  const anime = await animeImdbIds(f);
-  return anime.size ? titles.filter((t) => !(isAnimation(t) && anime.has(t.id))) : titles;
+  if (type === "anime") {
+    noteAnime(titles.map((t) => t.id));
+    return titles;
+  }
+  if (!titles.some((t) => t.id.startsWith("kitsu:") || (t.id.startsWith("tt") && (isAnimation(t) || learnt.has(t.id))))) return titles;
+  const anime = new Set([...learnt, ...(await animeImdbIds(f))]);
+  return titles.filter((t) => !isAnime(t, anime));
 }
 
 /** For the tests. */
 export function resetAnimeGuard(): void {
   known = null;
+  learnt.clear();
 }
