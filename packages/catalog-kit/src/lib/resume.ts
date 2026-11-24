@@ -1,4 +1,5 @@
 import { readJson, writeJson } from "@secretary/tv-kit";
+import { kindFor } from "./animeguard.ts";
 import type { CatalogType, Title, Video } from "./types.ts";
 
 const EDGE_SEC = 5;
@@ -123,12 +124,16 @@ export function loadResume(type: CatalogType): ResumeEntry[] {
   return Array.isArray(all) ? all : [];
 }
 
-/** Reads and merges local watch progress across Movies, Series, and Anime, newest first. */
-export function loadAllResume(): UnifiedResumeEntry[] {
+/**
+ * Reads and merges local watch progress across Movies, Series, and Anime, newest first. An anime saved or synced as a
+ * series is listed as Anime (the anime rule, animeguard.ts).
+ */
+export function loadAllResume(ids?: ReadonlySet<string>): UnifiedResumeEntry[] {
   const byKey = new Map<string, UnifiedResumeEntry>();
-  for (const type of ALL_TYPES) {
-    for (const entry of loadResume(type)) {
+  for (const stored of ALL_TYPES) {
+    for (const entry of loadResume(stored)) {
       if (!entry?.title?.id) continue;
+      const type = kindFor(stored, entry.title, ids);
       const nameKey = `${type}:${(entry.title.name || entry.title.id).trim().toLowerCase()}`;
       const prev = byKey.get(nameKey);
       if (!prev || (entry.updated ?? 0) >= (prev.updated ?? 0)) {

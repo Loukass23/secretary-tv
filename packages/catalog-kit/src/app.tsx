@@ -1,6 +1,6 @@
 import { type Focus, isTvImeOpen, mark, record, useKeys } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { withoutAnime } from "./lib/animeguard.ts";
+import { animeImdbIds, kindFor, withoutAnime } from "./lib/animeguard.ts";
 import { fetchMeta, fetchRow, getTmdbKey, rowsFor } from "./lib/cinemeta.ts";
 import {
   type SagaDef,
@@ -206,6 +206,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const [catalog, setCatalog] = useState<HomeRow[]>(() => loadHome(type));
   const [resume, setResume] = useState<UnifiedResumeEntry[]>(() => loadAllResume());
   const [watchedRev, setWatchedRev] = useState(0);
+  // Continue watching lists anime under Anime (lib/animeguard.ts): read it again once the anime ids are known.
+  useEffect(() => void animeImdbIds().then(() => setResume(loadAllResume()), () => {}), []);
   const [focus, setFocus] = useState<Focus>({ row: 0, col: 0 });
   const [status, setStatus] = useState<string | null>(catalog.length ? null : "Loading…");
   // The control centre (ui/ControlCentre.tsx): a held CH+ opens it, a short one opens Nest (or closes it).
@@ -297,7 +299,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         items: resume.map(toContinueTitle),
       });
     }
-    const saved = loadLibrary().filter((e) => e.type === activeType);
+    const saved = loadLibrary().filter((e) => kindFor(e.type, e.title) === activeType);
     if (saved.length) {
       topRows.push({ id: "mylist", title: "My List", originLabel: "Nuvio · your profile", items: saved.map((e) => ({ ...e.title, catalogType: e.type })) });
     }
