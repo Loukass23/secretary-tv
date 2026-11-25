@@ -200,6 +200,16 @@ export function catalogRows(art: Art): HomeRow[] {
  * The search screen's finder (launcher/src/search.tsx): the invented titles, in films, shows and anime, matched by
  * word start after a short wait, as a server would answer. Honours the abort, as the real one does.
  */
+/** A search with no catalog answering, as on a TV without internet: each request fails after a short wait. */
+export const searchOffline = (_q: string, signal: AbortSignal): Promise<SearchResult[]> =>
+  new Promise((_, reject) => {
+    const t = setTimeout(() => reject(new Error("The catalogs are not answering")), 400);
+    signal.addEventListener("abort", () => {
+      clearTimeout(t);
+      reject(new DOMException("aborted", "AbortError"));
+    });
+  });
+
 export function searchFixture(art: Art): (q: string, signal: AbortSignal) => Promise<SearchResult[]> {
   const kinds = ["movie", "series", "anime"] as const;
   const all: SearchResult[] = Array.from({ length: 36 }, (_, i) => ({

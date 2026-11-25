@@ -102,33 +102,88 @@ export function rankSearch(
     .map((s) => s.result);
 }
 
-export async function searchCatalogs(query: string, f: typeof fetch = fetch): Promise<SearchResult[]> {
+/** No catalog answered a search: offline, timed out, or every catalog failed. Not thrown for a search that was cancelled. */
+export class SearchUnavailable extends Error {
+  constructor(message = "The catalogs are not answering") {
+    super(message);
+    this.name = "SearchUnavailable";
+  }
+}
+
+export interface CatalogSearchOptions {
+  fetch?: typeof fetch;
+  /** Cancels the search: every catalog request is aborted and the promise rejects with an AbortError (or the signal's reason). */
+  signal?: AbortSignal;
+  /** Gives up on a catalog that has not answered after this many ms. Default 8000. */
+  timeout?: number;
+}
+
+const SEARCH_TIMEOUT_MS = 8000;
+
+/** Why a signal fired; older TV browsers have no `reason`. */
+const abortReason = (s: AbortSignal): unknown => s.reason ?? new DOMException("The search was cancelled", "AbortError");
+
+/**
+ * Searches the film, series and anime catalogs at once, straight from where it runs (the TV, or the server's /search
+ * while it lasts). Each catalog request is aborted when `signal` fires or after `timeout`; a catalog that fails or times
+ * out counts as no results, unless every catalog does: then it throws SearchUnavailable, so the screen can say search
+ * is not answering instead of "nothing found".
+ */
+export async function findCatalogs(query: string, opts: CatalogSearchOptions = {}): Promise<SearchResult[]> {
   const q = query.trim();
   if (!q) return [];
+  const f = opts.fetch ?? fetch;
+  const { signal } = opts;
+  if (signal?.aborted) throw abortReason(signal);
+  const ctrl = new AbortController();
+  const stop = () => ctrl.abort();
+  signal?.addEventListener("abort", stop);
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout ?? SEARCH_TIMEOUT_MS);
   const enc = encodeURIComponent(q);
   const sources: { type: CatalogKind; url: string }[] = [
     { type: "movie", url: `${CINEMETA}/catalog/movie/top/search=${enc}.json` },
     { type: "series", url: `${CINEMETA}/catalog/series/top/search=${enc}.json` },
     { type: "anime", url: `${KITSU}/catalog/anime/kitsu-anime-list/search=${enc}.json` },
   ];
+  // A fetch that ignores its signal still loses the race to the abort.
+  const aborted = new Promise<never>((_, reject) => {
+    ctrl.signal.addEventListener("abort", () => reject(new SearchUnavailable("The catalogs took too long")));
+  });
+  aborted.catch(() => {});
+  try {
+    const settled = await Promise.allSettled(
+      sources.map(({ type, url }) =>
+        Promise.race([
+          aborted,
+          (async () => {
+            const res = await f(url, { signal: ctrl.signal });
+            if (!res.ok) throw new SearchUnavailable(`HTTP ${res.status}`);
+            const { metas = [] } = (await res.json()) as { metas?: RawSearchMeta[] };
+            const items =
+              type === "anime" ? groupAnimeSearch(metas) : metas.map(toSlimTitle).filter((t): t is SlimTitle => t !== null);
+            return { type, items };
+          })(),
+        ]),
+      ),
+    );
+    if (signal?.aborted) throw abortReason(signal);
+    if (settled.every((r) => r.status === "rejected")) throw new SearchUnavailable();
+    const groups = settled.map((res, idx) => (res.status === "fulfilled" ? res.value : { type: sources[idx].type, items: [] }));
+    return rankSearch(q, groups);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", stop);
+  }
+}
 
-  const settled = await Promise.allSettled(
-    sources.map(async ({ type, url }) => {
-      const res = await f(url);
-      if (!res.ok) return { type, items: [] as SlimTitle[] };
-      const { metas = [] } = (await res.json()) as { metas?: RawSearchMeta[] };
-      const items =
-        type === "anime"
-          ? groupAnimeSearch(metas)
-          : metas.map(toSlimTitle).filter((t): t is SlimTitle => t !== null);
-      return { type, items };
-    }),
-  );
-
-  const groups = settled.map((res, idx) =>
-    res.status === "fulfilled" ? res.value : { type: sources[idx].type, items: [] },
-  );
-  return rankSearch(q, groups);
+/** findCatalogs, with "no catalog answered" read as no results (the assistant's watch prompts). */
+export async function searchCatalogs(query: string, f: typeof fetch = fetch): Promise<SearchResult[]> {
+  try {
+    return await findCatalogs(query, { fetch: f });
+  } catch (e) {
+    if (e instanceof SearchUnavailable) return [];
+    throw e;
+  }
 }
 
 const DISCOVER_RESULTS = 18;

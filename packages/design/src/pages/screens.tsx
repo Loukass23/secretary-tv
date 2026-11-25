@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
 import { SearchScreen } from "@secretary/launcher/src/search.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, SETTINGS_APPS, SETTINGS_FIXTURE } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, searchOffline, SETTINGS_APPS, SETTINGS_FIXTURE } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
@@ -41,6 +41,7 @@ export const SCREENS = [
   "Show page · spoilers",
   "Search",
   "Search · results",
+  "Search · offline",
   "Settings",
   "Settings · home screen",
   "Settings · apps",
@@ -53,7 +54,7 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
   if (name.startsWith("Settings")) return <SettingsPage key={name} tab={name === "Settings · apps" ? "Apps" : name === "Settings · home screen" ? "Home screen" : "Watching"} />;
-  if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} />;
+  if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} offline={name === "Search · offline"} />;
   if (name === "Lights") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
@@ -173,10 +174,11 @@ const DESK = "http://192.0.2.10:7000";
 
 /**
  * The one search (launcher/src/search.tsx) on fixture titles: "Search" opens empty on the recent searches, "Search ·
- * results" with a query typed. Type with the keyboard's letters or the panel's keys; the results follow.
+ * results" with a query typed, "Search · offline" with no catalog answering (the error state). Type with the keyboard's
+ * letters or the panel's keys; the results follow.
  */
-function SearchPage({ mode, theme, backdrop, art, results }: PageProps & { art: Art; results: boolean }) {
-  const find = useMemo(() => searchFixture(art), [art]);
+function SearchPage({ mode, theme, backdrop, art, results, offline }: PageProps & { art: Art; results: boolean; offline: boolean }) {
+  const find = useMemo(() => (offline ? searchOffline : searchFixture(art)), [art, offline]);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     localStorage.setItem("sectv:recent-searches:v1", JSON.stringify(RECENT_SEARCHES));
@@ -196,7 +198,7 @@ function SearchPage({ mode, theme, backdrop, art, results }: PageProps & { art: 
         person={{ name: "Robin", color: "#5b52e6" }}
         buttons={headerButtons(undefined, true, 2)}
         find={find}
-        initialQuery={results ? "the" : ""}
+        initialQuery={offline ? "harbour" : results ? "the" : ""}
         desk={DESK}
         onOpen={noop}
         onHeader={noop}

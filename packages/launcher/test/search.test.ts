@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { liveSearch, type LiveSearchState, type Timers } from "../src/live-search.ts";
 import { typeCode, watchPhone } from "../src/phone-keys.ts";
-import { clamp, KEY_ROWS, type SearchLens, START, step, typeKey } from "../src/search-nav.ts";
+import { backFrom, clamp, KEY_ROWS, type SearchLens, START, step, typeKey } from "../src/search-nav.ts";
 
 /** A clock the test moves by hand: timers fire only in `advance`. */
 function fakeClock() {
@@ -247,4 +247,11 @@ test("phone keyboard: the TV takes each new text once, and stops asking when clo
   const before = calls;
   await clock.advance(5000);
   assert.equal(calls, before);
+});
+
+test("search keys: one Back leaves, whatever is typed or focused; from the header it comes down to the keys", () => {
+  assert.equal(backFrom(START), "close");
+  assert.equal(backFrom({ area: "results", i: 5 }), "close");
+  assert.equal(backFrom({ area: "recent", i: 0 }), "close");
+  assert.equal(backFrom({ area: "header", i: 1 }), "keys");
 });

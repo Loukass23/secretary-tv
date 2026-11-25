@@ -122,3 +122,9 @@ export function clamp(f: SearchFocus, lens: SearchLens): SearchFocus {
   }
   return f;
 }
+
+/**
+ * Back on the search screen: from the header it comes down to the keyboard; anywhere else it leaves, in one press
+ * whatever was typed (the query is kept for the next visit; Clear empties it).
+ */
+export const backFrom = (focus: SearchFocus): "keys" | "close" => (focus.area === "header" ? "keys" : "close");

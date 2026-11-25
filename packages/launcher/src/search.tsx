@@ -12,7 +12,7 @@ import { liveSearch, type LiveSearchState } from "./live-search.ts";
 import { HEADER_PROFILE, HEADER_SEARCH } from "./nest-nav.ts";
 import { phoneUrl, typeCode, watchPhone } from "./phone-keys.ts";
 import { QrCode } from "./qr.tsx";
-import { clamp, KEY_COLS, KEY_ROWS, keyAt, RESULT_COLS, type SearchFocus, type SearchLens, START, step, typeKey } from "./search-nav.ts";
+import { backFrom, clamp, KEY_COLS, KEY_ROWS, keyAt, RESULT_COLS, type SearchFocus, type SearchLens, START, step, typeKey } from "./search-nav.ts";
 
 const PAD = 80;
 /** The keyboard panel, right; `pad` is its inner margin. */
@@ -62,19 +62,21 @@ export interface SearchScreenProps {
   /** One search request; abort it when `signal` fires. */
   find(query: string, signal: AbortSignal): Promise<readonly SearchResult[]>;
   initialQuery?: string;
+  /** Each change of the typed text, so the next visit opens on it. */
+  onQuery?(text: string): void;
   /** Secretary Desk's address: the panel shows the phone keyboard's QR code. Empty or absent: no QR code. */
   desk?: string;
   /** OK on a result. */
   onOpen(hit: SearchResult): void;
   /** OK on a header item other than search, as nest-nav numbers them. */
   onHeader(i: number): void;
-  /** Back with nothing typed, and CH+. */
+  /** Back (one press, whatever is typed), and CH+. */
   onClose(): void;
 }
 
 const EMPTY: LiveSearchState<SearchResult> = { query: "", results: [], answered: "", searching: false, failed: false };
 
-export function SearchScreen({ time, person, buttons, find, initialQuery = "", desk, onOpen, onHeader, onClose }: SearchScreenProps) {
+export function SearchScreen({ time, person, buttons, find, initialQuery = "", onQuery, desk, onOpen, onHeader, onClose }: SearchScreenProps) {
   const [text, setText] = useState(initialQuery);
   const [found, setFound] = useState<LiveSearchState<SearchResult>>(EMPTY);
   const [focus, setFocus] = useState<SearchFocus>(START);
@@ -87,9 +89,14 @@ export function SearchScreen({ time, person, buttons, find, initialQuery = "", d
 
   const findRef = useRef(find);
   findRef.current = find;
+  const onQueryRef = useRef(onQuery);
+  onQueryRef.current = onQuery;
   const search = useMemo(() => liveSearch<SearchResult>({ find: (q, s) => findRef.current(q, s), onChange: setFound }), []);
   useEffect(() => () => search.dispose(), []);
-  useEffect(() => search.set(text), [text]);
+  useEffect(() => {
+    search.set(text);
+    onQueryRef.current?.(text);
+  }, [text]);
 
   // The phone keyboard: one code for each time the screen opens.
   const code = useMemo(() => (desk ? typeCode() : ""), [desk]);
@@ -129,11 +136,7 @@ export function SearchScreen({ time, person, buttons, find, initialQuery = "", d
     if (key === "ChannelDown" || key === "Search") return void setFocus({ area: "keys", ...lastKey.current });
     if (key === "SearchVoice") return void tvKeyboard();
     if (key === "Back") {
-      if (focus.area === "header") return void setFocus({ area: "keys", ...lastKey.current });
-      if (text) {
-        setText("");
-        return void setFocus(START);
-      }
+      if (backFrom(focus) === "keys") return void setFocus({ area: "keys", ...lastKey.current });
       return void onClose();
     }
     if (key === "Enter") {
@@ -296,6 +299,6 @@ function captionFor(
     return { kicker, title: `Results for “${found.answered}”` };
   }
   if (found.searching) return { kicker: "Searching…", title: `“${q}”` };
-  if (found.failed) return { kicker: "Search", title: "Search is not answering", meta: ["Check the connection, then type again"] };
+  if (found.failed) return { kicker: "Search", title: "Search is not answering", meta: ["Check the TV's internet connection, then type again"] };
   return { kicker: "No results", title: `Nothing found for “${q}”` };
 }
