@@ -682,12 +682,21 @@
 
 /* --- preview beside a list (pieces.tsx PreviewList): compact lines on one panel, the focused line's preview on the other --- */
 .sg-plist .sg-plist-kicker { position: absolute; left: 28px; top: 26px; }
-.sg-plist-line { padding: 16px 24px; }
-.sg-plist-line .sg-card-row { font-size: var(--sg-t-m); }
-.sg-plist-line small { margin: 4px 0 0; font-size: var(--sg-t-s); }
+/* The title and its line sit in the middle of the line's fixed height, and still fit at the Large text size. */
+.sg-plist-line { display: flex; flex-direction: column; justify-content: center; padding: 8px 24px; }
+.sg-plist-line .sg-card-row { font-size: var(--sg-t-m); line-height: 1.15; }
+.sg-plist-line small { margin: 2px 0 0; font-size: var(--sg-t-s); line-height: 1.15; }
 /* The line the preview shows while the remote is in the preview: raised, not focused. */
 .sg-plist-line.is-picked::after { background: var(--sg-raised); }
 .sg-plist-preview.is-active::after { box-shadow: inset 0 0 0 3px var(--sg-accent); }
+/* A line that is switched on: its dot and value lit in the accent (on the focus sheet, in its ink). */
+.sg-plist-line.is-lit .sg-dot { background: var(--sg-accent) !important; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.sg-plist-line.is-lit .sg-card-meta,
+.sg-plist-line.is-lit small { color: var(--sg-accent); font-weight: 700; }
+.sg-plist-line.is-lit.is-focus .sg-dot { background: var(--sg-focus-ink) !important; }
+.sg-plist-line.is-lit.is-focus .sg-card-meta,
+.sg-plist-line.is-lit.is-focus small { color: var(--sg-focus-ink); }
+.sg-plist-line .sg-dot { width: 14px; height: 14px; }
 
 /* --- type style (tokens.ts TYPE_STYLES): titles, numbers and labels take their face from the style --- */
 .sg-info-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); }

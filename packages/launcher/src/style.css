@@ -176,13 +176,17 @@ html, body {
 .sg-glass > .nest-add { position: absolute; }
 .nest-add { display: flex; align-items: center; justify-content: center; font-size: var(--sg-t-m); font-weight: 600; }
 /* Home: like the reference's speaker card, the state on top and the scenes as buttons below. */
-.nest-home-card { padding: 36px 30px; text-align: center; }
-.nest-home-card b { display: block; margin-top: 20px; font-size: var(--sg-t-xl); font-weight: 600; }
-.nest-home-card small { font-size: var(--sg-t-m); }
+/* The bulb, the count and the line under it end at least 24px above the first scene button (4 buttons from the card's
+   bottom, cards.tsx), at both text sizes: each line is one line high and the bulb leaves the room. */
+.nest-home-card { padding: 32px 30px; text-align: center; }
+.nest-home-card b,
+.nest-home-card small { display: block; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-home-card b { margin-top: 14px; font-size: var(--sg-t-xl); font-weight: 600; }
+.nest-home-card small { margin-top: 2px; font-size: var(--sg-t-m); }
 .nest-home-bulb {
   display: block;
-  width: 116px;
-  height: 116px;
+  width: 84px;
+  height: 84px;
   margin: 0 auto;
   border-radius: 50%;
   background: #ffc94d;
@@ -325,28 +329,78 @@ html, body {
 .nest-party-text { position: absolute; left: 60px; top: 60px; right: 60px; bottom: 170px; display: flex; flex-direction: column; }
 .nest-party-text p { max-width: 900px; }
 
-/* --- lights (lights.tsx): SmartThings scenes and lights --- */
-.nest-lights-head { position: absolute; left: 60px; top: 50px; }
-.nest-lights-head h1 { margin: 6px 0 0; }
-.nest-fx span { font-size: var(--sg-t-s); padding: 0 8px; }
-.nest-scene span { padding: 0 24px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nest-lights-status { position: absolute; left: 60px; right: 60px; bottom: 44px; font-size: var(--sg-t-m); font-weight: 600; color: var(--sg-accent); }
-.sg-glass > .nest-lights-head,
-.sg-glass > .nest-lights-status { position: absolute; }
+/* --- lights (lights.tsx): the effects as a list beside their preview, then routines and lights by room --- */
+.nest-lights-head { position: absolute; }
+.nest-lights-head h1 { margin: 6px 0 0; font-size: var(--sg-t-title); font-weight: 700; letter-spacing: -0.01em; }
+/* The one light count (light-count.ts), as on the Home card. */
+.nest-lights-head h1 small { display: inline; margin-left: 24px; font-size: var(--sg-t-l); font-weight: 500; letter-spacing: 0; }
+.nest-lights-status { position: absolute; font-size: var(--sg-t-m); font-weight: 600; color: var(--sg-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-glass > .nest-lights-body { position: absolute; inset: 0; }
-/* Room names sit in a 250px column beside their lights. */
-.nest-lights-body > .sg-row-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; }
+/* Room names sit in a 180px column beside their lights; a long one wraps, its count under it. */
+.nest-lights-body > .nest-room-label { max-width: 164px; white-space: normal; line-height: 1.2; }
+.nest-lights-body > .nest-room-label em { display: block; margin: 4px 0 0; }
 .nest-light-card,
-.nest-routine { padding: 18px 24px; }
-/* Over the home's own card sizes (.nest .sg-card-row): the panel's cards are compact. */
+.nest-routine { padding: 12px 22px; }
+/* A routine's name and when it ran sit in the middle of its card, the name on up to three lines. */
+.nest-routine { display: flex; flex-direction: column; justify-content: center; }
+/* Over the home's own card sizes (.nest .sg-card-row): compact, and a long name wraps instead of being cut. */
 .nest-lights .nest-light-card .sg-card-row,
-.nest-lights .nest-routine .sg-card-row { font-size: var(--sg-t-m); line-height: 34px; }
-.nest-lights .nest-light-card small,
-.nest-lights .nest-routine small { font-size: var(--sg-t-s); line-height: 28px; margin: 6px 0 0; }
+.nest-lights .nest-routine .sg-card-row { align-items: flex-start; font-size: var(--sg-t-m); line-height: 1.15; }
+.nest-lights .nest-routine .sg-card-row { font-size: var(--sg-t-s); }
+.nest-lights .nest-light-card .sg-card-row .sg-dot,
+.nest-lights .nest-routine .sg-card-row .sg-dot { margin-top: 0.4em; }
+.nest-lights .nest-light-card .sg-card-row b,
+.nest-lights .nest-routine .sg-card-row b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; overflow-wrap: anywhere; }
+.nest-lights .nest-routine .sg-card-row b { -webkit-line-clamp: 3; }
+.nest .nest-lights .nest-light-card small,
+.nest .nest-lights .nest-routine small { font-size: var(--sg-t-xs); line-height: 1.3; margin: 4px 0 0; }
+.nest .nest-lights .nest-light-card small { margin-left: 24px; }
 /* More routines past an end of the line. */
 .nest-lights-more { position: absolute; margin-top: -24px; font-size: var(--sg-t-xxl); line-height: 48px; color: var(--sg-ink-dim); }
-.nest-lights-more.is-left { left: 22px; }
-.nest-lights-more.is-right { right: 22px; }
+.nest-lights-more.is-left { left: 6px; }
+.nest-lights-more.is-right { right: 6px; }
+
+/* The effect's preview (lights.tsx EffectPreview): a screen between two side lights, doing what the effect does. Flat
+   fills; the lamps move by opacity and the sheen by transform, on their own layers, and nothing moves under Reduce motion. */
+.sg-glass > .lfx-pv { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 28px 30px; }
+.lfx-stage { position: relative; flex: none; height: 260px; border-radius: 20px; overflow: hidden; background: #15161b; box-shadow: inset 0 0 0 1.5px var(--sg-line); }
+.lfx-screen { position: absolute; left: 30%; right: 30%; top: 32%; bottom: 32%; border-radius: 8px; background: #2b2d36; }
+.lfx-lamp { position: absolute; top: 40%; width: 44px; height: 44px; margin-top: -22px; border-radius: 50%; background: #3a3b44; }
+.lfx-lamp.is-left { left: 12%; }
+.lfx-lamp.is-right { right: 12%; }
+.lfx-lamp::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #ffd27a; opacity: 0; will-change: opacity; }
+.lfx-sheen { position: absolute; top: 0; bottom: 0; left: 0; width: 22%; background: rgba(255, 255, 255, 0.08); transform: translate3d(-100%, 0, 0); will-change: transform; }
+/* On: what each effect does. */
+.lfx-stage.is-on .lfx-lamp::after { opacity: 1; }
+.lfx-stage.is-on .lfx-screen { background: #3c4058; }
+.lfx-stage.is-splash.is-on .lfx-lamp::after { animation: lfx-glow 3s ease-in-out infinite; }
+.lfx-stage.is-mood.is-on { background: #2e1a2a; }
+.lfx-stage.is-mood.is-on .lfx-screen,
+.lfx-stage.is-sync.is-on .lfx-screen { background: #a8457a; }
+.lfx-stage.is-mood.is-on .lfx-lamp::after { opacity: 0; }
+.lfx-stage.is-sync.is-on .lfx-lamp::after { background: #e06aa8; }
+.lfx-stage.is-dance.is-on .lfx-lamp::after { animation: lfx-glow 0.9s ease-in-out infinite alternate; }
+.lfx-stage.is-dance.is-on .lfx-lamp.is-right::after { background: #6ab4e0; animation-delay: 0.45s; }
+.lfx-stage.is-shimmer.is-on .lfx-sheen { animation: lfx-slide 4s linear infinite; }
+.lfx-stage.is-shimmer.is-on .lfx-lamp::after { opacity: 0; }
+@keyframes lfx-glow { 0%, 100% { opacity: 0.15; } 50% { opacity: 1; } }
+@keyframes lfx-slide { 0% { transform: translate3d(-100%, 0, 0); } 100% { transform: translate3d(560%, 0, 0); } }
+html[data-sg-motion="reduced"] .lfx-stage * ,
+html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important; }
+.lfx-title { margin-top: 24px; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.15; }
+.lfx-about { margin: 10px 0 0; font-size: var(--sg-t-s); line-height: 1.35; color: var(--sg-ink-dim); }
+.lfx-wait { margin-top: 12px; font-size: var(--sg-t-xs); color: var(--sg-accent); }
+.lfx-chips { display: flex; gap: 12px; margin-top: auto; }
+.lfx-chip { padding: 10px 26px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--sg-line); font-size: var(--sg-t-s); font-weight: 600; color: var(--sg-ink-dim); }
+/* The state set: lit in the accent. */
+.lfx-chip.is-on { background: var(--sg-accent); color: var(--sg-accent-ink); box-shadow: none; }
+/* The effects list keeps PreviewList's compact lines over the home's own card sizes (.nest .sg-card-row). */
+.nest .sg-plist .sg-plist-line .sg-card-row { font-size: var(--sg-t-m); }
+.nest .sg-plist .sg-plist-line .sg-card-meta { font-size: var(--sg-t-s); }
+.nest .sg-plist .sg-plist-line small { margin: 4px 0 0 28px; font-size: var(--sg-t-xs); }
+/* An effect's state is its dot and its On; the hint under it stays quiet. */
+.nest .sg-plist .sg-plist-line.is-lit small { font-weight: 500; }
+.nest .sg-plist .sg-plist-line.is-lit:not(.is-focus) small { color: var(--sg-ink-dim); }
 
 /* --- card focus (cards.tsx): the whole card picked, then the Launch button inside an app card --- */
 .nest-col-ring {

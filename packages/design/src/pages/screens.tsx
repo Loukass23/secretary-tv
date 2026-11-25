@@ -46,15 +46,24 @@ export const SCREENS = [
   "Settings",
   "Settings · home screen",
   "Settings · apps",
+  "Settings · appearance",
 ] as const;
+
+/** Settings' look rows, shared with the toolbar: a change in either shows in both (catalog-kit applyLook). */
+type Look = DashboardSettings["general"];
+const SETTINGS_TABS: Record<string, SettingTab> = {
+  "Settings · home screen": "Home screen",
+  "Settings · apps": "Apps",
+  "Settings · appearance": "Appearance",
+};
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
 const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series", Anime: "anime" };
 
-export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
+export function ScreensPage(props: PageProps & { art: Art; screen: number; look: Omit<Look, "bootAnimation" | "clockFormat">; onLook(g: Look): void }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
-  if (name.startsWith("Settings")) return <SettingsPage key={name} tab={name === "Settings · apps" ? "Apps" : name === "Settings · home screen" ? "Home screen" : "Watching"} />;
+  if (name.startsWith("Settings")) return <SettingsPage key={name} tab={SETTINGS_TABS[name] ?? "Watching"} look={props.look} onLook={props.onLook} />;
   if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} offline={name === "Search · offline"} />;
   if (name === "Lights") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
@@ -211,15 +220,20 @@ function SearchPage({ mode, theme, backdrop, art, results, offline }: PageProps 
 
 /**
  * Settings (catalog-kit ui/HubOverlay.tsx) under Secretary's header, on fixture settings and apps: "Settings" opens on
- * Watching, the other two on Home screen's feature switches and on the Apps picker. Changes live in this page only.
+ * Watching, the others on Home screen's feature switches, the Apps picker and Appearance. Changes live in this page
+ * only, except the look (accent, type style, text size, Reduce motion), which goes to the toolbar and the page.
  */
-function SettingsPage({ tab }: { tab: SettingTab }) {
-  const [settings, setSettings] = useState<DashboardSettings>(SETTINGS_FIXTURE);
+function SettingsPage({ tab, look, onLook }: { tab: SettingTab; look: Omit<Look, "bootAnimation" | "clockFormat">; onLook(g: Look): void }) {
+  const [own, setSettings] = useState<DashboardSettings>(SETTINGS_FIXTURE);
+  const settings = { ...own, general: { ...own.general, ...look } };
   return (
     <HubOverlay
       active
       settings={settings}
-      onUpdateSettings={setSettings}
+      onUpdateSettings={(next) => {
+        setSettings(next);
+        onLook(next.general);
+      }}
       header={HEADER}
       apps={SETTINGS_APPS}
       initialTab={tab}
