@@ -520,7 +520,7 @@ Not deployed: measured at integration. What changed for frames:
 
 - **The poster-tinted focus ring is gone** (`ring.ts`, `useFocusRing`): it set three custom properties on every focused
   element after every render. Focus now takes the one accent from `:root`, set only when the setting changes. Expect the
-  same or slightly fewer long frames on the opened-card walk.
+  same or slightly fewer long frames on the opened-card walk. (Brought back the same day, below: it was not meant to go.)
 - **The header clock no longer moves**: collapsing fades the person and buttons only (opacity), with no transform on the
   clock.
 - **A bundled font** (Space Grotesk, 22 KB woff2, `font-display: swap`): check the first frame and that the boot splash
@@ -624,3 +624,22 @@ pages, Settings with previews and Lights) measured together on the Samsung TV in
   build without keys drops (assistant, debrid, SmartThings) and adds the key strings. With keys Secretary's JS is
   **168.7 KB gzip**, over the 168 KB budget; without keys, as every PR of the round measured it, 164.8 KB. Before the
   round the deploy build was 162.5 KB. `budget.json` was raised from 168 KB to 172 KB for it.
+
+### The poster-tinted focus ring, back (Secretary, 2026-11-25)
+
+Wave 1 A removed `useFocusRing` along with the hard-coded accents, but the review only asked for one accent instead of
+the violet, red and pink: the poster tint was meant to stay. It is back as it was (`glass/ring.ts`, focused elements
+only, night with Poster colour on), and it now also tints the picked card's ring (`.nest-col-ring.is-on`), which it
+never did before. Daylight, Poster colour off or no poster: the theme accent.
+
+Measured on the Samsung TV inside Secretary at `ed32e55` (`main`) and this change, deployed the same way one right after
+the other, 250 ms per key, 3 runs each.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home cards (`Right,Right,Right,Left,Left,Left` twice, from the Assistant card) | `ed32e55` | 33 ms | 83 ms | 31, 24, 21 | 4-5 MB |
+| | this change | 33 ms | 83-100 ms | 27, 29, 24 | 4-6 MB |
+| Opened Cinema card (the walk in the sections above) | `ed32e55` | 17-33 ms | 67-133 ms | 26, 51, 44 | 5 MB |
+| | this change | 17-33 ms | 83-150 ms | 23, 54, 46 | 5-7 MB |
+
+The same within the run-to-run spread. One 350 ms frame in the second Cinema run, not seen in the others.

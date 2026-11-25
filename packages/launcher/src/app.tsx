@@ -1,5 +1,5 @@
 import { exitApp, getTvInputBridge, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -831,6 +831,8 @@ export function App() {
   useEffect(() => onLightFx(setFx), []);
   const moodOn = effective(fx).mood;
   const shownMood = moodOn ? mood : null;
+  // At night the focus rings and fills (the picked card's ring too) take the poster's colour; in daylight, or with Poster colour off, the theme accent.
+  useFocusRing(theme === "day" ? null : shownMood, ".nest-col-ring.is-on");
   useEffect(() => {
     let live = true;
     const t = setTimeout(

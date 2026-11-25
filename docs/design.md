@@ -90,7 +90,9 @@ both together.
 One accent colour, `--sg-accent` (and its ink `--sg-accent-ink`), on `:root`: the theme accent the viewer picks in
 Settings › Appearance (`applyThemeToDocument` writes `--accent` and `--tinta`, Secretary applies it at start and on every
 change). Every focus fill and ring, badge, kicker, progress bar and picked tab takes it; no CSS names its own colour for
-these. Type: a scale of eight steps (`--sg-t-xs` 21px to `--sg-t-hero` 72px) times `--sg-text`; every font size in the
+these. One exception: on Secretary's home at night, with Poster colour on, the focused element's ring and fill take
+the focused poster's colour (`glass/ring.ts` `useFocusRing`, set on the focused elements only), and the accent comes back
+in daylight or with Poster colour off. Type: a scale of eight steps (`--sg-t-xs` 21px to `--sg-t-hero` 72px) times `--sg-text`; every font size in the
 glass and the screens' CSS is a step (a test checks `glass.css`), so the text size scales everything. Two faces: the TV's
 own for body text and Space Grotesk (SIL OFL, `glass/fonts`, 22 KB) for titles and numbers; a type style says which face
 titles (`--sg-font-title`), numbers (`--sg-font-num`) and labels (`--sg-font-label`) use. Style and size are
