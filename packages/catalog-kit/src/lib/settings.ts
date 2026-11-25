@@ -1,4 +1,6 @@
 import { type BootAnimationMode, readJson, writeJson } from "@secretary/tv-kit";
+import { applyType, isTextSize, isTypeStyle } from "@secretary/tv-kit/src/glass/type.ts";
+import type { TextSize, TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
 import { START_AFTER, type StartAfter, startAfterLabel } from "./autoplay.ts";
 import type { SheetOrder } from "../ui/sheet.ts";
 import { patternLabel, SIZE_STEPS_GB, sizeLabel } from "./rules.ts";
@@ -48,6 +50,9 @@ export interface DashboardSettings {
     bootAnimation: BootAnimationMode;
     clockFormat: ClockFormat;
     accentTheme: AccentTheme;
+    /** The type style and text size (tv-kit glass tokens.ts TYPE_STYLES, TEXT_SIZES); Settings offers them in wave 3. */
+    typeStyle: TypeStyle;
+    textSize: TextSize;
   };
   domotics: {
     cinemaAutoDim: boolean;
@@ -170,6 +175,8 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
     bootAnimation: "standard",
     clockFormat: "24h",
     accentTheme: "raptor",
+    typeStyle: "studio",
+    textSize: "normal",
   },
   domotics: {
     cinemaAutoDim: false,
@@ -208,13 +215,22 @@ export const ACCENT_THEMES: Record<AccentTheme, { label: string; hex: string; in
   gold: { label: "Aristocrat Gold (#E8B04F)", hex: "#e8b04f", ink: "#0d0f13" },
 };
 
-/** The accent colours highlights (Play, progress, badges); glass focus stays white. */
+/**
+ * The one accent (tv-kit glass tokens.ts ACCENT): every focus fill, badge, kicker, progress bar and tab takes this
+ * colour, and `--tinta` is the ink on it. Secretary calls it at start and whenever the setting changes.
+ */
 export function applyThemeToDocument(theme: AccentTheme): void {
   if (typeof document === "undefined") return;
   const spec = ACCENT_THEMES[theme] ?? ACCENT_THEMES.raptor;
   const root = document.documentElement;
   root.style.setProperty("--accent", spec.hex);
   root.style.setProperty("--tinta", spec.ink);
+}
+
+/** The page's look from the settings: the accent, the type style and the text size. */
+export function applyLook(general: Pick<DashboardSettings["general"], "accentTheme" | "typeStyle" | "textSize">): void {
+  applyThemeToDocument(general.accentTheme);
+  applyType(general.typeStyle, general.textSize);
 }
 
 const SETTINGS_KEY = "sectv:settings:v1";
@@ -277,6 +293,8 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null, legac
       bootAnimation: g.bootAnimation ?? DEFAULT_SETTINGS.general.bootAnimation,
       clockFormat: g.clockFormat ?? DEFAULT_SETTINGS.general.clockFormat,
       accentTheme: g.accentTheme ?? DEFAULT_SETTINGS.general.accentTheme,
+      typeStyle: isTypeStyle(g.typeStyle) ? g.typeStyle : DEFAULT_SETTINGS.general.typeStyle,
+      textSize: isTextSize(g.textSize) ? g.textSize : DEFAULT_SETTINGS.general.textSize,
     },
     domotics: {
       cinemaAutoDim: d.cinemaAutoDim ?? DEFAULT_SETTINGS.domotics.cinemaAutoDim,

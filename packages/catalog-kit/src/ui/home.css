@@ -4,47 +4,34 @@
 
 /* The focused title's caption over the art (tv-kit InfoPanel): the home caption's type, its name raised to read
    from the sofa as the page's title. */
-.cat-caption .sg-info-title { font-size: 52px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
+.cat-caption .sg-info-title { font-size: var(--sg-t-title); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
 .cat-caption .sg-info .sg-kicker { margin-bottom: 14px; }
 .cat-caption .sg-info small.sg-info-meta { margin-top: 10px; }
 
 /* A home row (Home.tsx sets its height from its look) and a folder row (NuvioFolder.tsx). */
 .cat-row { position: absolute; left: 0; width: 1920px; height: 372px; }
-.cat-home .sg-tile-progress i { background: var(--accent, #ff5a26); }
+.cat-home .sg-tile-progress i { background: var(--sg-accent); }
 
 /* Nuvio collection folders (FolderTile): cover art, else an emoji, else the name, on a flat fill. */
 .cat-folder { background: rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; }
 .cat-folder img { position: absolute; inset: 0; }
 .cat-folder-emoji { font-size: 96px; line-height: 1; margin-bottom: 40px; }
-.cat-folder-name { position: absolute; left: 18px; right: 18px; bottom: 16px; font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.cat-folder-name { position: absolute; left: 18px; right: 18px; bottom: 16px; font-size: var(--sg-t-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 /* Over cover art: a flat band, no shadow (docs/performance.md). */
-.cat-folder-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 18px; background: rgba(0, 0, 0, 0.55); font-size: 22px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cat-folder-title { padding: 0 22px; font-size: 30px; font-weight: 700; line-height: 1.15; text-align: center; }
+.cat-folder-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 18px; background: rgba(0, 0, 0, 0.55); font-size: var(--sg-t-s); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-folder-title { padding: 0 22px; font-size: var(--sg-t-l); font-weight: 700; line-height: 1.15; text-align: center; }
 
 /* The style menu of a collection row (a long OK): a line per card shape, then the size. Flat fills, no blur. */
 .cat-style { padding: 26px 30px; display: flex; flex-direction: column; gap: 4px; }
 .cat-style .sg-kicker { margin-bottom: 8px; }
-.cat-style-line { display: flex; justify-content: space-between; align-items: center; height: 54px; padding: 0 22px; border-radius: 27px; font-size: 26px; }
+.cat-style-line { display: flex; justify-content: space-between; align-items: center; height: 54px; padding: 0 22px; border-radius: 27px; font-size: var(--sg-t-m); }
 .cat-style-line.is-picked { font-weight: 700; }
 .cat-style-line.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); }
-.cat-style small { margin-top: 10px; font-size: 18px; color: var(--sg-ink-dim); }
+.cat-style small { margin-top: 10px; font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
 
 /* --- row looks (tv-kit/src/row-look.ts) --- */
-/* Top 10: an outlined numeral in the room before each poster; the poster sits over its right edge. */
+/* Top 10: the numeral (tv-kit RankNumber) in the room before each poster. */
 .cat-rank { position: absolute; top: 0; }
-.cat-rank > span {
-  position: absolute;
-  left: 0;
-  bottom: -8px;
-  font-size: 200px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.06em;
-  color: transparent;
-  -webkit-text-stroke: 4px rgba(255, 255, 255, 0.7);
-  text-align: right;
-}
-.cat-rank .sg-tile { z-index: 1; }
 /* Spotlight: the title on a flat shade strip along the bottom of the still. */
 .cat-spot .sg-tile-cap {
   left: 0;
@@ -53,10 +40,10 @@
   padding: 18px 24px 20px;
   background: rgba(7, 8, 11, 0.72);
 }
-.cat-spot .sg-tile-cap b { display: block; font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-spot .sg-tile-cap b { display: block; font-size: var(--sg-t-l); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- the end of the rows --- */
 .cat-end { display: flex; align-items: center; justify-content: space-between; padding: 0 40px; }
-.cat-end-text b { display: block; font-size: 30px; font-weight: 700; }
-.cat-end-text small { font-size: 20px; margin-top: 4px; }
+.cat-end-text b { display: block; font-size: var(--sg-t-l); font-weight: 700; }
+.cat-end-text small { font-size: var(--sg-t-s); margin-top: 4px; }
 .cat-end-actions { display: flex; gap: 16px; }

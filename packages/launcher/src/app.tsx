@@ -1,5 +1,5 @@
 import { exitApp, getTvInputBridge, useKeys, useOkHold } from "@secretary/tv-kit";
-import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
+import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -39,6 +39,7 @@ import {
   THEME_PREFS,
   type ThemePref,
   themeFor,
+  flipTheme,
   ripplePrompt,
   themePrompt,
   transcribeClip,
@@ -61,13 +62,13 @@ import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./di
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
-import { loadSettings, onSettings, saveHome } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { applyLook, loadSettings, onSettings, saveHome } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
 import { recommend, type RecState } from "./recommend.ts";
-import { type CardMenu, HEADER_ORDER, headerButtons, Home, shownStyle, type TileMenu } from "./home.tsx";
+import { type CardMenu, HEADER_ITEMS, HEADER_ORDER, headerButtons, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
   atEnd,
   clamp,
@@ -115,6 +116,7 @@ import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/cat
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
 import { LightsPanel } from "./lights.tsx";
+import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
 import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
@@ -282,7 +284,16 @@ export function App() {
   const [collectionCards, setCollectionCards] = useState<CollectionCard[]>(() => loadCards(storage, collectionOwner()));
   // Secretary's own settings (Settings › Home screen and Apps): the features switched off and the apps hidden.
   const [prefs, setPrefs] = useState(() => loadSettings().home);
-  useEffect(() => onSettings((s) => setPrefs(s.home)), []);
+  // The one accent and the type (glass tokens.ts) come from the settings, from the first frame and on every change.
+  useMemo(() => applyLook(loadSettings().general), []);
+  useEffect(
+    () =>
+      onSettings((s) => {
+        setPrefs(s.home);
+        applyLook(s.general);
+      }),
+    [],
+  );
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const [serverReminders, setReminders] = useState<Reminder[]>([]);
@@ -639,7 +650,7 @@ export function App() {
       setListening(false);
       flash(SERVER_URL ? `No TV keyboard here: ask from your phone at ${SERVER_URL}/companion` : "No TV keyboard here");
     } else {
-      flash("🎤 Speak or type, then OK");
+      flash("🎤 Listening");
     }
   };
 
@@ -812,7 +823,6 @@ export function App() {
   useEffect(() => onLightFx(setFx), []);
   const moodOn = effective(fx).mood;
   const shownMood = moodOn ? mood : null;
-  useFocusRing(theme === "day" ? null : shownMood);
   useEffect(() => {
     let live = true;
     const t = setTimeout(
@@ -1396,6 +1406,7 @@ export function App() {
       ask: 1,
       cols: rowLayout(columns, openCol).nav,
       menu: menuOpen ? menuItems.length : 0,
+      header: HEADER_ITEMS,
     }),
     [navKey, menuOpen],
   );
@@ -1526,7 +1537,7 @@ export function App() {
       closeMenu();
       return void openApp(SETTINGS_ID).catch(failed("the TV's settings"));
     }
-    if (i === 2) return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
+    if (i === 2) return pickTheme(flipTheme(themePref, new Date().getHours(), lux));
     toggleSpeech();
   };
 
@@ -1725,7 +1736,7 @@ export function App() {
     if (key === "SearchVoice") return void listen();
     if (key === "Red") return togglePicture();
     if (key === "Blue") return toggleSpeech();
-    if (key === "Green") return pickTheme(THEME_PREFS[(THEME_PREFS.indexOf(themePref) + 1) % THEME_PREFS.length]);
+    if (key === "Green") return pickTheme(flipTheme(themePref, new Date().getHours(), lux));
     if (key === "ChannelUp") {
       getTvInputBridge().close();
       setFocus({ area: "header", i: HEADER_SEARCH });
@@ -1742,7 +1753,7 @@ export function App() {
       const now = performance.now();
       if (now - lastBack.current < EXIT_WINDOW_MS) return void playFarewell().finally(() => exitApp());
       lastBack.current = now;
-      flash("Press Back again to leave the nest");
+      flash("Press Back again to leave Secretary");
       return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
@@ -1755,7 +1766,21 @@ export function App() {
 
   // Under the name, only what needs doing (an error, signing in); what the TV is connected to is a pair of icons,
   // and the words for it open with the profile menu.
-  const status = error ?? (cloudEnabled && !me ? "OK to sign in to Nuvio" : "");
+  const status = error ?? (cloudEnabled && !me ? "Not signed in to Nuvio" : "");
+
+  /** The one header over a panel (Lights, Watch together): picture and sound act in place, the rest leave for home. */
+  const panelHeader: PanelHeader = {
+    time,
+    person: { ...headerPerson, sub: status || undefined },
+    buttons: headerButtons(pictureMode, soundOn, openReminders),
+    press: (i) => {
+      if (i !== HEADER_PICTURE && i !== HEADER_SOUND) {
+        setView("home");
+        setFocus({ area: "header", i });
+      }
+      pressHeader(i);
+    },
+  };
   const links: { icon: IconName; off?: boolean }[] = [
     ...(cloudEnabled && me ? [{ icon: "sync" as const }] : []),
     ...(SERVER_URL ? [{ icon: "server" as const, off: !serverOnline }] : []),
@@ -1816,11 +1841,12 @@ export function App() {
         <CatalogHost entry={catalog} host={embeddedHost} serverUrl={SERVER_URL} />
       ) : view === "party" ? (
         <WatchTogether
+          header={panelHeader}
           onClose={() => setView("home")}
           onJoinHere={(o) => browse({ type: o.type, open: { type: o.type, title: { ...o.title, year: "", rating: "" }, autoPlay: false, room: o.room } })}
         />
       ) : view === "lights" ? (
-        <LightsPanel devices={devices} scenes={scenes} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
+        <LightsPanel devices={devices} scenes={scenes} header={panelHeader} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
       ) : view === "search" ? (
         <SearchScreen
           key={query}

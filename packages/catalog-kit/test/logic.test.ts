@@ -400,7 +400,7 @@ test("settings & reminders: organized settings persist and reminders switch clea
   const moodDef = SETTING_ITEMS.find((i) => i.id === "domotics.moodBackground")!;
   assert.equal(moodDef.cycle(initial, 1).domotics.moodBackground, false);
   const legacy = mergeSettings({ general: { startupView: "dashboard", accentTheme: "gold" } } as never);
-  assert.deepEqual(Object.keys(legacy.general).sort(), ["accentTheme", "bootAnimation", "clockFormat"]);
+  assert.deepEqual(Object.keys(legacy.general).sort(), ["accentTheme", "bootAnimation", "clockFormat", "textSize", "typeStyle"]);
   assert.equal(legacy.general.accentTheme, "gold");
 
   // Local mode uses localStorage without hitting the server

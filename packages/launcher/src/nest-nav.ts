@@ -49,6 +49,8 @@ export interface Layout {
   ask: number;
   cols: readonly Column[];
   menu: number;
+  /** The header's items in order, as the numbers below (`headerItems`); default all of them. */
+  header?: readonly number[];
 }
 
 export const HEADER_PROFILE = 0;
@@ -60,6 +62,10 @@ export const HEADER_SOUND = 5;
 export const HEADER_SETTINGS = 6;
 export const HEADER_BELL = 7;
 export const HEADER_LENGTH = 8;
+/** Every header item, left to right. */
+export const HEADER_ALL: readonly number[] = Array.from({ length: HEADER_LENGTH }, (_, i) => i);
+/** The header's items with Watch together left out while it is off (config.ts WATCH_TOGETHER). */
+export const headerItems = (party: boolean): readonly number[] => (party ? HEADER_ALL : HEADER_ALL.filter((i) => i !== HEADER_PARTY));
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
 /** The bar under an opened media card's last row, left to right: Back to top, Recommend me, See all. */
@@ -102,8 +108,9 @@ export function step(at: Focus, key: string, len: Layout): Focus {
   switch (area) {
     case "header": {
       if (key === "Left" || key === "Right") {
-        const next = i + (key === "Right" ? 1 : -1);
-        return next < 0 || next >= HEADER_LENGTH ? at : header(next);
+        const items = len.header ?? HEADER_ALL;
+        const next = items[items.indexOf(i) + (key === "Right" ? 1 : -1)];
+        return next == null ? at : header(next);
       }
       if (key === "Down") return rowStart(len) ?? (len.ask > 0 ? { area: "ask", i: 0 } : at);
       return at;
@@ -135,7 +142,8 @@ export function step(at: Focus, key: string, len: Layout): Focus {
           const p = columnFrom(len.cols, c - 1, -1);
           return p >= 0 ? card(p) : at;
         }
-        if (key === "Up") return header(HEADER_PARTY);
+        // Up from the row: the first button after the person.
+        if (key === "Up") return header((len.header ?? HEADER_ALL).find((h) => h !== HEADER_PROFILE) ?? HEADER_PROFILE);
         if (key === "Down" && len.ask > 0) return { area: "ask", i: 0 };
         return at;
       }

@@ -4,15 +4,64 @@
    - no soft outer shadows: repainting them on focus changes cost long frames; hairlines instead
    - focus fades a white sheet in with opacity on its own layer; movement is transform only
    Tokens: tokens.ts holds the same values as data (test/tokens.test.ts keeps them in step). */
+/* The display face (tokens.ts FONTS): Space Grotesk, SIL OFL 1.1 (fonts/OFL.txt), the Latin subset, one variable file
+   for weights 300 to 700. Characters outside the range fall back to the body face. */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./fonts/space-grotesk-latin.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Type (tokens.ts TYPE_SCALE, TEXT_SIZES, FONTS, TYPE_STYLES) on the page itself, so every screen and panel has it:
+   the scale times the text size, the two faces, and what the type style gives titles, numbers and labels. Settings
+   switches them with data-sg-type and data-sg-text on <html> (type.ts). The one accent (tokens.ts ACCENT) is here too,
+   fed by the theme accent setting. */
+:root {
+  --sg-accent: var(--accent, #ff5a26);
+  --sg-accent-ink: var(--tinta, #ffffff);
+  --sg-text: 1;
+  --sg-t-xs: calc(21px * var(--sg-text));
+  --sg-t-s: calc(24px * var(--sg-text));
+  --sg-t-m: calc(28px * var(--sg-text));
+  --sg-t-l: calc(32px * var(--sg-text));
+  --sg-t-xl: calc(38px * var(--sg-text));
+  --sg-t-xxl: calc(48px * var(--sg-text));
+  --sg-t-title: calc(60px * var(--sg-text));
+  --sg-t-hero: calc(72px * var(--sg-text));
+  --sg-font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sg-font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --sg-font-title: var(--sg-font-display);
+  --sg-font-num: var(--sg-font-display);
+  --sg-font-label: var(--sg-font-body);
+  --sg-title-weight: 600;
+  --sg-title-track: -0.01em;
+}
+:root[data-sg-type="classic"] {
+  --sg-font-title: var(--sg-font-body);
+  --sg-font-num: var(--sg-font-body);
+  --sg-font-label: var(--sg-font-body);
+  --sg-title-weight: 600;
+  --sg-title-track: 0em;
+}
+:root[data-sg-type="bold"] {
+  --sg-font-title: var(--sg-font-display);
+  --sg-font-num: var(--sg-font-display);
+  --sg-font-label: var(--sg-font-display);
+  --sg-title-weight: 700;
+  --sg-title-track: -0.02em;
+}
+:root[data-sg-text="large"] { --sg-text: 1.15; }
 .sg-root {
   --sg-fill: rgba(255, 255, 255, 0.07);
   --sg-line: rgba(255, 255, 255, 0.11);
   --sg-raised: rgba(255, 255, 255, 0.16);
   --sg-ink: #f4f4f6;
-  --sg-ink-dim: rgba(244, 244, 246, 0.55);
-  --sg-focus: #f4f4f6;
-  --sg-focus-ink: #101114;
-  --sg-focus-ink-dim: rgba(16, 17, 20, 0.6);
+  --sg-ink-dim: rgba(244, 244, 246, 0.62);
+  --sg-focus: var(--sg-accent);
+  --sg-focus-ink: var(--sg-accent-ink);
+  --sg-focus-ink-dim: color-mix(in srgb, var(--sg-accent-ink) 74%, transparent);
   --sg-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --sg-move: 280ms;
   --sg-fade: 180ms;
@@ -25,7 +74,7 @@
   overflow: hidden;
   background: #0b0807 center / 1920px 1080px no-repeat;
   color: var(--sg-ink);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--sg-font-body);
 }
 .sg-root > * { position: absolute; }
 /* The wallpaper that was just replaced, fading out on its own layer: opacity only. */
@@ -154,7 +203,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 28px;
-  font-size: 26px;
+  font-size: var(--sg-t-m);
   font-weight: 600;
   color: var(--sg-ink-dim);
 }
@@ -163,7 +212,7 @@
 .sg-seg-item.is-focus { color: var(--sg-focus-ink); }
 
 /* --- icon button --- */
-.sg-icon { display: flex; align-items: center; justify-content: center; font-size: 34px; border-radius: 20px; }
+.sg-icon { display: flex; align-items: center; justify-content: center; font-size: var(--sg-t-xl); border-radius: 20px; }
 .sg-icon > span { display: flex; align-items: center; }
 
 /* --- line icons (icons.tsx): one-colour masks in the text colour, so focus switches their ink with the text --- */
@@ -182,7 +231,7 @@
   height: 7px;
   margin-left: -11px;
   border-radius: 4px;
-  background: #e0484f;
+  background: var(--sg-accent);
 }
 
 /* --- date chip --- */
@@ -195,10 +244,10 @@
   transition: transform 220ms var(--sg-ease);
   will-change: transform;
 }
-.sg-chip b { font-size: 34px; font-weight: 600; line-height: 1.1; }
-.sg-chip small { font-size: 22px; }
+.sg-chip b { font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.1; }
+.sg-chip small { font-size: var(--sg-t-s); }
 .sg-glass > .sg-dot { position: absolute; top: 10px; right: 10px; }
-.sg-dot { display: block; width: 10px; height: 10px; border-radius: 50%; background: #6b74ff; flex-shrink: 0; }
+.sg-dot { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--sg-accent); flex-shrink: 0; }
 .sg-chip.is-focus { transform: scale(1.06); }
 
 /* --- app chip --- */
@@ -214,8 +263,8 @@
   will-change: transform;
 }
 .sg-app img { width: 64px; height: 64px; object-fit: contain; }
-.sg-app-letter { width: 64px; height: 64px; border-radius: 16px; background: var(--sg-raised); font-size: 34px; font-weight: 700; line-height: 64px; text-align: center; }
-.sg-app small { max-width: 100%; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-app-letter { width: 64px; height: 64px; border-radius: 16px; background: var(--sg-raised); font-size: var(--sg-t-xl); font-weight: 700; line-height: 64px; text-align: center; }
+.sg-app small { max-width: 100%; font-size: var(--sg-t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-app.is-focus { transform: scale(1.06); }
 
 /* --- list card --- */
@@ -226,10 +275,10 @@
   will-change: transform;
 }
 .sg-card.is-focus { transform: scale(1.025); }
-.sg-card-row { display: flex; align-items: center; gap: 14px; font-size: 32px; }
+.sg-card-row { display: flex; align-items: center; gap: 14px; font-size: var(--sg-t-xl); }
 .sg-card-row b { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sg-card-meta { font-size: 24px; }
-.sg-card small { font-size: 24px; margin: 8px 0 0 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-card-meta { font-size: var(--sg-t-m); }
+.sg-card small { font-size: var(--sg-t-m); margin: 8px 0 0 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- media tile --- */
 .sg-tile {
@@ -256,10 +305,10 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--accent, #ff5a26);
+  background: var(--sg-accent);
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
-  color: #fff;
-  font-size: 22px;
+  color: var(--sg-accent-ink);
+  font-size: var(--sg-t-s);
   font-weight: 700;
   line-height: 38px;
   text-align: center;
@@ -278,17 +327,18 @@
 .sg-tile.is-focus { transform: scale(1.06); }
 .sg-tile.is-focus::before { opacity: 1; }
 /* Captions sit on artwork, so they keep a light ink in both themes (sg-ink is dark by day). */
-.sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: 22px; color: #f4f4f6; }
-.sg-tile-cap small { font-size: 19px; color: rgba(255, 255, 255, 0.75); }
+.sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: var(--sg-t-s); color: #f4f4f6; }
+.sg-tile-cap small { font-size: var(--sg-t-xs); color: rgba(255, 255, 255, 0.75); }
 .sg-tile-count {
   position: absolute;
+  color: #f4f4f6;
   right: 16px;
   bottom: 16px;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
-  font-size: 18px;
+  font-size: var(--sg-t-xs);
   line-height: 36px;
   text-align: center;
 }
@@ -300,7 +350,9 @@
   padding: 4px 12px;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.55);
-  font-size: 17px;
+  /* On artwork: a light ink in both themes, as the captions. */
+  color: #f4f4f6;
+  font-size: var(--sg-t-xs);
   font-weight: 600;
 }
 .sg-tile-progress {
@@ -313,11 +365,11 @@
   background: rgba(255, 255, 255, 0.25);
   overflow: hidden;
 }
-.sg-tile-progress i { display: block; height: 100%; background: var(--sg-focus); transform-origin: left; }
+.sg-tile-progress i { display: block; height: 100%; background: var(--sg-accent); transform-origin: left; }
 
 /* --- user row, action button --- */
-.sg-user { position: absolute; display: flex; align-items: center; gap: 22px; font-size: 28px; }
-.sg-user small { font-size: 22px; }
+.sg-user { position: absolute; display: flex; align-items: center; gap: 22px; font-size: var(--sg-t-l); }
+.sg-user small { font-size: var(--sg-t-s); }
 .sg-avatar {
   width: 76px;
   height: 76px;
@@ -332,7 +384,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
-  font-size: 36px;
+  font-size: var(--sg-t-xl);
   font-weight: 700;
   color: #fff;
 }
@@ -344,7 +396,7 @@
   border-radius: 50%;
   background: var(--sg-focus);
   color: var(--sg-focus-ink);
-  font-size: 52px;
+  font-size: var(--sg-t-title);
   font-weight: 300;
   line-height: 86px;
   text-align: center;
@@ -442,9 +494,9 @@
   --sg-raised: rgba(120, 50, 10, 0.09);
   --sg-ink: #2a1810;
   --sg-ink-dim: rgba(42, 24, 16, 0.7);
-  --sg-focus: #c2410c;
-  --sg-focus-ink: #ffffff;
-  --sg-focus-ink-dim: rgba(255, 255, 255, 0.88);
+  --sg-focus: var(--sg-accent);
+  --sg-focus-ink: var(--sg-accent-ink);
+  --sg-focus-ink-dim: color-mix(in srgb, var(--sg-accent-ink) 74%, transparent);
   background-color: #f4e9dc;
 }
 
@@ -457,9 +509,9 @@
   height: 28px;
   padding: 0 7px;
   border-radius: 14px;
-  background: #e0484f;
-  color: #fff;
-  font-size: 17px;
+  background: var(--sg-accent);
+  color: var(--sg-accent-ink);
+  font-size: var(--sg-t-xs);
   font-weight: 700;
   line-height: 28px;
   text-align: center;
@@ -470,7 +522,7 @@
 .sg-holdpill { opacity: 0; transition: opacity 160ms ease-out; will-change: opacity; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 0 28px; }
 .sg-holdpill::after { background: rgba(10, 11, 14, 0.86); }
 .sg-holdpill-wrap.is-open .sg-holdpill { opacity: 1; }
-.sg-holdpill-text { position: relative; z-index: 2; font-size: 21px; font-weight: 600; white-space: nowrap; }
+.sg-holdpill-text { position: relative; z-index: 2; font-size: var(--sg-t-s); font-weight: 600; white-space: nowrap; }
 .sg-holdpill-track { position: relative; z-index: 2; display: block; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
 .sg-holdpill-fill { display: block; width: 100%; height: 100%; border-radius: 3px; background: var(--sg-ink); transform: scaleX(0); transform-origin: left center; will-change: transform; }
 
@@ -493,50 +545,50 @@
 @keyframes sgBHead{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.sg-bird *{animation:none!important}}
 .sg-loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: 0; animation: sgLoaderIn 420ms ease-out both; pointer-events: none; z-index: 20; }
-.sg-loader-label { font-size: 30px; font-weight: 600; letter-spacing: 0.02em; color: var(--sg-ink); }
+.sg-loader-label { font-size: var(--sg-t-l); font-weight: 600; letter-spacing: 0.02em; color: var(--sg-ink); }
 @keyframes sgLoaderIn { to { opacity: 1; } }
 .sg-loader.is-calm { animation: none; opacity: 1; }
 .sg-loader.is-calm .sg-b-spikes, .sg-loader.is-calm .sg-b-in, .sg-loader.is-calm .sg-b-out, .sg-loader.is-calm .sg-b-head { animation: none; }
 
-/* --- header (Header.tsx): the person, the clock and the quiet buttons. Collapsed (a title page), only the clock stays,
-   slid to the right edge by transform; the rest fades out as one layer, then stops being drawn. --- */
+/* --- header (Header.tsx): the person, the quiet buttons and the clock last, at the right edge. Collapsed (a title page),
+   the clock stays where it is and the rest fades out as one layer, then stops being drawn. --- */
 .sg-root > .sg-head-items { left: 0; top: 0; transition: opacity var(--sg-fade) var(--sg-ease), visibility 0s; will-change: opacity; }
 .sg-head-items.is-away { opacity: 0; visibility: hidden; transition: opacity var(--sg-fade) var(--sg-ease), visibility 0s var(--sg-fade); }
 .sg-head-clock {
   position: absolute;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   height: 78px;
   text-align: right;
-  transition: transform var(--sg-move) var(--sg-ease);
-  will-change: transform;
+  white-space: nowrap;
 }
-.sg-head-clock b { display: block; font-size: 38px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+.sg-head-clock b { display: block; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
 /* Header buttons: no fill or hairline until focused, so the top stays quiet. */
 .sg-glass.sg-quiet::after { opacity: 0; }
-.sg-glass.sg-quiet { font-size: 38px; }
+.sg-glass.sg-quiet { font-size: var(--sg-t-xl); }
 
 /* --- shared pieces (pieces.tsx): the home screen's type, spacing and focus for the catalog screens --- */
 .sg-kicker {
   display: block;
-  font-size: 18px;
+  font-size: var(--sg-t-xs);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--accent, #ff5a26);
+  color: var(--sg-accent);
 }
-.sg-row-label { position: absolute; font-size: 26px; font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
-.sg-row-label em { margin-left: 14px; font-size: 22px; font-style: normal; font-weight: 500; }
+.sg-row-label { position: absolute; font-size: var(--sg-t-m); font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
+.sg-row-label em { margin-left: 14px; font-size: var(--sg-t-s); font-style: normal; font-weight: 500; }
 
 /* Info panel: the opened card's caption (28px name, 23px line, 24px synopsis); on glass, a title page's panel. */
 .sg-info { position: absolute; overflow: hidden; }
 .sg-info.is-glass { padding: 36px 40px; }
 .sg-info .sg-kicker { margin-bottom: 10px; }
-.sg-info-title { display: block; font-size: 28px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sg-info small.sg-info-meta { margin-top: 4px; font-size: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-info-title { display: block; font-size: var(--sg-t-l); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-info small.sg-info-meta { margin-top: 4px; font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-info-about {
   margin: 10px 0 0;
-  font-size: 24px;
+  font-size: var(--sg-t-m);
   line-height: 1.38;
   color: var(--sg-ink-dim);
   overflow: hidden;
@@ -545,7 +597,7 @@
 }
 
 /* Buttons: the home card's pill, a hairline and the white sheet fading in on focus with a small lift. */
-.sg-btn-row { display: flex; gap: 16px; margin-top: 28px; }
+.sg-btn-row { display: flex; gap: 14px; margin-top: 28px; }
 .sg-root > .sg-btn-row.is-placed { margin-top: 0; }
 .sg-btn {
   position: relative;
@@ -553,10 +605,10 @@
   align-items: center;
   gap: 14px;
   height: 60px;
-  padding: 0 28px;
+  padding: 0 24px;
   border-radius: 30px;
   box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  font-size: 27px;
+  font-size: var(--sg-t-m);
   font-weight: 600;
   white-space: nowrap;
   isolation: isolate;
@@ -594,12 +646,47 @@
   align-items: center;
   justify-content: center;
   border-radius: 30px;
-  font-size: 26px;
+  font-size: var(--sg-t-m);
   font-weight: 600;
   color: var(--sg-ink-dim);
   white-space: nowrap;
   isolation: isolate;
 }
-.sg-tab.is-picked { background: var(--sg-raised); color: var(--sg-ink); }
+/* The picked tab (the season shown, the settings page open): raised, in the accent's ink. */
+.sg-tab.is-picked { background: var(--sg-raised); color: var(--sg-accent); }
 /* Picked and focused (Settings' categories, the season being shown): the focus sheet's ink, not the picked one's. */
 .sg-tab.is-picked.is-focus { color: var(--sg-focus-ink); }
+
+/* --- rank numeral (pieces.tsx RankNumber): one style for every Top 10, filled and flat, brighter by opacity on focus --- */
+.sg-rank {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding-right: 8px;
+  box-sizing: border-box;
+  font-family: var(--sg-font-num);
+  font-weight: 700;
+  line-height: 0.78;
+  letter-spacing: -0.05em;
+  color: var(--sg-ink);
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
+}
+.sg-rank.is-focus { opacity: 1; }
+
+/* --- preview beside a list (pieces.tsx PreviewList): compact lines on one panel, the focused line's preview on the other --- */
+.sg-plist .sg-plist-kicker { position: absolute; left: 28px; top: 26px; }
+.sg-plist-line { padding: 16px 24px; }
+.sg-plist-line .sg-card-row { font-size: var(--sg-t-m); }
+.sg-plist-line small { margin: 4px 0 0; font-size: var(--sg-t-s); }
+/* The line the preview shows while the remote is in the preview: raised, not focused. */
+.sg-plist-line.is-picked::after { background: var(--sg-raised); }
+.sg-plist-preview.is-active::after { box-shadow: inset 0 0 0 3px var(--sg-accent); }
+
+/* --- type style (tokens.ts TYPE_STYLES): titles, numbers and labels take their face from the style --- */
+.sg-info-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); }
+.sg-head-clock b, .sg-chip b, .sg-count, .sg-tile-count { font-family: var(--sg-font-num); }
+.sg-kicker, .sg-row-label, .sg-btn, .sg-tab, .sg-seg-item { font-family: var(--sg-font-label); }

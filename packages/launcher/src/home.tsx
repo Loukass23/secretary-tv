@@ -4,26 +4,42 @@
 // whole screen (the chat, opened from its card). Layout only; data and keys live in app.tsx.
 import { useRef } from "preact/hooks";
 import { Glass, Glow, Header, type HeaderButton, Icon, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
-import { type CardStyle, LAYOUT_LABEL, LAYOUTS, MOVE_LINE, REMOVE_LINE, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
+import { type CardStyle, LAYOUT_LABEL, LAYOUTS, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
-import { type Focus, HEADER_BELL, HEADER_LIGHTS, HEADER_PARTY, HEADER_PICTURE, HEADER_PROFILE, HEADER_SEARCH, HEADER_SETTINGS, HEADER_SOUND } from "./nest-nav.ts";
+import { WATCH_TOGETHER } from "./config.ts";
+import { type Focus, HEADER_BELL, HEADER_PROFILE, headerItems } from "./nest-nav.ts";
 
 const PAD = 80;
+/** The header's items as nest-nav numbers them: the person, then the buttons (Watch together only while it is on). */
+export const HEADER_ITEMS = headerItems(WATCH_TOGETHER);
 /** The header buttons, left to right, as nest-nav numbers them. */
-export const HEADER_ORDER = [HEADER_PARTY, HEADER_SEARCH, HEADER_LIGHTS, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL];
+export const HEADER_ORDER = HEADER_ITEMS.filter((i) => i !== HEADER_PROFILE);
 
-/** The header's buttons, as home draws them and as the catalog's title pages draw them (catalog-kit host.ts). */
-export const headerButtons = (pictureMode: string | undefined, soundOn: boolean | undefined, open: number): HeaderButton[] =>
-  (["party", "search", "lights", pictureIcon(pictureMode), soundOn === false ? "hifi-off" : "hifi", "settings", "bell"] as const satisfies readonly IconName[]).map((icon, k) => ({
-    key: String(k),
-    icon,
-    badge: k === 6 ? open : undefined,
-  }));
+/** Each header button's icon, by its nest-nav number (1 Watch together ... 7 the bell). */
+const ICONS = (pictureMode: string | undefined, soundOn: boolean | undefined): readonly IconName[] => [
+  "party",
+  "party",
+  "search",
+  "lights",
+  pictureIcon(pictureMode),
+  soundOn === false ? "hifi-off" : "hifi",
+  "settings",
+  "bell",
+];
 
-/** The picture button shows the mode the TV is on: a sun for Dynamic, a moon for Eco, a screen for anything else. */
+/** The header's buttons, as home draws them and as every other screen and panel draws them (catalog-kit host.ts). */
+export const headerButtons = (pictureMode: string | undefined, soundOn: boolean | undefined, open: number): HeaderButton[] => {
+  const icons = ICONS(pictureMode, soundOn);
+  return HEADER_ORDER.map((i) => ({ key: String(i), icon: icons[i], badge: i === HEADER_BELL ? open : undefined }));
+};
+
+/**
+ * The picture button switches the TV's own picture mode (SmartThings), not Secretary's look: a screen with a sun for
+ * Dynamic, with a moon for Eco, a plain screen for anything else, so it never reads as Night/Daylight.
+ */
 function pictureIcon(mode: string | undefined): IconName {
   const m = (mode ?? "").toLowerCase();
-  return m.startsWith("dynamic") ? "clear" : m.startsWith("eco") ? "clear-night" : "partly";
+  return m.startsWith("dynamic") ? "picture-bright" : m.startsWith("eco") ? "picture-dim" : "picture";
 }
 /** The full screen width: the orb rests in the middle under the cards, and the ribbons run out to both edges. */
 const WAVE = { x: 0, y: 880, w: 1920, h: 72 };
@@ -105,7 +121,7 @@ const STYLE_LINE = 72;
 function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; name: string }) {
   const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`, "Move", "Remove from home"];
   return (
-    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 64} class="nest-menu nest-style">
+    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 24} class="nest-menu nest-style">
       <span class="nest-kicker nest-style-head">{name} · card style</span>
       {lines.map((label, i) => (
         <span
@@ -116,9 +132,6 @@ function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; 
           {label}
         </span>
       ))}
-      <small class="nest-style-hint" style={{ top: `${88 + lines.length * STYLE_LINE}px` }}>
-        {m.line === REMOVE_LINE ? "OK removes · Back keeps" : m.line === MOVE_LINE ? "OK then ◀ ▶ moves it" : "OK keeps · Back undoes"}
-      </small>
     </Glass>
   );
 }
@@ -153,23 +166,15 @@ function TitleTileMenu({ m }: { m: TileMenu }) {
 function RemoveMenu({ m, x, y, name }: { m: CardMenu; x: number; y: number; name: string }) {
   const lines = ["Move", "Remove from home"];
   return (
-    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 64} class="nest-menu nest-style">
+    <Glass x={x} y={y} w={STYLE_W} h={96 + lines.length * STYLE_LINE + 24} class="nest-menu nest-style">
       <span class="nest-kicker nest-style-head">{name}</span>
       {lines.map((label, i) => (
         <span key={label} class={`nest-menu-item${m.line === i ? " is-focus" : ""}`} style={{ top: `${76 + i * STYLE_LINE}px` }}>
           {label}
         </span>
       ))}
-      <small class="nest-style-hint" style={{ top: `${88 + lines.length * STYLE_LINE}px` }}>
-        {m.line === 1 ? "OK removes · Back keeps" : "OK then ◀ ▶ moves it"}
-      </small>
     </Glass>
   );
-}
-
-/** While a card is being moved: a hint under the row, the card lifted and the others stepped back. */
-function MoveHint() {
-  return <small class="nest-move-hint">◀ ▶ moves the card · OK keeps · Back puts it back</small>;
 }
 
 /** The style a card shows: the menu's while it is open on that card. */
@@ -193,10 +198,10 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
     ? { x: ROW.x + layout.x[colAt] - rowScroll + focusBox.x, y: ROW.y + LABEL_H + focusBox.y, w: focusBox.w, h: focusBox.h }
     : null;
   const menuKey = styleMenu?.key ?? removeMenu?.key ?? moving ?? null;
-  // The wave shows only while someone speaks; the line under it says what is going on, or hints at what to do.
+  // The wave shows only while someone speaks; the line under it says what is going on, else names the assistant.
   const busy = ask.wave !== "idle";
   const live = busy || ask.focused;
-  const line = busy ? ask.status || ask.reply : ask.focused ? "Press OK to talk" : "Ask Assistant";
+  const line = busy ? ask.status || ask.reply : "Ask Assistant";
 
   return (
     <>
@@ -248,7 +253,6 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         <p key={ask.turnId}>{ask.reply}</p>
       </div>
 
-      {moving && <MoveHint />}
       {tileMenu && <TitleTileMenu m={tileMenu} />}
       {menuKey && !moving && (() => {
         const c = columns.findIndex((k) => k.key === menuKey);
