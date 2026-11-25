@@ -581,3 +581,46 @@ Walk inside Secretary, against `main` deployed the same way:
 - Lights (header lights button): `cdp.mjs walk 250 Down,Down,Down,Down,Down,Right,Right,Right,Down,Down,Down,Down,Left,Left,Up,Up,Up,Up`
   (the effects, then routines and rooms). Then `soak` on the Lights panel with the Shimmer preview showing.
 
+
+### Integration: the 25 Nov round measured on the TV (2026-11-25)
+
+PRs #26 to #31 (search on the TV, artwork and metadata, type/accent/header, home immersion and opened cards, title
+pages, Settings with previews and Lights) measured together on the Samsung TV inside Secretary at `c9b11d4`, against
+`fdf6b92` (`main` before the round) deployed the same way from a worktree, one right after the other. Each walk at
+250 ms per key, run right after reaching the screen.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home cards (`Right,Right,Right,Left,Left,Left` twice, from the Assistant card), 3 runs | `fdf6b92` | 17 ms | 33-83 ms | 13, 3, 2 | 4-5 MB |
+| | `c9b11d4` | 17-33 ms | 50-67 ms | 16, 6, 10 | 4 MB |
+| Opened Cinema card (the walk in the sections above), 4 runs | `fdf6b92` | 17 ms | 50-83 ms | 41, 26, 29, 10 | 4-6 MB |
+| | `c9b11d4` | 17 ms | 50-83 ms | 40, 31, 19, 16 | 5-7 MB |
+| Show page (Shows card, OK on Continue watching; `Right,Right,Right,Right,Left,Left,Up,Right,Left,Down,Right,Right,Up,Up,Down,Down`), 3 runs | `fdf6b92` | 17 ms | 50-83 ms | 32, 6, 11 | 7-8 MB |
+| | `c9b11d4` | 17 ms | 33-83 ms | 31, 7, 10 | 7-9 MB |
+| Settings (header button; `Down`x6, `Up`x6, `Right,Right,Left,Left,Down,Down,Up,Up`), 3 runs | `fdf6b92` | 17 ms | 33 ms | 1, 1, 0 | 7 MB |
+| | `c9b11d4` | 17 ms | 33 ms | 3, 3, 3 | 7 MB |
+
+- **No regression on the opened card or the title page**: the same long frames within the run-to-run spread. The
+  title page without its frosted panel costs the same as before.
+- **Home**: the focus push-in adds a few long frames per walk (6-16 against 2-13), and the first walk after launch is
+  the worst on both builds. One frame of 1033 ms in the third run on `c9b11d4`, not seen again; watch it on the next
+  walk.
+- **Settings**: 3 long frames per walk against 0-1, from the preview re-rendering on each key. Small, but steady. In
+  both builds `Down` from the tabs did not visibly move focus into the list, so this walk mostly switches tabs; walk
+  the list lines next time (`docs` G section above).
+- **Soak**: `cdp.mjs soak` presses header buttons (picture mode, sound), so a safer loop was used: from the Assistant
+  card open Cinema, walk its rows, Back; open Shows, OK on a Continue watching tile, move on the title page, Back,
+  Back; heap after a forced GC every 3 cycles, 12 minutes each.
+
+| Build | heap after GC, start | after 12 min (27-30 cycles) | DOM at home |
+| --- | --- | --- | --- |
+| `fdf6b92` | 2.8 MB | 12.7 MB | 287 nodes, 23 images |
+| `c9b11d4` | 6.5 MB | 12.6 MB | 285 nodes, 25 images |
+
+  The cached artwork adds nothing measurable: both builds end at the same heap and the DOM stays flat. Both still creep
+  up by about 0.1 MB per cycle at the end of 12 minutes; that was there before this round. A 30-minute soak should
+  say whether it levels off.
+- **Size**: the build deployed to the TV carries the owner's keys from `.env` and `.env.tizen`, which keeps code a
+  build without keys drops (assistant, debrid, SmartThings) and adds the key strings. With keys Secretary's JS is
+  **168.7 KB gzip**, over the 168 KB budget; without keys, as every PR of the round measured it, 164.8 KB. Before the
+  round the deploy build was 162.5 KB. Measured here with the budget raised locally, not committed.
