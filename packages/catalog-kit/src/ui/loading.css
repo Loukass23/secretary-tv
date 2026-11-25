@@ -1,11 +1,11 @@
 /* The title's loading screen (Loading.tsx): the bird, then the words under it. Flat fills; the bar moves by transform. */
 .det .sg-loader, .ply-start .sg-loader { background: rgba(8, 9, 12, 0.5); gap: 10px; }
-.sg-loader .sg-loader-label { max-width: 1400px; margin-top: 8px; font-size: 44px; font-weight: 700; letter-spacing: -0.01em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ld-status { font-size: 24px; color: var(--sg-ink-dim); min-height: 30px; }
+.sg-loader .sg-loader-label { max-width: 1400px; margin-top: 8px; font-size: var(--sg-t-xxl); font-weight: 700; letter-spacing: -0.01em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-status { font-size: var(--sg-t-m); color: var(--sg-ink-dim); min-height: 30px; }
 .ld-badges { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 34px; }
-.ld-badge { padding: 3px 12px; border-radius: 8px; background: var(--sg-raised); font-size: 18px; font-weight: 700; }
-.ld-dim { font-size: 20px; color: var(--sg-ink-dim); }
+.ld-badge { padding: 3px 12px; border-radius: 8px; background: var(--sg-raised); font-size: var(--sg-t-xs); font-weight: 700; }
+.ld-dim { font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
 .ld-bar { display: block; width: 360px; height: 5px; margin-top: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
-.ld-bar i { display: block; height: 100%; background: var(--accent, #ff5a26); transform-origin: left; will-change: transform; }
+.ld-bar i { display: block; height: 100%; background: var(--sg-accent); transform-origin: left; will-change: transform; }
 .ld-bar i.is-loading { width: 30%; animation: plySlide 1.4s linear infinite; }
 .ld-bar i.is-failed { width: 100%; background: rgba(255, 255, 255, 0.35); }

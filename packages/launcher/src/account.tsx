@@ -221,7 +221,7 @@ export function Profiles({ onPicked, onSignedOut, onClose }: { onPicked: (p: Pro
           <small>of this TV</small>
         </div>
       )}
-      <div class="nest-signin-status nest-profiles-note">{note ?? (profiles ? "OK picks · Back returns home" : "Loading profiles…")}</div>
+      <div class="nest-signin-status nest-profiles-note">{note ?? (profiles ? "" : "Loading profiles…")}</div>
     </Glass>
   );
 }

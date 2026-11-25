@@ -171,6 +171,7 @@ code, kbd { font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .dz-r-chip { border-radius: var(--sg-r-chip); }
 .dz-type { display: flex; align-items: baseline; gap: 24px; white-space: nowrap; }
 .dz-type small { font-size: 18px; }
+.dz-type.is-title span { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); }
 .sg-glass > .dz-motion-dot {
   position: absolute;
   display: block;
@@ -183,3 +184,5 @@ code, kbd { font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; }
   transition: transform var(--sg-move) var(--sg-ease);
   will-change: transform;
 }
+/* The preview specimen's mock (pages/components.tsx LookPreview). */
+.sg-glass > .dz-look { position: absolute; inset: 0; }

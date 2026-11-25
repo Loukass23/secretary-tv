@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { briefing, ripplePrompt, themeFor, themePrompt, waveState } from "../src/assistant.ts";
+import { briefing, flipTheme, ripplePrompt, themeFor, themePrompt, waveState } from "../src/assistant.ts";
 
 test("the wave follows the keyboard, the request and the answer", () => {
   const none = { listening: false, asking: false, pending: false, answered: false };
@@ -55,4 +55,17 @@ test("the briefing greets by the hour and counts the open reminders", () => {
   assert.deepEqual(briefing(at(14), "A", [{ text: "Water the plants" }]).lines, ["1 reminder", "Water the plants"]);
   const three = [{ text: "Call mum", due: "6pm" }, { text: "Bins" }, { text: "Post" }];
   assert.deepEqual(briefing(at(14), "A", three).lines, ["3 reminders", "Call mum · 6pm", "Bins", "Post"]);
+});
+
+test("the Theme item always flips the look, and comes back to automatic", () => {
+  // Daytime, automatic shows Daylight: Night, then automatic (Daylight) again.
+  assert.equal(flipTheme("auto", 12), "night");
+  assert.equal(flipTheme("night", 12), "auto");
+  assert.equal(flipTheme("day", 12), "night");
+  // Night time, automatic shows Night: Daylight, then automatic.
+  assert.equal(flipTheme("auto", 22), "day");
+  assert.equal(flipTheme("day", 22), "auto");
+  // A dark room by day: automatic follows the room.
+  assert.equal(flipTheme("auto", 12, 20), "day");
+  for (const pref of ["auto", "day", "night"] as const) for (const h of [3, 12, 22]) assert.notEqual(themeFor(flipTheme(pref, h), h), themeFor(pref, h));
 });

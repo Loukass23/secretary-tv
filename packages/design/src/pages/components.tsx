@@ -13,7 +13,6 @@ import {
   Glow,
   glowImage,
   Header,
-  type HeaderButton,
   Icon,
   IconButton,
   type IconName,
@@ -24,6 +23,9 @@ import {
   ListCard,
   MediaTile,
   PosterTile,
+  PreviewList,
+  type PreviewListItem,
+  RankNumber,
   RowLabel,
   Scroller,
   Segmented,
@@ -36,6 +38,7 @@ import { Fragment, type VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
+import { headerButtons } from "@secretary/launcher/src/home.tsx";
 
 interface Box {
   x: number;
@@ -59,16 +62,23 @@ const WAVES: readonly WaveState[] = ["idle", "listening", "thinking", "speaking"
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
 const CHIP = { w: 112, h: 120, stride: 126 };
 const NAMES = Object.keys(ICON_PATHS) as IconName[];
-/** Secretary's header buttons, as the home screen shows them. */
-const HEAD_BUTTONS: readonly HeaderButton[] = (["party", "search", "lights", "partly", "hifi", "settings", "bell"] as const).map((icon, k) => ({
-  key: icon,
-  icon,
-  badge: k === 6 ? 2 : undefined,
-}));
+/** Secretary's header buttons, as the home screen shows them (Watch together hidden while it is off). */
+const HEAD_BUTTONS = headerButtons(undefined, true, 2);
+/** Settings-like lines for the preview piece: what wave 3 puts beside a preview of each choice. */
+const LOOK_LINES: readonly PreviewListItem[] = [
+  { key: "accent", title: "Accent", sub: "Raptor Orange", color: "#ff5a26" },
+  { key: "type", title: "Type style", sub: "Studio" },
+  { key: "size", title: "Text size", sub: "Normal" },
+  { key: "theme", title: "Theme", sub: "Automatic" },
+  { key: "clock", title: "Clock", sub: "24 hours" },
+  { key: "boot", title: "Start animation", sub: "Standard" },
+  { key: "cards", title: "Card size", sub: "Automatic" },
+  { key: "tabs", title: "Tab style", sub: "Automatic" },
+];
 const SEASONS = Array.from({ length: 12 }, (_, i) => `Season ${i + 1}`);
 const ABOUT = "A lighthouse keeper on a remote island finds a message in a bottle, and starts a long correspondence with a stranger who seems to know the island better than anyone.";
 /** The groups drawn under the header, which start lower so it stays clear. */
-const UNDER_HEADER = [3, 4];
+const UNDER_HEADER = [3, 4, 5];
 const ACTIONS = NAMES.slice(0, NAMES.indexOf("clear"));
 const WEATHER = NAMES.slice(NAMES.indexOf("clear"));
 
@@ -83,6 +93,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
   const [wave, setWave] = useState(0);
   const [glow, setGlow] = useState<string | undefined>();
   const [headOpen, setHeadOpen] = useState(true);
+  const [line, setLine] = useState(1);
 
   const groups: { title: string; specs: Spec[] }[][] = [
     [
@@ -265,6 +276,43 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
         ],
       },
     ],
+    // The piece Settings and Lights build on (wave 3), and the one rank numeral.
+    [
+      {
+        title: "Preview beside a list",
+        specs: [
+          {
+            name: `PreviewList: line ${line + 1} (OK steps)`,
+            w: 1760,
+            h: 420,
+            render: (b, f) => (
+              <PreviewList
+                {...b}
+                kicker="Appearance"
+                items={LOOK_LINES}
+                focusIndex={f ? line : -1}
+                shown={line}
+                preview={<LookPreview line={LOOK_LINES[line]} art={art} />}
+              />
+            ),
+          },
+        ],
+      },
+      {
+        title: "Rank numeral",
+        specs: [1, 2, 10].map((n, k) => ({
+          name: n === 10 ? "RankNumber 10" : `RankNumber ${n}`,
+          w: 330,
+          h: 270,
+          render: (b: Box, f: boolean) => (
+            <>
+              <RankNumber x={b.x} y={b.y} w={150} h={b.h} n={n} focused={f} />
+              <PosterTile x={b.x + 150} y={b.y} focused={f} src={art.posters[k + 3]} scale={270 / 378} />
+            </>
+          ),
+        })),
+      },
+    ],
   ];
   const rows = groups[group] ?? groups[0];
 
@@ -287,6 +335,7 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
       if (scroller) setInside(0);
       else if (current.name.startsWith("VoiceWave")) setWave((wave + 1) % WAVES.length);
       else if (current.name.startsWith("Header")) setHeadOpen(!headOpen);
+      else if (current.name.startsWith("PreviewList")) setLine((line + 1) % LOOK_LINES.length);
       return true;
     }
     const dir = ({ Left: "left", Right: "right", Up: "up", Down: "down" } as Record<string, Dir>)[key];
@@ -336,5 +385,17 @@ export function ComponentsPage({ mode, theme, backdrop, art, group, focusAll }: 
     <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} class={theme === "day" ? "dz-page sg-day" : "dz-page"}>
       {placed}
     </GlassRoot>
+  );
+}
+
+/** The preview side of the specimen: a small mock of what the focused line changes, in the page's own accent and type. */
+function LookPreview({ line, art }: { line: PreviewListItem; art: Art }) {
+  return (
+    <div class="dz-look">
+      <InfoPanel x={44} y={40} w={600} kicker={`Preview · ${line.title}`} title="The Quiet Harbour" meta={["2019", "Drama", "1 h 52 min", "20:41"]} about={ABOUT} lines={2}>
+        <ButtonRow items={[{ id: "play", label: "Play", primary: true }, { id: "list", label: "My List" }]} focusIndex={0} />
+      </InfoPanel>
+      <PosterTile x={720} y={40} src={art.posters[6]} scale={0.8} progress={0.4} focused />
+    </div>
   );
 }

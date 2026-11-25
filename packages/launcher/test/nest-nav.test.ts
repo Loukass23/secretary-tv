@@ -11,6 +11,7 @@ import {
   HEADER_PROFILE,
   HEADER_SEARCH,
   HEADER_SOUND,
+  headerItems,
   END_ALL,
   END_RECOMMEND,
   END_TOP,
@@ -164,4 +165,15 @@ test("an opened weather card keeps the remote: Down stays, Up folds it", () => {
   assert.deepEqual(step(inside(0, 0), "Down", len), inside(0, 0));
   assert.deepEqual(step(inside(0, 0), "Up", len), card(0));
   assert.deepEqual(step(inside(0, 0), "Down", { ...len, cols: [{ count: 1, across: 1 }] }), { area: "ask", i: 0 }, "a folded card still goes to the assistant");
+});
+
+test("with Watch together hidden, the header skips it and Up from the row lands on Search", () => {
+  const items = headerItems(false);
+  assert.deepEqual(items, [HEADER_PROFILE, HEADER_SEARCH, 3, HEADER_PICTURE, HEADER_SOUND, HEADER_SETTINGS, HEADER_BELL]);
+  const len: Layout = { ...full, header: items };
+  assert.deepEqual(step({ area: "header", i: HEADER_PROFILE }, "Right", len), { area: "header", i: HEADER_SEARCH });
+  assert.deepEqual(step({ area: "header", i: HEADER_SEARCH }, "Left", len), { area: "header", i: HEADER_PROFILE });
+  assert.deepEqual(step({ area: "header", i: HEADER_BELL }, "Right", len), { area: "header", i: HEADER_BELL });
+  assert.deepEqual(step(card(2), "Up", len), { area: "header", i: HEADER_SEARCH });
+  assert.deepEqual(headerItems(true).length, HEADER_LENGTH);
 });

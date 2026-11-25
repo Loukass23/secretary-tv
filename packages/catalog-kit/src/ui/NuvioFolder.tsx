@@ -4,7 +4,7 @@
 // View button (top right) sets this folder's own view; the tabs take one of four styles. Pages are read as focus
 // nears the end. Glass rules as the home (docs/performance.md): transform-only motion, windowed lists, no blur.
 import { type Dir, type Focus, move, rowColumn, useKeys, windowOf } from "@secretary/tv-kit";
-import { Glass, GlassRoot, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, GlassRoot, MediaTile, RankNumber, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import type { CollectionFolder, NuvioCollection } from "@secretary/nuvio";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -422,7 +422,6 @@ function PopupList({ title, items, cursor, picked }: { title: string; items: rea
           {from + k === picked && <b>✓</b>}
         </div>
       ))}
-      <small>OK picks · Back closes</small>
     </Glass>
   );
 }
@@ -539,7 +538,7 @@ function RankBody({ items, index, focused, empty, type }: BodyProps) {
           const i = from + j;
           return (
             <div key={`${m.catalogType ?? type}:${m.id}`} class="nf-rank" style={{ left: `${i * RANK_STEP}px` }}>
-              <span>{i + 1}</span>
+              <RankNumber x={0} w={110} h={300} size={104} n={i + 1} focused={focused && i === index} />
               <MediaTile x={110} y={0} w={200} h={300} src={posterUrl(m)} focused={focused && i === index} />
             </div>
           );

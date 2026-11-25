@@ -9,6 +9,8 @@ import { groupByRoom, lightCommands, type RoomGroup, type SmartThings, type StDe
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { home, type MovieScenes, movieScenes, setMovieScenes } from "./home-control.ts";
 import { type LightFx, lightFx, setLightFx } from "./light-fx.ts";
+import { HEADER_LIGHTS } from "./nest-nav.ts";
+import { type PanelHeader, usePanelHeader } from "./panel-header.tsx";
 
 /** The light effects row: each OK flips one. Turning "Light effects" off stops every other one, whatever it shows. */
 const EFFECTS: readonly { key: keyof LightFx; label: string }[] = [
@@ -20,7 +22,8 @@ const EFFECTS: readonly { key: keyof LightFx; label: string }[] = [
   { key: "shimmer", label: "Shimmer" },
 ];
 
-export const PANEL = { x: 260, y: 90, w: 1400, h: 900 } as const;
+/** Under the one header (tv-kit HEADER.bottom), to the bottom margin. */
+export const PANEL = { x: 260, y: 150, w: 1400, h: 870 } as const;
 /** The inner margin, and the width inside it. */
 const PAD = 60;
 const INNER = PANEL.w - 2 * PAD;
@@ -28,7 +31,7 @@ const FX = { y: 170, h: 72, gap: 20 };
 /** The routines: a label, then one line of cards, `ROUTINE.shown` at a time. */
 const ROUTINE = { labelY: 262, y: 300, w: 305, h: 96, gap: 20, shown: 4 };
 /** The rooms: the room's name in a column on the left, its lights three to a line on the right. */
-const ROOMS = { labelW: 250, top: 424, bottom: 812, gap: 22 };
+const ROOMS = { labelW: 250, top: 424, bottom: 786, gap: 22 };
 const COLS = 3;
 const CARD = { h: 110, gap: 20, w: (INNER - ROOMS.labelW - (COLS - 1) * 20) / COLS };
 
@@ -87,6 +90,7 @@ export function LightsPanel({
   scenes,
   onChange,
   onClose,
+  header,
   api = home,
   now = Date.now,
 }: {
@@ -95,6 +99,8 @@ export function LightsPanel({
   /** Ask for a fresh poll after a command (SmartThings settles in a second or two). */
   onChange: () => void;
   onClose: () => void;
+  /** Secretary's one header over the panel (panel-header.tsx). */
+  header: PanelHeader;
   api?: LightsApi;
   now?: () => number;
 }) {
@@ -102,6 +108,8 @@ export function LightsPanel({
   const homesKey = useMemo(() => [...new Set(lights.map((d) => d.locationId).filter((l): l is string => Boolean(l)))].sort().join(","), [lights]);
   const [rooms, setRooms] = useState<StRoom[] | null>(() => roomCache.get(homesKey) ?? null);
   const [focus, setFocus] = useState({ row: 0, col: 0 });
+  const head = usePanelHeader(header, HEADER_LIGHTS);
+  const inPanel = head.head == null;
   const [picked, setPicked] = useState<MovieScenes>(movieScenes);
   const [fx, setFx] = useState<LightFx>(lightFx);
   const [note, setNote] = useState<string | null>(null);
@@ -205,6 +213,7 @@ export function LightsPanel({
   };
 
   useKeys(true, (key) => {
+    if (head.key(key)) return;
     if (key === "Back") return void onClose();
     const scene = sceneAt(at.row, at.col);
     if (key === "Enter") {
@@ -219,6 +228,8 @@ export function LightsPanel({
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       const next = move(lengths, at, key.toLowerCase() as Dir);
       if (next.row !== focus.row || next.col !== focus.col) setFocus(next);
+      // Up from the effects row: into the header.
+      else if (key === "Up" && at.row === 0) head.enter();
       return;
     }
     return false;
@@ -253,6 +264,8 @@ export function LightsPanel({
   };
 
   return (
+    <>
+    {head.view}
     <Glass {...PANEL} class="nest-account nest-lights">
       <div class="nest-lights-head">
         <Kicker>SmartThings</Kicker>
@@ -271,7 +284,7 @@ export function LightsPanel({
               w={w}
               h={FX.h}
               page={[PANEL.x + PAD + i * (w + FX.gap), PANEL.y + FX.y]}
-              focused={at.row === 0 && at.col === i}
+              focused={inPanel && at.row === 0 && at.col === i}
               class="nest-button nest-scene nest-fx"
             >
               <span>
@@ -297,7 +310,7 @@ export function LightsPanel({
               w={ROUTINE.w}
               h={ROUTINE.h}
               page={[PANEL.x + x, PANEL.y + ROUTINE.y]}
-              focused={sceneFocus === i}
+              focused={inPanel && sceneFocus === i}
               class={`nest-routine${runs[s.id]?.state === "running" ? " is-running" : ""}`}
               color={color}
               title={s.name}
@@ -326,7 +339,7 @@ export function LightsPanel({
                   w={CARD.w}
                   h={CARD.h}
                   page={[PANEL.x + x, PANEL.y + y]}
-                  focused={at.row === row && at.col === col}
+                  focused={inPanel && at.row === row && at.col === col}
                   class="nest-light-card"
                   color={on ? "#ffd27a" : "#4a4a55"}
                   title={d.name}
@@ -338,15 +351,9 @@ export function LightsPanel({
         })}
       </div>
       <div class="nest-lights-status">
-        {note ??
-          (lights.length || scenes.length
-            ? at.row === 0
-              ? "OK switches the effect · Back"
-              : sceneFocus >= 0
-                ? "OK runs the routine · Red: run on Play · Green: run after the film · Back"
-                : "OK switches · say “couch light to 30%” for levels · Back"
-            : "Loading your SmartThings home…")}
+        {note ?? (lights.length || scenes.length ? "" : "Loading your SmartThings home…")}
       </div>
     </Glass>
+    </>
   );
 }

@@ -93,7 +93,7 @@ export function ControlCentre({
                 {nowPlaying.badges.length ? ` · ${nowPlaying.badges.join(" · ")}` : ""}
               </>
             ) : (
-              <b>Control centre · Back closes</b>
+              <b>Control centre</b>
             )}
           </span>
         </div>

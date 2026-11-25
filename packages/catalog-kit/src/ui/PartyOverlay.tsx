@@ -182,7 +182,7 @@ export function PartyOverlay({ session, view, open, onClose, onLeave }: Props) {
             <span class="ply-dim">
               {host
                 ? others.length
-                  ? "OK on someone makes them the host."
+                  ? "Pick someone to hand them the remote."
                   : "Nobody else yet: share the code."
                 : view.control === "host"
                   ? "The host controls playback."
