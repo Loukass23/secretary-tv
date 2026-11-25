@@ -1,6 +1,6 @@
 import { type BootAnimationMode, readJson, writeJson } from "@secretary/tv-kit";
 import { applyType, isTextSize, isTypeStyle } from "@secretary/tv-kit/src/glass/type.ts";
-import type { TextSize, TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
+import { TEXT_SIZES, type TextSize, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
 import { START_AFTER, type StartAfter, startAfterLabel } from "./autoplay.ts";
 import type { SheetOrder } from "../ui/sheet.ts";
 import { patternLabel, SIZE_STEPS_GB, sizeLabel } from "./rules.ts";
@@ -63,12 +63,12 @@ export interface DashboardSettings {
     bootAnimation: BootAnimationMode;
     clockFormat: ClockFormat;
     accentTheme: AccentTheme;
-    /** The type style and text size (tv-kit glass tokens.ts TYPE_STYLES, TEXT_SIZES); Settings offers them in wave 3. */
+    /** The type style and text size (tv-kit glass tokens.ts TYPE_STYLES, TEXT_SIZES), in Settings › Appearance. */
     typeStyle: TypeStyle;
     textSize: TextSize;
     /**
      * Reduce motion: no push-in on a focused home card and no transition when a card opens (Secretary's home). On the
-     * page as `data-sg-motion="reduced"` (applyLook). The Settings row comes in wave 3.
+     * page as `data-sg-motion="reduced"` (applyLook). In Settings › Appearance.
      */
     reduceMotion: boolean;
   };
@@ -225,10 +225,10 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 };
 
 export const ACCENT_THEMES: Record<AccentTheme, { label: string; hex: string; ink: string }> = {
-  raptor: { label: "Raptor Orange (#FF5A26)", hex: "#ff5a26", ink: "#ffffff" },
-  rose: { label: "Rose (#EC407A)", hex: "#ec407a", ink: "#ffffff" },
-  blue: { label: "Cinema Blue (#5AA2FF)", hex: "#5aa2ff", ink: "#0d0f13" },
-  gold: { label: "Aristocrat Gold (#E8B04F)", hex: "#e8b04f", ink: "#0d0f13" },
+  raptor: { label: "Raptor Orange", hex: "#ff5a26", ink: "#ffffff" },
+  rose: { label: "Rose", hex: "#ec407a", ink: "#ffffff" },
+  blue: { label: "Cinema Blue", hex: "#5aa2ff", ink: "#0d0f13" },
+  gold: { label: "Aristocrat Gold", hex: "#e8b04f", ink: "#0d0f13" },
 };
 
 /**
@@ -409,12 +409,21 @@ export interface SettingItemDef {
   description: string;
   getValue(s: DashboardSettings): string;
   cycle(s: DashboardSettings, dir: 1 | -1): DashboardSettings;
+  /** A switch: whether it is on, so its line lights up in the accent (Settings' list). */
+  on?(s: DashboardSettings): boolean;
+  /** A few fixed values: all of them and the one set, shown under the preview beside the list. */
+  choices?(s: DashboardSettings): { items: readonly string[]; at: number };
   /** A setting typed with the TV keyboard: OK opens it with the current text, Left clears it. */
   text?: { get(s: DashboardSettings): string; set(s: DashboardSettings, value: string): DashboardSettings };
 }
 
 /** The languages to cycle through, with the current one in it when it is not one of ours. */
 const withCurrent = (code: string | undefined) => (code && !LANGUAGES.includes(code) ? [code, ...LANGUAGES] : [...LANGUAGES]);
+
+const ACCENT_ORDER: readonly AccentTheme[] = ["raptor", "rose", "blue", "gold"];
+const TYPE_STYLE_ORDER = Object.keys(TYPE_STYLES) as TypeStyle[];
+const TEXT_SIZE_ORDER = Object.keys(TEXT_SIZES) as TextSize[];
+const BOOT_ORDER: readonly BootAnimationMode[] = ["standard", "fade", "instant"];
 
 function cycleOption<T>(list: readonly T[], current: T, dir: 1 | -1): T {
   const idx = Math.max(0, list.indexOf(current));
@@ -426,7 +435,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.resumeAtOnce",
     section: "Watching",
     label: "Resume from Continue watching",
-    description: "A title in progress plays at once when you press OK on it on the home screen; off, its page opens first",
+    description: "OK on a title in progress plays it, or opens its page first",
     getValue: (s) => (s.playback.resumeAtOnce ? "Plays at once" : "Opens the page"),
     cycle: (s) => ({ ...s, playback: { ...s.playback, resumeAtOnce: !s.playback.resumeAtOnce } }),
   },
@@ -434,31 +443,35 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.spoilerProtection",
     section: "Watching",
     label: "Spoiler protection",
-    description: "On a show's page, episodes you have not watched: Blur shows their stills and synopses blurred, Hide shows only their number and title",
+    description: "Episodes you have not watched yet, on a show's page",
     getValue: (s) => SPOILER_LABELS[s.playback.spoilerProtection],
+    on: (s) => s.playback.spoilerProtection !== "off",
+    choices: (s) => ({ items: SPOILER_MODES.map((m) => SPOILER_LABELS[m]), at: SPOILER_MODES.indexOf(s.playback.spoilerProtection) }),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, spoilerProtection: cycleOption(SPOILER_MODES, s.playback.spoilerProtection, dir) } }),
   },
   {
     id: "playback.autoSkip",
     section: "Watching",
-    label: "Skip intros and recaps by themselves",
-    description: "Off: a Skip intro pill shows for 10 seconds and OK skips; On: they are skipped without asking",
+    label: "Skip intros by themselves",
+    description: "Off, a Skip intro pill shows for 10 seconds",
     getValue: (s) => (s.playback.autoSkip ? "On" : "Off"),
+    on: (s) => s.playback.autoSkip,
     cycle: (s) => ({ ...s, playback: { ...s.playback, autoSkip: !s.playback.autoSkip } }),
   },
   {
     id: "playback.pausePanel",
     section: "Watching",
     label: "Pause panel",
-    description: "Paused for 4 seconds, the screen shows what is playing; OK resumes",
+    description: "Paused for 4 seconds, the screen says what is playing",
     getValue: (s) => (s.playback.pausePanel ? "On" : "Off"),
+    on: (s) => s.playback.pausePanel,
     cycle: (s) => ({ ...s, playback: { ...s.playback, pausePanel: !s.playback.pausePanel } }),
   },
   {
     id: "playback.upNextCountdown",
     section: "Watching",
     label: "Up next countdown",
-    description: "Near an episode's end a card shows the next one; it starts after this, or OK starts it at once",
+    description: "How long the Up next card waits before the next episode",
     getValue: (s) => countdownLabel(s.playback.upNextCountdown),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, upNextCountdown: cycleOption(COUNTDOWNS, s.playback.upNextCountdown, dir) } }),
   },
@@ -466,7 +479,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.audioLangs",
     section: "Watching",
     label: "Audio language",
-    description: "Sources in this language go first; providers that know the language of a release use it to search",
+    description: "Sources in this language go first",
     getValue: (s) =>
       s.playback.audioLangs.length ? languageLabel(s.playback.audioLangs[0]) : `Automatic (${languageLabel(systemLang())})`,
     cycle: (s, dir) => {
@@ -479,7 +492,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.subLangs",
     section: "Watching",
     label: "Subtitles for other languages",
-    description: "When no source has your audio language, those with subtitles in this one go next (VOSTFR-style)",
+    description: "When no source has your language, these subtitles go next",
     getValue: (s) => (s.playback.subLangs.length ? languageLabel(s.playback.subLangs[0]) : "Same as audio"),
     cycle: (s, dir) => {
       const options = ["", ...withCurrent(s.playback.subLangs[0])];
@@ -491,9 +504,9 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "domotics.cinemaAutoDim",
     section: "Watching",
     label: "Movie lights",
-    description:
-      "Run the movie scene picked in the Lights panel when playback starts, and its restore scene after. Without SmartThings in Secretary, the server dims to 15%",
+    description: "Your movie scene on Play, its restore scene after",
     getValue: (s) => (s.domotics.cinemaAutoDim ? "On" : "Off"),
+    on: (s) => s.domotics.cinemaAutoDim,
     cycle: (s) => ({
       ...s,
       domotics: { ...s.domotics, cinemaAutoDim: !s.domotics.cinemaAutoDim },
@@ -503,7 +516,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.startAfter",
     section: "Sources",
     label: "Start playing after",
-    description: "Play starts at once with a 4K source; otherwise it waits this long for slower providers",
+    description: "4K starts at once; otherwise Play waits this long",
     getValue: (s) => startAfterLabel(s.playback.startAfter),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, startAfter: cycleOption(START_AFTER, s.playback.startAfter, dir) } }),
   },
@@ -511,15 +524,16 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.rememberSource",
     section: "Sources",
     label: "Remember my source",
-    description: "A title, and its next episode, start with the same kind of release you picked or watched last",
+    description: "Start with the kind of release you picked last time",
     getValue: (s) => (s.playback.rememberSource ? "On" : "Off"),
+    on: (s) => s.playback.rememberSource,
     cycle: (s) => ({ ...s, playback: { ...s.playback, rememberSource: !s.playback.rememberSource } }),
   },
   {
     id: "playback.maxSizeGb",
     section: "Sources",
     label: "Largest file autoplay picks",
-    description: "Bigger sources are tried after the others, never hidden",
+    description: "Bigger sources are tried last, never hidden",
     getValue: (s) => sizeLabel(s.playback.maxSizeGb),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, maxSizeGb: cycleOption(SIZE_STEPS_GB, s.playback.maxSizeGb, dir) } }),
   },
@@ -527,7 +541,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.minSizeGb",
     section: "Sources",
     label: "Smallest file autoplay picks",
-    description: "Smaller sources (often low quality) are tried after the others, never hidden",
+    description: "Smaller sources are tried last, never hidden",
     getValue: (s) => sizeLabel(s.playback.minSizeGb),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, minSizeGb: cycleOption(SIZE_STEPS_GB, s.playback.minSizeGb, dir) } }),
   },
@@ -535,7 +549,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.sheetOrder",
     section: "Sources",
     label: "Sources list order",
-    description: "Grouped by quality with the best for this TV first, or in the providers' own order",
+    description: "Grouped by quality, or in the providers' own order",
     getValue: (s) => (s.playback.sheetOrder === "provider" ? "Providers' order" : "Grouped by quality"),
     cycle: (s) => ({
       ...s,
@@ -546,54 +560,87 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "home.reminders",
     section: "Home screen",
     label: "Reminders",
-    description: "The Reminders card, the count on the bell and reminders in the assistant's greeting. Off hides them; nothing is deleted",
+    description: "The card, the bell's count and the greeting; nothing is deleted",
     getValue: (s) => (s.home.reminders ? "On" : "Off"),
+    on: (s) => s.home.reminders,
     cycle: (s) => ({ ...s, home: { ...s.home, reminders: !s.home.reminders } }),
   },
   {
     id: "home.homeAlerts",
     section: "Home screen",
     label: "Home notifications",
-    description: "A notice when something at home changes (a phone comes home, the vacuum finishes), kept in the Recent card. Needs SmartThings",
+    description: "A notice when something at home changes (SmartThings)",
     getValue: (s) => (s.home.homeAlerts ? "On" : "Off"),
+    on: (s) => s.home.homeAlerts,
     cycle: (s) => ({ ...s, home: { ...s.home, homeAlerts: !s.home.homeAlerts } }),
   },
   {
     id: "home.spokenReplies",
     section: "Home screen",
     label: "Spoken replies",
-    description: "The assistant reads its answer aloud after a voice question. Blue on the home screen switches it too",
+    description: "Answers to voice questions are read aloud; Blue switches it",
     getValue: (s) => (s.home.spokenReplies ? "On" : "Off"),
+    on: (s) => s.home.spokenReplies,
     cycle: (s) => ({ ...s, home: { ...s.home, spokenReplies: !s.home.spokenReplies } }),
   },
   {
     id: "home.listenOnFocus",
     section: "Home screen",
-    label: "Listen when the assistant is focused",
-    description: "The microphone opens as soon as focus reaches the assistant. Off, it waits for OK or the mic key",
+    label: "Listen on focus",
+    description: "The microphone opens when focus reaches the assistant",
     getValue: (s) => (s.home.listenOnFocus ? "On" : "Off"),
+    on: (s) => s.home.listenOnFocus,
     cycle: (s) => ({ ...s, home: { ...s.home, listenOnFocus: !s.home.listenOnFocus } }),
   },
   {
     id: "general.accentTheme",
     section: "Appearance",
     label: "Accent colour",
-    description: "Colours the Play button, progress bars and badges; focus stays white glass",
+    description: "Focus, the Play button, progress bars and badges",
     getValue: (s) => (ACCENT_THEMES[s.general.accentTheme] ?? ACCENT_THEMES.raptor).label,
+    choices: (s) => ({ items: ACCENT_ORDER.map((a) => ACCENT_THEMES[a].label), at: ACCENT_ORDER.indexOf(s.general.accentTheme) }),
     cycle: (s, dir) => ({
       ...s,
       general: {
         ...s.general,
-        accentTheme: cycleOption(["raptor", "rose", "blue", "gold"] as const, s.general.accentTheme, dir),
+        accentTheme: cycleOption(ACCENT_ORDER, s.general.accentTheme, dir),
       },
     }),
+  },
+  {
+    id: "general.typeStyle",
+    section: "Appearance",
+    label: "Type style",
+    description: "The faces of titles, numbers and buttons",
+    getValue: (s) => TYPE_STYLES[s.general.typeStyle].label,
+    choices: (s) => ({ items: TYPE_STYLE_ORDER.map((t) => TYPE_STYLES[t].label), at: TYPE_STYLE_ORDER.indexOf(s.general.typeStyle) }),
+    cycle: (s, dir) => ({ ...s, general: { ...s.general, typeStyle: cycleOption(TYPE_STYLE_ORDER, s.general.typeStyle, dir) } }),
+  },
+  {
+    id: "general.textSize",
+    section: "Appearance",
+    label: "Text size",
+    description: "Every text on screen; Large is 15% bigger",
+    getValue: (s) => TEXT_SIZES[s.general.textSize].label,
+    choices: (s) => ({ items: TEXT_SIZE_ORDER.map((t) => TEXT_SIZES[t].label), at: TEXT_SIZE_ORDER.indexOf(s.general.textSize) }),
+    cycle: (s, dir) => ({ ...s, general: { ...s.general, textSize: cycleOption(TEXT_SIZE_ORDER, s.general.textSize, dir) } }),
+  },
+  {
+    id: "general.reduceMotion",
+    section: "Appearance",
+    label: "Reduce motion",
+    description: "No push-in on focused cards, no movement when one opens",
+    getValue: (s) => (s.general.reduceMotion ? "On" : "Off"),
+    on: (s) => s.general.reduceMotion,
+    cycle: (s) => ({ ...s, general: { ...s.general, reduceMotion: !s.general.reduceMotion } }),
   },
   {
     id: "general.clockFormat",
     section: "Appearance",
     label: "Clock format",
-    description: "Show the time in 24-hour or 12-hour format",
+    description: "The time in the header",
     getValue: (s) => (s.general.clockFormat === "24h" ? "24-hour (21:45)" : "12-hour (9:45 PM)"),
+    choices: (s) => ({ items: ["24-hour", "12-hour"], at: s.general.clockFormat === "24h" ? 0 : 1 }),
     cycle: (s) => ({
       ...s,
       general: { ...s.general, clockFormat: s.general.clockFormat === "24h" ? "12h" : "24h" },
@@ -603,18 +650,19 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "general.bootAnimation",
     section: "Appearance",
     label: "Boot animation",
-    description: "The quill rising in, a gentle fade, or an instant launch",
+    description: "What shows while Secretary starts",
     getValue: (s) =>
       s.general.bootAnimation === "standard"
-        ? "Standard (Quill rises in)"
+        ? "Standard (the quill rises in)"
         : s.general.bootAnimation === "fade"
-          ? "Fade Only (Reduced Motion)"
-          : "Instant (No Splash)",
+          ? "Fade only"
+          : "Instant (no splash)",
+    choices: (s) => ({ items: ["Standard", "Fade only", "Instant"], at: BOOT_ORDER.indexOf(s.general.bootAnimation) }),
     cycle: (s, dir) => ({
       ...s,
       general: {
         ...s.general,
-        bootAnimation: cycleOption(["standard", "fade", "instant"] as const, s.general.bootAnimation, dir),
+        bootAnimation: cycleOption(BOOT_ORDER, s.general.bootAnimation, dir),
       },
     }),
   },
@@ -622,8 +670,9 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "domotics.moodBackground",
     section: "Appearance",
     label: "Poster colour",
-    description: "Tint the metallic background with the colour of the poster in focus. Off keeps the neutral background",
+    description: "The background takes the colour of the poster in focus",
     getValue: (s) => (s.domotics.moodBackground ? "On" : "Off"),
+    on: (s) => s.domotics.moodBackground,
     cycle: (s) => ({
       ...s,
       domotics: { ...s.domotics, moodBackground: !s.domotics.moodBackground },
@@ -633,7 +682,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "collections.cardShape",
     section: "Appearance",
     label: "Collection cards",
-    description: "The card shape of Nuvio collection rows; Automatic uses each collection's own. A long OK on a row sets that row",
+    description: "Nuvio collection rows; a long OK on a row sets that row",
     getValue: (s) => CARD_SHAPE_LABELS[s.collections.cardShape],
     cycle: (s, dir) => ({ ...s, collections: { ...s.collections, cardShape: cycleOption(["auto", ...CARD_SHAPES] as const, s.collections.cardShape, dir) } }),
   },
@@ -641,7 +690,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "collections.cardSize",
     section: "Appearance",
     label: "Collection card size",
-    description: "Compact fits more cards on screen; Automatic is Standard",
+    description: "Compact fits more cards on screen",
     getValue: (s) => CARD_SIZE_LABELS[s.collections.cardSize],
     cycle: (s, dir) => ({ ...s, collections: { ...s.collections, cardSize: cycleOption(["auto", ...CARD_SIZES] as const, s.collections.cardSize, dir) } }),
   },
@@ -649,7 +698,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "collections.folderView",
     section: "Appearance",
     label: "Folder view",
-    description: "How a folder opens: grid, rows, timeline, cover flow, ranking, mural or decades. Automatic follows the collection. The View button in a folder sets that folder",
+    description: "How a folder opens; its View button sets that folder",
     getValue: (s) => FOLDER_VIEW_LABELS[s.collections.folderView],
     cycle: (s, dir) => ({ ...s, collections: { ...s.collections, folderView: cycleOption(["auto", ...FOLDER_VIEWS] as const, s.collections.folderView, dir) } }),
   },
@@ -657,15 +706,15 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "collections.tabStyle",
     section: "Appearance",
     label: "Folder tabs",
-    description: "How a folder's catalogs are picked: chips, a dropdown, a centre bar or pages. Automatic uses chips up to 5 catalogs, else a dropdown",
+    description: "How a folder's catalogs are picked",
     getValue: (s) => TAB_STYLE_LABELS[s.collections.tabStyle],
     cycle: (s, dir) => ({ ...s, collections: { ...s.collections, tabStyle: cycleOption(["auto", ...TAB_STYLES] as const, s.collections.tabStyle, dir) } }),
   },
   {
     id: "playback.require",
     section: "Advanced",
-    label: "Autoplay only sources matching",
-    description: "A pattern such as MULTI|DUAL; when nothing matches, the sources open to pick from. OK types, ‹ clears",
+    label: "Autoplay only matching",
+    description: "Only matching sources autoplay. OK types, Left clears",
     getValue: (s) => patternLabel(s.playback.require),
     cycle: (s) => ({ ...s, playback: { ...s.playback, require: "" } }),
     text: { get: (s) => s.playback.require, set: (s, v) => ({ ...s, playback: { ...s.playback, require: v } }) },
@@ -674,7 +723,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.prefer",
     section: "Advanced",
     label: "Prefer sources matching",
-    description: "A pattern such as REMUX; matching sources are tried first. OK types, ‹ clears",
+    description: "Matching sources are tried first. OK types, Left clears",
     getValue: (s) => patternLabel(s.playback.prefer),
     cycle: (s) => ({ ...s, playback: { ...s.playback, prefer: "" } }),
     text: { get: (s) => s.playback.prefer, set: (s, v) => ({ ...s, playback: { ...s.playback, prefer: v } }) },

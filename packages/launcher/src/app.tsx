@@ -118,6 +118,7 @@ import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalo
 import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
+import { lightCount, lightsOnLabel } from "./light-count.ts";
 import { LightsPanel } from "./lights.tsx";
 import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
@@ -1311,14 +1312,14 @@ export function App() {
       shown.map((f) => (f.cover ? { src: f.cover, type: f.kind } : undefined)),
     );
   }
-  const lights = devices.filter((d) => d.kind === "light");
-  const lit = lights.filter((d) => d.on).length;
+  // The same count as the Lights panel's (light-count.ts).
+  const lights = lightCount(devices);
   push({
     kind: "home",
     key: "home",
     label: "Home",
-    title: lights.length ? `${lit} light${lit === 1 ? "" : "s"} on` : "Lights",
-    sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.length} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
+    title: lights.total ? lightsOnLabel(lights) : "Lights",
+    sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.total} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
     actions: SCENES.map(([id]) => CARD_ACTION[id]),
     run: (i) => runScene(SCENES[i][0], SCENES[i][1]),
   });

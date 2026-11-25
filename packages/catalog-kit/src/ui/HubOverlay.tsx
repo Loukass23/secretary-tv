@@ -1,7 +1,8 @@
 // Settings, under Secretary's one header: the categories as tabs (lib/settings.ts SETTING_TABS), then the shown
-// category's lines. Search is Secretary's (launcher/src/search.tsx): the search keys hand over to it through `onSearch`.
+// category's lines as a compact list beside a preview of what the focused one does (PreviewList, setting-preview.tsx).
+// Search is Secretary's (launcher/src/search.tsx): the search keys hand over to it through `onSearch`.
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
-import { Glass, GlassRoot, Header, HEADER, ListCard, Tabs } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, GlassRoot, Header, HEADER, PreviewList, type PreviewListItem, Tabs } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { HostApp, HostHeader } from "../host.ts";
 import { addonStore, loadDebrid, pluginStore, saveDebrid } from "../lib/plugins.ts";
@@ -17,7 +18,8 @@ import {
 } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import { useBase } from "./art.tsx";
-import { rowWindow, SETTINGS_START, type SettingsPlace, stepSettings } from "./settings-nav.ts";
+import { type PreviewLine, SettingPreview } from "./setting-preview.tsx";
+import { SETTINGS_START, type SettingsPlace, stepSettings } from "./settings-nav.ts";
 import { addonRows, type SourceRow, sourceRows } from "./sources.ts";
 import "./hub.css";
 
@@ -25,17 +27,13 @@ const PAD = HEADER.pad;
 const TITLE_Y = 140;
 const TABS_Y = 262;
 const LIST_Y = 344;
-const LIST_H = 716;
+const LIST_H = 696;
 const ROW_W = 1760;
-const SETTING_H = 112;
-const SETTING_STRIDE = SETTING_H + 16;
+/** The list's width: the longest names fit on one line; the preview takes the rest. */
+const LIST_W = 760;
 
-/** One line of a category: what it shows, and what OK, Left and Right do on it. */
-interface Row {
-  key: string;
-  title: string;
-  sub: string;
-  meta: string;
+/** One line of a category: what it shows (and its preview), and what OK, Left and Right do on it. */
+interface Row extends PreviewLine {
   act?(key: "Enter" | "Left" | "Right"): void;
 }
 
@@ -184,7 +182,9 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
       key: item.id,
       title: item.label,
       sub: item.description,
-      meta: item.text ? item.getValue(settings) : `‹ ${item.getValue(settings)} ›`,
+      value: item.getValue(settings),
+      on: item.on?.(settings),
+      choices: item.choices?.(settings),
       act: (key) => {
         // A typed setting: OK opens the TV keyboard with its text, Left clears it.
         const text = item.text;
@@ -196,17 +196,18 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
         apply(item.cycle(settings, key === "Left" ? -1 : 1));
       },
     })),
-    ...sources.map((row): Row => ({ key: row.key, title: row.title, sub: row.sub, meta: row.meta, act: (key) => runSource(row, key) })),
+    ...sources.map((row): Row => ({ key: row.key, title: row.title, sub: row.sub, value: row.meta, act: (key) => runSource(row, key) })),
   ];
   if (tab === "Apps") {
-    if (!apps.length) rows.push({ key: "no-apps", title: "No other apps listed", sub: "The TV lists its apps when Secretary starts on it", meta: "" });
+    if (!apps.length) rows.push({ key: "no-apps", title: "No other apps listed", sub: "The TV lists its apps when Secretary starts on it", value: "" });
     for (const app of apps) {
       const shown = !settings.home.hiddenApps.includes(app.id);
       rows.push({
         key: `app:${app.id}`,
         title: app.name,
-        sub: app.note ?? (shown ? "On the Apps card" : "Not on the Apps card"),
-        meta: shown ? "‹ Shown ›" : "‹ Hidden ›",
+        sub: app.note ?? "Shown on the Apps card, or hidden from it",
+        value: shown ? "Shown" : "Hidden",
+        on: shown,
         act: () => apply(toggleApp(settings, app.id)),
       });
     }
@@ -215,8 +216,8 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
     rows.push({
       key: "reset",
       title: "Restore default settings",
-      sub: "Every setting goes back to its default and hidden apps come back; sources, keys and addons are kept",
-      meta: confirmReset ? "OK again to confirm" : "OK",
+      sub: "Hidden apps come back; sources, keys and addons are kept",
+      value: confirmReset ? "OK again to confirm" : "Every setting to its default",
       act: (key) => {
         if (key !== "Enter") return;
         if (!confirmReset) {
@@ -257,8 +258,9 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
   });
 
   const head = place.focus.area === "head" ? place.focus.at : null;
-  const shift = Math.max(0, listAt - 3) * SETTING_STRIDE;
-  const win = rowWindow(Math.max(0, listAt), rows.length);
+  // The list's lines: the name and the value set; a switch's dot lit when it is on.
+  const items: PreviewListItem[] = rows.map((r) => ({ key: r.key, title: r.title, sub: r.value || undefined, lit: r.on }));
+  const shownRow = rows[Math.max(0, Math.min(rows.length - 1, listAt))];
 
   return (
     <div class="hub-glass" style={active ? undefined : "display:none"}>
@@ -269,27 +271,17 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
           <small>{SETTING_TAB_BLURB[tab]}</small>
         </div>
         <Tabs x={PAD} y={TABS_Y} w={ROW_W} items={SETTING_TABS} picked={place.tab} focusIndex={place.focus.area === "tabs" ? place.tab : -1} />
-        <div class="sg-clip" style={{ left: `${PAD - 20}px`, top: `${LIST_Y}px`, width: `${ROW_W + 40}px`, height: `${LIST_H}px` }}>
-          <div class="sg-scroll" key={tab} style={{ transform: `translate3d(20px,${20 - shift}px,0)` }}>
-            {rows.slice(win.from, win.to).map((row, k) => {
-              const i = win.from + k;
-              return (
-                <ListCard
-                  key={row.key}
-                  x={0}
-                  y={i * SETTING_STRIDE}
-                  w={ROW_W}
-                  h={SETTING_H}
-                  frost={false}
-                  title={row.title}
-                  sub={row.sub}
-                  meta={row.meta || undefined}
-                  focused={listAt === i}
-                />
-              );
-            })}
-          </div>
-        </div>
+        <PreviewList
+          key={tab}
+          x={PAD}
+          y={LIST_Y}
+          w={ROW_W}
+          h={LIST_H}
+          listW={LIST_W}
+          items={items}
+          focusIndex={listAt}
+          preview={shownRow ? <SettingPreview line={shownRow} settings={settings} /> : null}
+        />
 
         {toast && (
           <Glass x={560} y={990} w={800} h={60} class="hub-toast">

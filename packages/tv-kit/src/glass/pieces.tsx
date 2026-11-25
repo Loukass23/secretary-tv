@@ -218,6 +218,8 @@ export interface PreviewListItem {
   meta?: string;
   /** A dot before the title. */
   color?: string;
+  /** Switched on (a light effect, a setting that is On): the dot, the value and the line under the title take the accent, so the state reads at a glance. */
+  lit?: boolean;
 }
 
 export interface PreviewListProps {
@@ -277,7 +279,7 @@ export function PreviewList({ x, y, w, h, items, focusIndex, shown, side = "left
                   w={listW - 2 * L.pad}
                   h={L.row}
                   frost={false}
-                  class={`sg-plist-line${i === (shown ?? -1) && focusIndex < 0 ? " is-picked" : ""}`}
+                  class={`sg-plist-line${i === (shown ?? -1) && focusIndex < 0 ? " is-picked" : ""}${it.lit ? " is-lit" : ""}`}
                   focused={i === focusIndex}
                   title={it.title}
                   sub={it.sub}

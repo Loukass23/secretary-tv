@@ -552,3 +552,32 @@ Walk inside Secretary, against `main` deployed the same way:
 - A film page with "More like this": `cdp.mjs walk 250 Right,Right,Right,Left,Left,Left,Down,Right,Right,Right,Up`.
 - The catalog home (See all on the Cinema card): the opened-card walk above, at 250 ms and at 800 ms per key (the slow
   walk swaps the backdrop and its readable copy on nearly every key). Watch the heap: 8 readable copies are kept.
+
+### Settings with previews, and Lights (wave 3 G, 2026-11-25, not yet measured)
+
+Not deployed: measured at integration. What changed for frames:
+
+- **Settings is a `PreviewList`.** The full-width rows (1760 px, one surface each, the windowed list moving by
+  transform) became a 760 px list of compact lines and one fixed preview panel. Both panels are fixed, so their frost
+  never swaps; the lines have no frost. The preview re-renders on every key (a few dozen nodes of flat fills, no
+  images). The type style and text size previews set the type tokens on their own columns, so they restyle only
+  inside the preview.
+- **Animated previews**: Reduce motion (four cards pushing in by `transform`, their ring by `opacity`), the boot
+  animation (transform and opacity) and the Lights effect previews (lamps by opacity, the shimmer band by transform),
+  all on their own layers (`will-change`), looping while the line is focused. None moves under Reduce motion. Watch
+  for long frames while one of them is on screen and nothing else moves.
+- **Lights** has no outer panel any more: the effects `PreviewList` (two fixed surfaces) and one fixed surface for the
+  routines and rooms, whose cards have no frost (they scroll). Before, the routine and light cards each carried a
+  frost piece.
+- JS 164.8 KB gzip of 168 KB (162.3 KB before).
+
+Walk inside Secretary, against `main` deployed the same way:
+
+- Settings (header settings button): `cdp.mjs walk 250
+  Down,Down,Down,Down,Down,Down,Up,Up,Up,Up,Up,Up,Right,Right,Right,Right,Down,Down,Down,Down,Right,Left,Up,Up,Up,Up`
+  (Watching's lines, then Appearance down to Reduce motion, flipping it on and off), once with Reduce motion off,
+  once on, and once with `data-sg-text="large"`.
+- Settings, Sources (many lines): `cdp.mjs walk 250 Right,Down,Down,Down,Down,Down,Down,Down,Down,Down,Down,Up,Up,Up,Up,Up`.
+- Lights (header lights button): `cdp.mjs walk 250 Down,Down,Down,Down,Down,Right,Right,Right,Down,Down,Down,Down,Left,Left,Up,Up,Up,Up`
+  (the effects, then routines and rooms). Then `soak` on the Lights panel with the Shimmer preview showing.
+

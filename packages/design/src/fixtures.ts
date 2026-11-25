@@ -12,6 +12,7 @@ import { appIcon } from "@secretary/launcher/src/app-icons.ts";
 import { episodeLabel } from "@secretary/launcher/src/card-rows.ts";
 import { YOUTUBE_APP_ID } from "@secretary/launcher/src/config.ts";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
+import { lightCount, lightsOnLabel } from "@secretary/launcher/src/light-count.ts";
 import type { LightsApi } from "@secretary/launcher/src/lights.tsx";
 import type { StDevice, StRoom, StScene } from "@secretary/smartthings";
 import { type Art, TITLES } from "./art.ts";
@@ -167,7 +168,7 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
       run: noop,
       folders: ["Space operas", "Slow burns", "Heists", "Road trips"].map((title, k) => ({ title, cover: art.posters[k % art.posters.length] })),
     },
-    { key: "home", label: "Home", run: noop, kind: "home", title: "Living room", sub: "3 lights on · 21°", actions: [{ icon: "cinema", label: "Cinema" }, { icon: "warm", label: "Warm" }, { icon: "power", label: "Off" }, { icon: "music", label: "Music" }] },
+    { key: "home", label: "Home", run: noop, kind: "home", title: lightsOnLabel(lightCount(LIGHT_DEVICES)), sub: "120 lux in the room", actions: [{ icon: "cinema", label: "Cinema" }, { icon: "warm", label: "Warm" }, { icon: "power", label: "Off" }, { icon: "music", label: "Music" }] },
     {
       key: "reminders",
       label: "Reminders",
@@ -299,7 +300,7 @@ export const LIGHT_DEVICES: StDevice[] = [
 
 export const LIGHT_SCENES: StScene[] = [
   { id: "scene-film", name: "Film night", locationId: HOME, lastRun: Date.now() - 26 * 3600_000 },
-  { id: "scene-after", name: "After the film", locationId: HOME },
+  { id: "scene-after", name: "After the film: hallway and kitchen", locationId: HOME },
   { id: "scene-wake", name: "Good morning", locationId: HOME, lastRun: Date.now() - 9 * 3600_000 },
   { id: "scene-dinner", name: "Dinner", locationId: HOME },
   { id: "scene-read", name: "Reading corner", locationId: HOME },

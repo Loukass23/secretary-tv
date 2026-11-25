@@ -231,7 +231,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
 
   useEffect(() => {
     applyLook(settings.general);
-  }, [settings.general.accentTheme, settings.general.typeStyle, settings.general.textSize]);
+  }, [settings.general.accentTheme, settings.general.typeStyle, settings.general.textSize, settings.general.reduceMotion]);
 
   // Global Channel Rocker (CH- / CH+) and Search shortcuts when inside Detail or Timeline views.
   useKeys(view.name === "detail" || view.name === "timeline", (key) => {

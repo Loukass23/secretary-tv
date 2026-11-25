@@ -161,7 +161,13 @@ export function App() {
   ) : s.page === "components" ? (
     <ComponentsPage {...props} art={art} group={s.group} />
   ) : (
-    <ScreensPage {...props} art={art} screen={s.screen} />
+    <ScreensPage
+      {...props}
+      art={art}
+      screen={s.screen}
+      look={{ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, reduceMotion: s.calm }}
+      onLook={(g) => set({ accent: g.accentTheme, type: g.typeStyle, text: g.textSize, calm: g.reduceMotion })}
+    />
   );
 
   const errors = findings.filter((f) => f.issues.some((i) => i.severity === "error")).length;
