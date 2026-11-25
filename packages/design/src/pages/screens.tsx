@@ -38,7 +38,8 @@ export const SCREENS = [
   "Show page",
   "Film page · slim",
   "Film page · offline",
-  "Show page · spoilers",
+  "Show page · blur",
+  "Show page · hide",
   "Search",
   "Search · results",
   "Search · offline",
@@ -293,7 +294,8 @@ const streams: StreamClient = { get: async () => [], watch: (_i, _h, _t, cb) => 
 /** Detail on fixture data. `fetch` is stubbed while it is mounted: "Detail slim" gets its synopsis from the network, "offline" never does. */
 function DetailScreen({ variant, art }: { variant: string; art: Art }) {
   const series = variant.startsWith("Show page");
-  const spoilers = variant === "Show page · spoilers";
+  // Spoiler protection as Settings › Watching sets it: Off on the plain show page.
+  const spoilers = variant === "Show page · blur" ? "blur" : variant === "Show page · hide" ? "hide" : "off";
   const slim = variant !== "Film page" && !series;
   const offline = variant === "Film page · offline";
   // A show with two seasons, the first two episodes watched: the page opens on S1E3, up next, and ticks the two. Each
@@ -318,6 +320,8 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
     rating: "8.3",
     poster: art.posters[0],
     background: art.backgrounds[0],
+    // The film has a logo (shown as its mark); the show has none, so its name shows in the display face.
+    ...(series ? {} : { logo: art.logos[0] }),
     ...(slim ? {} : { description: LONG, genre: ["Crime", "Drama", "Thriller"], runtime: "170 min" }),
   };
   const [ready, setReady] = useState(false);

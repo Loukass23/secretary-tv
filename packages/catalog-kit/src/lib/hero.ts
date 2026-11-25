@@ -54,6 +54,64 @@ function cover(g: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h:
   g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
 
+/** The readable copy's size: a quarter of the page each way, scaled up by the compositor (which softens it further). */
+const READ_W = W / 4;
+const READ_H = H / 4;
+
+/**
+ * Darkens and softens the art where a page writes on it: a blurred, much darker copy of the art, opaque over the left
+ * of the page (where the logo, the lines and the buttons are) and fading to nothing by two thirds across, then the
+ * shade over all of it. Painted once per backdrop into a small canvas, never by a CSS gradient or filter.
+ */
+function paintReadable(g: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number): void {
+  const [dc, dg] = canvas(w, h);
+  dg.filter = "blur(3px)";
+  cover(dg, img, w, h);
+  dg.filter = "none";
+  dg.fillStyle = "rgba(7,8,11,0.6)";
+  dg.fillRect(0, 0, w, h);
+  // Kept where the text is, faded out towards the right.
+  const mask = dg.createLinearGradient(0, 0, w, 0);
+  mask.addColorStop(0, "rgba(0,0,0,1)");
+  mask.addColorStop(0.4, "rgba(0,0,0,1)");
+  mask.addColorStop(0.68, "rgba(0,0,0,0)");
+  dg.globalCompositeOperation = "destination-in";
+  dg.fillStyle = mask;
+  dg.fillRect(0, 0, w, h);
+  g.drawImage(dc, 0, 0);
+  paintShade(g, w, h);
+}
+
+const readables = new Map<string, Promise<string>>();
+const MAX_READABLES = 8;
+
+/**
+ * The readable layer for one backdrop URL (catalog home hero, title pages): shown over the art in place of the shade,
+ * so text sits on a dark, soft copy of the picture itself rather than on a band of black. Cached per URL; rejects
+ * when the art cannot be read back (a tainted canvas on a desktop browser), and the page keeps the plain shade.
+ */
+export function readableFor(src: string): Promise<string> {
+  let p = readables.get(src);
+  if (!p) {
+    p = load(src).then(
+      (img) =>
+        new Promise<string>((resolve, reject) => {
+          const [c, g] = canvas(READ_W, READ_H);
+          paintReadable(g, img, READ_W, READ_H);
+          c.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error("readable failed"))), "image/png");
+        }),
+    );
+    p.catch(() => readables.delete(src));
+    readables.set(src, p);
+    if (readables.size > MAX_READABLES) {
+      const oldest = readables.keys().next().value!;
+      void readables.get(oldest)?.then(URL.revokeObjectURL, () => {});
+      readables.delete(oldest);
+    }
+  }
+  return p;
+}
+
 const frosts = new Map<string, Promise<string>>();
 const MAX_FROSTS = 24;
 

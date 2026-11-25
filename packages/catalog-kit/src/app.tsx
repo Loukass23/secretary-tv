@@ -29,6 +29,7 @@ import {
 } from "./lib/nuviocollections.ts";
 import { loadHome, saveHome } from "./lib/home-cache.ts";
 import {
+  continueFor,
   loadAllResume,
   loadWatchedIds,
   setResumeServer,
@@ -303,11 +304,13 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
     const nuvioRows = collectionRows(shownCols);
     const pinnedNuvio = new Set(shownCols.filter((c) => c.pinToTop).map((c) => `nuvio-col:${c.id}`));
     const topRows: HomeRow[] = [];
-    if (resume.length) {
+    // Only the kind the home was opened for (the Secretary card's), as every other row.
+    const going = continueFor(resume, activeType);
+    if (going.length) {
       topRows.push({
         id: "continue",
         title: "Continue watching",
-        items: resume.map(toContinueTitle),
+        items: going.map(toContinueTitle),
       });
     }
     const saved = loadLibrary().filter((e) => kindFor(e.type, e.title) === activeType);

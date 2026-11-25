@@ -148,6 +148,12 @@ export function loadAllResume(ids?: ReadonlySet<string>): UnifiedResumeEntry[] {
     .slice(0, MAX);
 }
 
+/**
+ * The catalog home's Continue watching for one kind: the home opened from Secretary's Anime card lists anime only, never
+ * a talk show (the kinds as `loadAllResume` gives them, after the anime rule).
+ */
+export const continueFor = (all: readonly UnifiedResumeEntry[], kind: CatalogType): UnifiedResumeEntry[] => all.filter((e) => e.type === kind);
+
 /** Where to start: nothing in the first or last seconds, or when the duration is unknown. */
 export function resumeStart(posSec: number, durSec: number): number {
   if (!(durSec > 0) || posSec <= EDGE_SEC || posSec >= durSec - EDGE_SEC) return 0;

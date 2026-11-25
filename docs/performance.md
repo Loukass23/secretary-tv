@@ -528,3 +528,27 @@ Not deployed: measured at integration. What changed for frames:
 - **Larger type** everywhere (eight steps, `--sg-t-*`): more glyph raster on text changes. Walk the opened Cinema card,
   Settings and a title page, and compare with `main` as above. Also walk once with `data-sg-text="large"` and
   `data-sg-type="bold"` on `<html>` (`cdp.mjs eval`).
+
+### Title pages and the catalog home hero (wave 2 E, 2026-11-25, not yet measured)
+
+Not deployed: measured at integration. What changed for frames:
+
+- **No frosted panel on title pages.** The caption (logo, lines, buttons) sits straight on the art, so the page has
+  one glass surface fewer to re-rasterize when its frost lands.
+- **The readable copy replaces the shade.** Each backdrop layer (`art.tsx` `HeroLayers`) now holds the art and, over
+  it, a 480x270 darkened, softened copy of that art (`lib/hero.ts` `readableFor`, painted once per backdrop) or the
+  shade. That is one full-page layer per backdrop instead of the art plus a separate shade layer. The copy is made
+  before the swap, so a backdrop swap costs one extra small canvas paint and PNG encode (catalog home: after the
+  0.6 s dwell, while nothing moves).
+- **Logos** (`useLogo`): decoded before they are shown; on the catalog home looked up after the dwell, then faded in
+  (opacity, own layer). A title page waits for its logo under the veil (capped at 0.9 s like the art).
+- **Spoilers**: Blur shows each synopsis as a small pre-blurred PNG (`ui/stillblur.ts` `blurredText`, cached per text),
+  never a CSS filter; Hide shows no still at all.
+
+Walk inside Secretary, against `main` deployed the same way:
+
+- A show page (Shows card, OK on a title): `cdp.mjs walk 250 Right,Right,Right,Right,Left,Left,Up,Right,Left,Down,Right,Right,Up,Up,Down,Down`
+  (episodes, seasons, actions), once with spoilers Off, once on Blur.
+- A film page with "More like this": `cdp.mjs walk 250 Right,Right,Right,Left,Left,Left,Down,Right,Right,Right,Up`.
+- The catalog home (See all on the Cinema card): the opened-card walk above, at 250 ms and at 800 ms per key (the slow
+  walk swaps the backdrop and its readable copy on nearly every key). Watch the heap: 8 readable copies are kept.

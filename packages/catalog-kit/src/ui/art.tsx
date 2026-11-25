@@ -4,7 +4,8 @@
 //   - the frost swap re-rasterizes every glass layer, so it waits until focus rests
 import { artPalette, type Backdrop, backdropFor, type Palette, TINTS } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { frostFor, preload, shadeImage } from "../lib/hero.ts";
+import { type ArtTitle, cachedTitleArt, titleArt } from "../lib/fanart.ts";
+import { frostFor, preload, readableFor, shadeImage } from "../lib/hero.ts";
 import { lightsFollowFocus, syncSideLights } from "../lib/home.ts";
 import { loadSettings } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
@@ -69,6 +70,8 @@ export function useBase(type: CatalogType, moodSrc?: string): { backdrop: Backdr
 interface Slot {
   id: string;
   src: string;
+  /** The art's readable copy (lib/hero.ts `readableFor`), shown over it in place of the shade. */
+  read?: string;
 }
 
 export interface HeroArt {
@@ -94,6 +97,11 @@ export function useHeroArt(
   immediate = false,
   /** How long focus rests before the frost swaps; a page that does not move (Detail) takes it at once. */
   frostRestMs = FROST_REST_MS,
+  /**
+   * The page writes on the art (catalog home hero, title pages): each backdrop comes with its readable copy, made
+   * before the swap so both arrive together in one fade. Without it (or when it cannot be made) the shade.
+   */
+  readable = false,
 ): HeroArt {
   // The backdrop alternates between two permanent layers; `front` is the one shown.
   const [slots, setSlots] = useState<[Slot | null, Slot | null]>(() => (immediate && id && src && shownArt.has(src) ? [{ id, src }, null] : [null, null]));
@@ -113,12 +121,14 @@ export function useHeroArt(
     const t = setTimeout(
       () => {
         if (!shownSrc) {
-          void preload(src).then(
-            () => {
+          const read = readable ? readableFor(src).catch(() => undefined) : Promise.resolve(undefined);
+          void Promise.all([preload(src), read]).then(
+            ([, r]) => {
               if (!live) return;
               shownArt.add(src);
               const back = 1 - front;
-              setSlots((s) => (back === 0 ? [{ id, src }, s[1]] : [s[0], { id, src }]));
+              const slot: Slot = { id, src, read: r };
+              setSlots((s) => (back === 0 ? [slot, s[1]] : [s[0], slot]));
               setFront(back);
               setTimeout(() => {
                 if (frontRef.current === back) setSlots((s) => (back === 0 ? [s[0], null] : [null, s[1]]));
@@ -153,16 +163,75 @@ export function useHeroArt(
   return { slots, front, frost: shownFrost, settled };
 }
 
-/** The art layers and the shade over them; place first inside a GlassRoot. */
+/**
+ * The art layers; place first inside a GlassRoot. Each is one layer holding the art and, over it, its readable copy or
+ * else the shade, so the darkening crossfades with the picture it belongs to and never changes in a step.
+ */
 export function HeroLayers({ hero, shade }: { hero: HeroArt; shade: string | null }) {
   return (
     <>
       {hero.slots.map((h, i) =>
-        h ? <img key={i} class={`cat-hero${i === hero.front ? " is-front" : ""}`} src={h.src} alt="" onError={hideImg} /> : null,
+        h ? (
+          <div key={i} class={`cat-hero${i === hero.front ? " is-front" : ""}`}>
+            <img class="cat-hero-art" src={h.src} alt="" onError={hideImg} />
+            {(h.read ?? shade) && <img class="cat-hero-over" src={h.read ?? shade!} alt="" />}
+          </div>
+        ) : null,
       )}
-      {/* Mounted with the first art, and fading in with it, so the page never darkens in one step. */}
-      {shade && hero.slots[hero.front] && <img class="cat-shade" src={shade} alt="" />}
     </>
+  );
+}
+
+/** Logos already decoded on this page: shown at once when their title comes back, never faded in again. */
+const decodedLogos = new Set<string>();
+
+/**
+ * A title's logo (lib/fanart.ts `titleArt`, "hero" size), decoded before it is returned: `src` is undefined while there
+ * is none (show the name), and `settled` once the lookup has answered either way, so a page can wait for it before it
+ * shows itself. With `waitMs`, the lookup starts only once the title has held that long (the catalog home, where focus
+ * passes over many titles).
+ */
+export function useLogo(type: CatalogType, t: ArtTitle | undefined, waitMs = 0): { src?: string; settled: boolean } {
+  const cachedLogo = t ? cachedTitleArt(type, t, "hero").logo : undefined;
+  const [got, setGot] = useState<{ id: string; src?: string } | null>(null);
+  useEffect(() => {
+    if (!t) return;
+    let live = true;
+    const done = (src?: string) => live && setGot({ id: t.id, src });
+    const show = (src: string | undefined) => {
+      if (!src) return done();
+      if (decodedLogos.has(src)) return done(src);
+      void preload(src).then(
+        () => {
+          decodedLogos.add(src);
+          done(src);
+        },
+        () => done(),
+      );
+    };
+    const timer = setTimeout(() => void titleArt(type, t, "hero").then((a) => show(a.logo)), waitMs);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [type, t?.id]);
+  if (!t) return { settled: true };
+  if (got?.id === t.id) return { src: got.src, settled: true };
+  return { src: cachedLogo && decodedLogos.has(cachedLogo) ? cachedLogo : undefined, settled: false };
+}
+
+/**
+ * The title's mark over the art: its logo, contained in `w` x `h` and anchored bottom left, else its name in the display
+ * face, no taller than `h` (see `shrink`). A logo arriving after the name fades in in its place once (opacity, its own layer); the
+ * captions are anchored by their foot, so only what is above the mark can move, and that under the page's veil.
+ */
+export function TitleMark({ name, logo, w, h, shrink, class: cls }: { name: string; logo?: string; w: number; h: number; shrink?: boolean; class?: string }) {
+  return (
+    // A logo fills its box. With `shrink` (a title page, one title) a name takes only the lines it needs; else (the
+    // catalog home, where titles follow focus) the box keeps its height, so the kicker over it never moves.
+    <div class={`cat-mark${cls ? ` ${cls}` : ""}`} style={{ width: `${w}px`, ...(logo || !shrink ? { height: `${h}px` } : { maxHeight: `${h}px` }) }}>
+      {logo ? <img key={logo} class="cat-mark-logo" src={logo} alt={name} /> : <b class="cat-mark-name">{name}</b>}
+    </div>
   );
 }
 

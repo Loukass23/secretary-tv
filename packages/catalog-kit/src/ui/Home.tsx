@@ -1,6 +1,6 @@
 // The catalog home in Secretary's home look: Secretary's one header (tv-kit Header) at the top, the focused title's
-// art behind the page with its name, line and synopsis in a bare info panel (tv-kit pieces, as under an opened card),
-// and rows of posters at the home row's size underneath; Continue watching is a row of landscape stills. Which kind it
+// art behind the page with its logo (else its name), line and synopsis straight on the art's readable copy (art.tsx), as
+// a title page shows them, and rows of posters at the home row's size underneath; Continue watching is a row of landscape stills. Which kind it
 // shows (films, shows or anime) comes from the Secretary card the viewer opened it from (CatalogConfig.type); there are
 // no section tabs. Same rules as Secretary's home (tv-kit/src/glass, docs/performance.md): transform and opacity only,
 // faked blur, no soft shadows, and only the rows around focus are rendered.
@@ -14,7 +14,6 @@ import {
   type HeaderButton,
   headerStart,
   type HeaderPerson,
-  InfoPanel,
   Kicker,
   LANDSCAPE,
   LandscapeTile,
@@ -25,7 +24,8 @@ import {
   showImg,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { backgroundUrl, fetchMeta, posterUrl } from "../lib/cinemeta.ts";
+import { backgroundUrl, fetchMeta, posterUrl, ratingLabel } from "../lib/cinemeta.ts";
+import { cachedTitleArt } from "../lib/fanart.ts";
 import {
   CARD_SHAPE_LABELS,
   CARD_SHAPES,
@@ -41,15 +41,18 @@ import type { LookBox } from "@secretary/tv-kit/src/row-look.ts";
 import type { ClockFormat, DashboardSettings, OverlayTab } from "../lib/settings.ts";
 import type { CatalogType, HomeRow, Title } from "../lib/types.ts";
 import type { HostHeader } from "../host.ts";
-import { DWELL_MS, HeroLayers, useBase, useHeroArt } from "./art.tsx";
+import { DWELL_MS, HeroLayers, TitleMark, useBase, useHeroArt, useLogo } from "./art.tsx";
 import "./home.css";
 
 const PAD = 80;
 /** The style menu of a collection row (a long OK): beside the info panel, over the art. */
 const MENU = { x: 1000, y: 150, w: 620 };
 const MENU_LINE = 58;
-/** The focused title's caption, over the art between the header and the rows. */
-const INFO = { x: PAD, y: 236, w: 900, h: 300 };
+/**
+ * The focused title's caption, over the art between the header and the rows, anchored by its foot so the rows' label
+ * never meets it; the mark is the logo (else the name) in its box, and the synopsis keeps its two lines' height.
+ */
+const CAPTION = { x: PAD, foot: 536, w: 1000, mark: { w: 620, h: 150 }, lines: 2 };
 /** The focused row's top: its label, then its tiles; the next row's label peeks in under it. */
 const ROWS_Y = 580;
 /** A row's label over its tiles, then the tiles, then the gap to the next row's label. */
@@ -101,8 +104,9 @@ interface Props {
   onBack(): void;
 }
 
-/** The backdrop for a focused card; a Nuvio folder shows only the art its collection gave. */
-const heroArt = (t: Title): string | undefined => (t.folder ? t.background : backgroundUrl(t));
+/** The backdrop for a focused card (the art lookup's, when it has the title cached); a Nuvio folder shows only its collection's art. */
+const heroArt = (type: CatalogType, t: Title): string | undefined =>
+  t.folder ? t.background : cachedTitleArt(t.catalogType ?? type, t, "hero").background;
 
 /** The style menu's lines: Automatic and the shapes, then the size. */
 const MENU_SHAPES = ["auto", ...CARD_SHAPES] as const;
@@ -175,9 +179,12 @@ export function Home({
   /** Focus on the bar under the last row (0 Back to top, 1 Search), or null. */
   const [endIdx, setEndIdx] = useState<number | null>(null);
   useEffect(() => setEndIdx(null), [type]);
-  const { backdrop, shade, sheen, mood } = useBase(type, current ? heroArt(current) : undefined);
-  // The focused card's art becomes the backdrop once focus rests on it.
-  const hero = useHeroArt(current?.id, current ? heroArt(current) : undefined, active);
+  const heroSrc = current ? heroArt(type, current) : undefined;
+  const { backdrop, shade, sheen, mood } = useBase(type, heroSrc);
+  // The focused card's art becomes the backdrop once focus rests on it, with its readable copy under the caption.
+  const hero = useHeroArt(current?.id, heroSrc, active, false, undefined, true);
+  // Its logo, looked up once focus has rested as long (a folder has none).
+  const logo = useLogo(current?.catalogType ?? type, current && !current.folder ? current : undefined, DWELL_MS);
 
   useEffect(() => {
     setClockText(formatClock(clockFormat));
@@ -353,7 +360,7 @@ export function Home({
         isContinue && current.progressPct ? `${current.progressPct}% watched` : "",
         current.badge ?? "",
         current.badge?.includes(current.year) ? "" : current.year,
-        current.rating ? `IMDb ${current.rating}` : "",
+        ratingLabel(current.rating),
         current.runtime ?? "",
         current.genre?.slice(0, 2).join(", ") ?? "",
       ].filter(Boolean)
@@ -366,8 +373,14 @@ export function Home({
       {/* Secretary's one header: the person, its buttons, the clock last. */}
       <Header time={header?.time ?? clockText} person={headPerson} buttons={headButtons} focus={topIdx} />
 
-      <div class="cat-caption">
-        <InfoPanel {...INFO} kicker={kicker} title={current?.name ?? status ?? heading} meta={meta} about={current?.description || extraText || undefined} />
+      {/* The caption straight on the art's readable copy, as on a title page; every line keeps its height. */}
+      <div class="cat-caption" style={{ left: `${CAPTION.x}px`, bottom: `${1080 - CAPTION.foot}px`, width: `${CAPTION.w}px` }}>
+        <Kicker>{kicker}</Kicker>
+        <TitleMark name={current?.name ?? status ?? heading} logo={logo.src} w={CAPTION.mark.w} h={CAPTION.mark.h} class="cat-caption-mark" />
+        <small class="cat-caption-meta">{meta.join(" · ") || " "}</small>
+        <p class="cat-caption-about" style={{ WebkitLineClamp: CAPTION.lines }}>
+          {current?.description || extraText || ""}
+        </p>
       </div>
 
       <div class="sg-clip" style={{ left: "0px", top: `${ROWS_Y - 30}px`, width: "1920px", height: `${1080 - ROWS_Y + 30}px` }}>

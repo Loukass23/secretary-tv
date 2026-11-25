@@ -30,7 +30,8 @@ same screen.
   (`launcher/src/search.tsx`), empty on its recent searches, with results and with no catalog answering (its error state), on fixture titles that answer after a
   short wait (type with the panel's keys); then the catalog pages Secretary opens inside itself: the catalog home
   (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page (with its cast) and a show page
-  (`ui/Detail.tsx`), and the show page with spoiler protection on. Last, Settings (`catalog-kit/src/ui/HubOverlay.tsx`) under Secretary's header, on fixture settings and apps,
+  (`ui/Detail.tsx`, the film with a logo, the show with its name in the display face), and the show page with spoiler
+  protection on Blur and on Hide. Last, Settings (`catalog-kit/src/ui/HubOverlay.tsx`) under Secretary's header, on fixture settings and apps,
   opened on Watching, on Home screen's feature switches and on the Apps picker. Up from a title page's buttons expands the header. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.

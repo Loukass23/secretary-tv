@@ -1,4 +1,4 @@
-// Spoiler protection's blurred stills (Detail.tsx), made once per still and cheap to show. No CSS filter: each still
+// Spoiler protection's blurred stills and synopses (Detail.tsx), made once each and cheap to show. No CSS filter: each still
 // is drawn once into a tiny canvas (32x18) and read back as a small JPEG; the tile shows that image at full size, and
 // the compositor's scaling turns it into a soft blur. Showing it costs what any other tile image costs.
 //
@@ -52,6 +52,71 @@ export function blurredStill(src: string): Promise<string> {
   if (made.size > MAX) {
     const [oldest, gone] = made.entries().next().value as [string, Promise<string>];
     made.delete(oldest);
+    void gone.then(URL.revokeObjectURL, () => {});
+  }
+  return p;
+}
+
+/** The text's look for `blurredText`: the box it fills and the type it is set in, as the page shows it. */
+export interface TextBox {
+  w: number;
+  lines: number;
+  /** Line height in px. */
+  lineH: number;
+  /** A canvas font, e.g. `28px sans-serif`. */
+  font: string;
+  color: string;
+}
+
+/** Text broken into at most `lines` lines that fit `w` (measured in the canvas's font). */
+function wrap(g: CanvasRenderingContext2D, text: string, w: number, lines: number): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && g.measureText(next).width > w) {
+      out.push(line);
+      if (out.length === lines) return out;
+      line = word;
+    } else line = next;
+  }
+  if (line && out.length < lines) out.push(line);
+  return out;
+}
+
+/** Text drawn this many times smaller, then shown at full size: the scaling blurs it, with a light blur on top. */
+const TEXT_SCALE = 4;
+const texts = new Map<string, Promise<string>>();
+
+/**
+ * A synopsis as a blurred picture of itself (spoiler protection, Blur): its lines laid out as the page would set them,
+ * drawn small into a canvas and read back, so it shows as soft grey lines of the right length and never as text. Made
+ * once per text and box; shown as an image, it costs what any small image costs.
+ */
+export function blurredText(text: string, box: TextBox): Promise<string> {
+  const key = `${box.w}|${box.lines}|${box.lineH}|${box.font}|${box.color}|${text}`;
+  const hit = texts.get(key);
+  if (hit) return hit;
+  const p = new Promise<string>((resolve, reject) => {
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(box.w / TEXT_SCALE);
+    c.height = Math.ceil((box.lines * box.lineH) / TEXT_SCALE);
+    const g = c.getContext("2d");
+    if (!g) return reject(new Error("stillblur: no 2d context"));
+    g.font = box.font;
+    const lines = wrap(g, text, box.w, box.lines);
+    g.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE);
+    // In the small canvas's own pixels: about a word's letter height once shown at full size.
+    g.filter = "blur(1.5px)";
+    g.fillStyle = box.color;
+    g.textBaseline = "middle";
+    lines.forEach((l, i) => g.fillText(l, 0, i * box.lineH + box.lineH / 2));
+    c.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error("stillblur: toBlob failed"))), "image/png");
+  });
+  texts.set(key, p);
+  if (texts.size > MAX) {
+    const [oldest, gone] = texts.entries().next().value as [string, Promise<string>];
+    texts.delete(oldest);
     void gone.then(URL.revokeObjectURL, () => {});
   }
   return p;
