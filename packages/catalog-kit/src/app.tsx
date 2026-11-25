@@ -39,7 +39,7 @@ import {
   type UnifiedResumeEntry,
 } from "./lib/resume.ts";
 import {
-  applyThemeToDocument,
+  applyLook,
   type DashboardSettings,
   loadSettings,
   onSettings,
@@ -229,8 +229,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   useEffect(() => onSettings(setSettings), []);
 
   useEffect(() => {
-    applyThemeToDocument(settings.general.accentTheme);
-  }, [settings.general.accentTheme]);
+    applyLook(settings.general);
+  }, [settings.general.accentTheme, settings.general.typeStyle, settings.general.textSize]);
 
   // Global Channel Rocker (CH- / CH+) and Search shortcuts when inside Detail or Timeline views.
   useKeys(view.name === "detail" || view.name === "timeline", (key) => {
@@ -604,6 +604,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         heading={currentHeading}
         clockFormat={settings.general.clockFormat}
         person={embedded.person}
+        header={embedded.header}
         onFocus={setFocus}
         onOpen={(title, autoPlay) => {
           fromContinue.current = Boolean(autoPlay);

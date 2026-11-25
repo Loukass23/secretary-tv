@@ -24,6 +24,11 @@ export const NUVIO_URL = typeof __NUVIO_URL__ !== "undefined" ? __NUVIO_URL__ : 
 export const NUVIO_KEY = typeof __NUVIO_KEY__ !== "undefined" ? __NUVIO_KEY__ : "";
 /** The watch-party room service (packages/party), no trailing slash; empty when this build has none. */
 export const PARTY_URL = (typeof __PARTY_URL__ !== "undefined" ? __PARTY_URL__ : "").replace(/\/$/, "");
+/**
+ * The Watch together button in the header: hidden until Secretary's own party service is deployed. Setting `PARTY_URL`
+ * in `.env.tizen` turns it back on.
+ */
+export const WATCH_TOGETHER = PARTY_URL !== "";
 /** "nuvio" (accounts and sync on Nuvio Cloud) or "secretary" (the home server only, for dev and tests). */
 export const SYNC_BACKEND = typeof __SYNC_BACKEND__ !== "undefined" && __SYNC_BACKEND__ === "secretary" ? "secretary" : "nuvio";
 

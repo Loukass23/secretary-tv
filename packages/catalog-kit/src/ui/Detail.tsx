@@ -77,7 +77,7 @@ const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
  * The info panel, under the collapsed header (the clock alone, top right): taller for films, which list their people,
  * shorter for series to leave room for the season tabs and the episodes.
  */
-const INFO_MOVIE = { x: PAD, y: 140, w: 1000, h: 540 };
+const INFO_MOVIE = { x: PAD, y: 140, w: 1000, h: 564 };
 const INFO_SERIES = { x: PAD, y: 140, w: 1000, h: 440 };
 const SEASONS_Y = 616;
 const EPS_Y = 712;
@@ -85,7 +85,7 @@ const EPS_Y = 712;
 const META_WAIT_MS = 6000;
 /** "More like this" under a film's panel: a row label, then the home row's posters, smaller. */
 const SIM_SCALE = 0.68;
-const SIM = { labelY: 708, y: 752, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
+const SIM = { labelY: 724, y: 768, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
 /** The sources sheet, on the right; rows scroll inside it. */
 const SHEET = { x: 1060, y: 60, w: 800, h: 960 };
 const SOURCE_H = 112;
@@ -176,7 +176,7 @@ function SourceDetails({
   ];
   return (
     <Glass x={20} y={120} w={SHEET.w - 40} h={SHEET.h - 150} frost={false} class="det-details">
-      <span class="cat-kicker det-details-k">Source details · OK closes</span>
+      <span class="cat-kicker det-details-k">Source details</span>
       <Scroller x={30} y={84} w={SHEET.w - 120} h={SHEET.h - 290} axis="y" offset={scroll} pad={10}>
         <dl class="det-facts">
           {facts
@@ -925,7 +925,7 @@ export function Detail({
     !targetId
       ? ""
       : pending
-        ? `Starting when a good source is found${pluginProgress ? ` · ${pluginProgress}` : ""} · Back cancels`
+        ? `Starting when a good source is found${pluginProgress ? ` · ${pluginProgress}` : ""}`
         : found?.id !== targetId
           ? pluginsActive() && pluginProgress
             ? pluginProgress
@@ -1205,7 +1205,7 @@ export function Detail({
                                   : tags
                           }
                           meta={st.notice ? "Notice" : (p.size ?? "Cached")}
-                          color={st === best ? "var(--accent, #ff5a26)" : undefined}
+                          color={st === best ? "var(--sg-accent)" : undefined}
                           focused={idx === focusedAt && chipAt == null}
                         />
                       );

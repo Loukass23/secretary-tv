@@ -1,6 +1,7 @@
 // The workbench shell: a toolbar, the 1920x1080 stage scaled into the window, and a side panel with the
 // linter and the remote. Its own chrome is desktop UI; only what is on the stage is TV code.
-import { type Backdrop, drawBackdrop, type GlassMode, type Theme, TINTS, type TintName } from "@secretary/tv-kit/src/glass/index.ts";
+import { applyLook, type AccentTheme } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { type Backdrop, drawBackdrop, type GlassMode, TEXT_SIZES, type TextSize, type Theme, TINTS, type TintName, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/index.ts";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { type Art, drawArt } from "./art.ts";
@@ -18,9 +19,13 @@ export interface PageProps {
 }
 
 const PAGES = ["tokens", "components", "screens"] as const;
-const GROUPS = ["Controls and cards", "Media and motion", "Icons", "Header and panels", "Catalog tiles"];
+const GROUPS = ["Controls and cards", "Media and motion", "Icons", "Header and panels", "Catalog tiles", "Preview and rank"];
 const MODES: readonly GlassMode[] = ["fake", "flat", "live"];
 const TINT_NAMES = Object.keys(TINTS) as TintName[];
+/** The theme accent (Settings › Appearance), the type styles and the text sizes, as the TV's settings set them. */
+const ACCENTS: readonly AccentTheme[] = ["raptor", "rose", "blue", "gold"];
+const TYPE_NAMES = Object.keys(TYPE_STYLES) as TypeStyle[];
+const TEXT_NAMES = Object.keys(TEXT_SIZES) as TextSize[];
 
 interface State {
   page: (typeof PAGES)[number];
@@ -28,6 +33,9 @@ interface State {
   screen: number;
   theme: Theme;
   tint: TintName;
+  accent: AccentTheme;
+  type: TypeStyle;
+  text: TextSize;
   mode: GlassMode;
   fit: boolean;
   safe: boolean;
@@ -44,6 +52,9 @@ const DEFAULTS: State = {
   screen: 0,
   theme: "night",
   tint: "orange",
+  accent: "raptor",
+  type: "studio",
+  text: "normal",
   mode: "fake",
   fit: true,
   safe: false,
@@ -106,6 +117,8 @@ export function App() {
   useEffect(() => {
     void drawBackdrop(TINTS[s.tint], s.theme).then(setBackdrop);
   }, [s.tint, s.theme]);
+  // The accent and the type go on the page as the TV's settings put them there (catalog-kit applyLook).
+  useLayoutEffect(() => applyLook({ accentTheme: s.accent, typeStyle: s.type, textSize: s.text }), [s.accent, s.type, s.text]);
 
   // The stage: 1920x1080, scaled to fit the room the chrome leaves.
   const room = useRef<HTMLDivElement>(null);
@@ -160,6 +173,9 @@ export function App() {
         <span class="dz-sep" />
         <Choice items={["night", "day"] as Theme[]} value={s.theme} label={(t) => (t === "day" ? "Daylight" : "Night")} onPick={(theme) => set({ theme })} />
         <Choice items={TINT_NAMES} value={s.tint} onPick={(tint) => set({ tint })} />
+        <Choice items={ACCENTS} value={s.accent} label={(a) => `● ${a}`} onPick={(accent) => set({ accent })} />
+        <Choice items={TYPE_NAMES} value={s.type} label={(t) => TYPE_STYLES[t].label} onPick={(type) => set({ type })} />
+        <Choice items={TEXT_NAMES} value={s.text} label={(t) => TEXT_SIZES[t].label} onPick={(text) => set({ text })} />
         <Choice items={MODES} value={s.mode} onPick={(mode) => set({ mode })} />
         <span class="dz-sep" />
         <Toggle on={s.focusAll} onFlip={() => set({ focusAll: !s.focusAll })}>Focus all</Toggle>

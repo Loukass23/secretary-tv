@@ -14,7 +14,7 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font: 24px/1.35 system-ui, -apple-system, sans-serif;
+  font: var(--sg-t-s, 24px)/1.35 var(--sg-font-body, system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
 }
 html.avplay, html.avplay body { background: transparent !important; }
@@ -27,7 +27,7 @@ html.avplay, html.avplay body { background: transparent !important; }
 .island { transform: scaleX(0.2); opacity: 0; transition: transform 260ms var(--sg-ease), opacity 160ms ease-out; will-change: transform, opacity; display: flex; align-items: center; justify-content: center; }
 .island::after { background: rgba(10, 11, 14, 0.86); }
 .island.is-open { transform: scaleX(1); opacity: 1; }
-.island-text { position: relative; z-index: 2; font-size: 21px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 28px; opacity: 0; transition: opacity 160ms ease-out 140ms; }
+.island-text { position: relative; z-index: 2; font-size: var(--sg-t-s); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 28px; opacity: 0; transition: opacity 160ms ease-out 140ms; }
 .island.is-open .island-text { opacity: 1; }
 .island.is-error .island-text { color: #ffb4a0; }
 
@@ -39,10 +39,14 @@ html.avplay, html.avplay body { background: transparent !important; }
 /* Placed by top/left inside the pill: more specific than the glass rule that keeps a surface's children in flow. */
 .cc > .cc-head, .cc > .cc-row { position: absolute; z-index: 2; }
 .cc-head { position: absolute; left: 30px; right: 30px; top: 24px; display: flex; flex-direction: column; gap: 10px; }
-.cc-clock { font-size: 64px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
-.cc-now { font-size: 19px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-now b { color: var(--accent, #ff5a26); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; margin-right: 6px; }
-.cc-row { position: absolute; left: 16px; right: 16px; height: 62px; padding: 0 18px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 20px; }
+.cc-clock { font-size: var(--sg-t-hero); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.cc-now { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-now b { color: var(--sg-accent); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: var(--sg-t-xs); margin-right: 6px; }
+.cc-row { position: absolute; left: 16px; right: 16px; height: 62px; padding: 0 18px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: var(--sg-t-s); }
 .cc-row.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); }
 .cc-val { color: inherit; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; text-align: right; }
-
+/* --- type style (glass tokens.ts TYPE_STYLES): the catalog's titles and numbers --- */
+.nf-head h1, .tl-head h1, .hub-title, .ply-panel h1, .ply-pause h1, .det-sheet h2, .tl-why h2, .tl-about h3, .pty-card h2, .cat-end-text b, .cat-folder-title, .cat-spot .sg-tile-cap b, .sg-loader .sg-loader-label {
+  font-family: var(--sg-font-title);
+}
+.pty-code, .cc-clock, .tl-clock { font-family: var(--sg-font-num); }

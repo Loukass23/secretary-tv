@@ -5,6 +5,8 @@ import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useState } from "preact/hooks";
 import { cloud, partyApi } from "./cloud.ts";
+import { HEADER_PARTY } from "./nest-nav.ts";
+import { type PanelHeader, usePanelHeader } from "./panel-header.tsx";
 
 const PANEL = { x: 360, y: 200, w: 1200, h: 680 };
 
@@ -24,8 +26,11 @@ const STATE_TEXT: Record<RoomSummary["state"], string> = {
 export function WatchTogether({
   onClose,
   onJoinHere,
+  header,
 }: {
   onClose: () => void;
+  /** Secretary's one header over the panel (panel-header.tsx). */
+  header: PanelHeader;
   /** Join the room in Secretary's own catalog. */
   onJoinHere: (open: { type: "movie" | "series" | "anime"; title: { id: string; name: string }; room: string }) => void;
 }) {
@@ -37,6 +42,7 @@ export function WatchTogether({
         : { kind: "idle", note: "Sign in to Nuvio first: the party knows you by your profile." },
   );
   const [focus, setFocus] = useState(0);
+  const head = usePanelHeader(header, HEADER_PARTY);
   const ready = partyApi.configured && cloud.session.signedIn();
 
   const look = (raw: string) => {
@@ -75,7 +81,9 @@ export function WatchTogether({
   const buttons = step.kind === "found" ? ["Join the party", "Another code"] : ready ? ["Type a code"] : [];
 
   useKeys(step.kind !== "typing", (key) => {
+    if (head.key(key)) return;
     if (key === "Back") return void onClose();
+    if (key === "Up") return void head.enter();
     if (key === "Left") return void setFocus((f) => Math.max(0, f - 1));
     if (key === "Right") return void setFocus((f) => Math.min(buttons.length - 1, f + 1));
     if (key === "Enter") {
@@ -93,9 +101,11 @@ export function WatchTogether({
         ? `Looking for ${step.code}…`
         : step.kind === "found"
           ? `${step.room.members} watching · ${STATE_TEXT[step.room.state]}`
-          : step.note ?? "OK types a code · Back returns home";
+          : (step.note ?? "");
 
   return (
+    <>
+    {head.view}
     <Glass {...PANEL} class="nest-account nest-party">
       <div class="nest-party-text">
         <span class="nest-kicker">Watch together</span>
@@ -109,11 +119,12 @@ export function WatchTogether({
       </div>
       <div class="nest-account-buttons">
         {buttons.map((label, i) => (
-          <Glass key={label} x={60 + i * 440} y={PANEL.h - 120} w={400} h={72} page={[PANEL.x + 60 + i * 440, PANEL.y + PANEL.h - 120]} focused={focus === i} class="nest-button">
+          <Glass key={label} x={60 + i * 440} y={PANEL.h - 120} w={400} h={72} page={[PANEL.x + 60 + i * 440, PANEL.y + PANEL.h - 120]} focused={head.head == null && focus === i} class="nest-button">
             <span>{label}</span>
           </Glass>
         ))}
       </div>
     </Glass>
+    </>
   );
 }

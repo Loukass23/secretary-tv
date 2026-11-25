@@ -17,6 +17,7 @@ import {
   LandscapeTile,
   ListCard,
   MediaTile,
+  RankNumber,
   Scroller,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
@@ -283,7 +284,6 @@ function WeatherCard({ w, page, focused, out }: { w: Weather | null; page: [numb
                 </small>
               )}
             </div>
-            <small class="nest-wc-hint">OK for the forecast</small>
           </>
         ) : (
           <small class="nest-wc-none">No weather yet</small>
@@ -422,11 +422,7 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
         const x = i * b.stride;
         return (
           <div key={keys[i]} class="nest-rise" style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}>
-            {b.lead > 0 && (
-              <span class={`nest-rank${at === i ? " is-focus" : ""}`} style={{ left: `${x}px`, top: 0, width: `${b.lead}px`, height: `${b.h}px` }}>
-                {i + 1}
-              </span>
-            )}
+            {b.lead > 0 && <RankNumber x={x} w={b.lead} h={b.h} n={i + 1} focused={at === i} />}
             {b === WIDE_BOX ? (
               <LandscapeTile x={x} y={0} src={it.still ?? it.poster} title={it.title} sub={it.sub} badge={badgeOf(it, false)} progress={it.progress} focused={at === i} />
             ) : (
@@ -604,8 +600,6 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted
       style={{ transform: `translate3d(${x}px,0,0)` }}
     >
       <span class={`nest-col-label${open ? " is-answer" : ""}`}>{open ? <OpenHeader col={col} flat={focus} /> : col.label}</span>
-      {open && col.kind === "media" && !col.note && <span class="nest-col-hint">Hold OK on a title for options · Back to close</span>}
-      {open && col.kind === "weather" && <span class="nest-col-hint">Back to close</span>}
       {open && col.kind === "media" && col.note && (
         <span class="nest-col-note">
           <b>“{col.note.prompt}”</b> {col.note.reply}
@@ -639,7 +633,6 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted
             {col.lines.map((l, k) => (
               <small key={k}>{l}</small>
             ))}
-            <span class="nest-ac-hint">OK to talk</span>
           </Glass>
         )}
         {col.kind === "weather" && <WeatherCard w={col.weather} page={page} focused={false} out={open} />}

@@ -165,6 +165,16 @@ export function themeFor(pref: ThemePref, hour: number, lux: number | null = nul
   return hour >= 7 && hour < 19 ? "day" : "night";
 }
 
+/**
+ * The Theme item and the Green key: every press flips what the screen shows, Night to Daylight or back. A flip that
+ * lands on what automatic would show now goes back to automatic, so automatic is never more than a press away and no
+ * press leaves the look as it was.
+ */
+export function flipTheme(pref: ThemePref, hour: number, lux: number | null = null): ThemePref {
+  const next = themeFor(pref, hour, lux) === "day" ? "night" : "day";
+  return themeFor("auto", hour, lux) === next ? "auto" : next;
+}
+
 /** Theme prompts Nest answers itself, without the server: "light theme", "dark mode", "auto theme". */
 export function themePrompt(prompt: string): ThemePref | null {
   const p = prompt.trim().toLowerCase();
