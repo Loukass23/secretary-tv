@@ -68,6 +68,15 @@ export function episodePanel(show: Pick<Title, "name" | "description" | "runtime
   };
 }
 
+/** How many seasons a show has: specials (season 0) are not a season. */
+export const seasonCount = (videos: readonly Pick<Video, "season">[]): number => new Set(videos.map((v) => v.season).filter((s) => s > 0)).size;
+
+/** "1 season", "3 seasons", for a show's kicker; empty when it has none (specials only, or no episodes yet). */
+export function seasonsLabel(videos: readonly Pick<Video, "season">[]): string {
+  const n = seasonCount(videos);
+  return n ? `${n} season${n === 1 ? "" : "s"}` : "";
+}
+
 /** A film's people for its page: "Director" and "Starring" lines, the first few names each; empty when unknown. */
 export function creditLines(t: Pick<Title, "cast" | "director">, maxCast = 5): { label: string; names: string }[] {
   const out: { label: string; names: string }[] = [];

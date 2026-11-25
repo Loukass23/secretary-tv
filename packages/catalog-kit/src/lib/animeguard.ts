@@ -11,9 +11,13 @@ import type { CatalogType, Title } from "./types.ts";
  *   entry saved or synced as a series moves to Anime (`asAnimeKind`).
  * - The type label on a title page ("Anime", not "Series").
  *
- * Cinemeta's series and movie lists hold anime too (they are IMDb titles). A title is anime when it has a Kitsu id, or
- * when its IMDb id is one the anime catalogs list. Animation alone is not enough: western cartoons belong in Shows. A
- * title whose genres are known and include neither Animation nor Anime is never anime, whatever the id lists say.
+ * Cinemeta's series and movie lists hold anime too (they are IMDb titles). A title is anime when it has a Kitsu id,
+ * when its IMDb id is one the anime catalogs list, or when it is animation its metadata says is Japanese
+ * (`Title.japanese`, lib/cinemeta.ts). Animation alone is not enough: western cartoons belong in Shows. A title whose
+ * genres are known and include neither Animation nor Anime is never anime, whatever the id lists say.
+ *
+ * A list asked for one kind (`onlyKind`) holds each title once: an anime synced as a series and saved as anime is one
+ * entry, not two.
  */
 let known: Promise<Set<string>> | null = null;
 /** The ids learnt so far, for the surfaces that decide at once (a render). Only grows. */
@@ -43,18 +47,21 @@ export const knownAnime = (): ReadonlySet<string> => learnt;
 const isAnimation = (t: Pick<Title, "genre">) => t.genre?.some((g) => /^(animation|anime)$/i.test(g)) ?? false;
 
 /** Whether the catalog knows `t` is anime. Pure given `ids`. */
-export function isAnime(t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): boolean {
+type Kinded = Pick<Title, "id" | "genre" | "japanese">;
+
+export function isAnime(t: Kinded, ids: ReadonlySet<string> = learnt): boolean {
   if (t.id.startsWith("kitsu:")) return true;
+  if (t.japanese && isAnimation(t)) return true;
   if (!t.id.startsWith("tt") || !ids.has(t.id)) return false;
   return !t.genre?.length || isAnimation(t);
 }
 
 /** The catalog a title belongs under: `type`, unless the title is anime. */
-export const kindFor = (type: CatalogType, t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): CatalogType =>
+export const kindFor = (type: CatalogType, t: Kinded, ids: ReadonlySet<string> = learnt): CatalogType =>
   type === "anime" || isAnime(t, ids) ? "anime" : type;
 
 /** Continue watching (or any typed list) with anime entries moved to Anime. Entries already right are kept as they are. */
-export function asAnimeKind<E extends { type: CatalogType; title: Pick<Title, "id" | "genre"> }>(
+export function asAnimeKind<E extends { type: CatalogType; title: Kinded }>(
   list: readonly E[],
   ids: ReadonlySet<string> = learnt,
 ): E[] {
@@ -65,14 +72,17 @@ export function asAnimeKind<E extends { type: CatalogType; title: Pick<Title, "i
 }
 
 /** The entries of a typed list that belong under `kind` (a Secretary card's Continue watching, picks or My List). */
-export const onlyKind = <E extends { type: CatalogType; title: Pick<Title, "id" | "genre"> }>(
+export const onlyKind = <E extends { type: CatalogType; title: Kinded }>(
   kind: CatalogType,
   list: readonly E[],
   ids: ReadonlySet<string> = learnt,
-): E[] => asAnimeKind(list, ids).filter((e) => e.type === kind);
+): E[] => {
+  const seen = new Set<string>();
+  return asAnimeKind(list, ids).filter((e) => e.type === kind && !seen.has(e.title.id) && !!seen.add(e.title.id));
+};
 
 /** The word a title page shows for its kind. */
-export const typeLabel = (type: CatalogType, t: Pick<Title, "id" | "genre">, ids: ReadonlySet<string> = learnt): string =>
+export const typeLabel = (type: CatalogType, t: Kinded, ids: ReadonlySet<string> = learnt): string =>
   type === "movie" ? "Film" : kindFor(type, t, ids) === "anime" ? "Anime" : "Series";
 
 /** `titles` without the anime, for the Shows and Cinema rows; the Anime rows pass through. */
@@ -81,7 +91,7 @@ export async function withoutAnime(type: CatalogType, titles: Title[], f?: typeo
     noteAnime(titles.map((t) => t.id));
     return titles;
   }
-  if (!titles.some((t) => t.id.startsWith("kitsu:") || (t.id.startsWith("tt") && (isAnimation(t) || learnt.has(t.id))))) return titles;
+  if (!titles.some((t) => t.id.startsWith("kitsu:") || (t.id.startsWith("tt") && (isAnimation(t) || learnt.has(t.id) || t.japanese)))) return titles;
   const anime = new Set([...learnt, ...(await animeImdbIds(f))]);
   return titles.filter((t) => !isAnime(t, anime));
 }

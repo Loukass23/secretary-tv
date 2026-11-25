@@ -1,5 +1,5 @@
 export { CatalogApp, type CatalogConfig, type EmbeddedHost } from "./app.tsx";
-export { clearFanartCache, type FrameArtworkResult, resolveFrameArtwork, setFanartKeys } from "./lib/fanart.ts";
+export { type ArtSize, ART_MAX, cachedTitleArt, clearArtCache, setFanartKeys, type TitleArt, titleArt } from "./lib/fanart.ts";
 export {
   clearRecentSearches,
   type DashboardSettings,

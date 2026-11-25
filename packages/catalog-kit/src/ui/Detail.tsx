@@ -53,7 +53,7 @@ import { matchPref } from "../lib/sourcepref.ts";
 import { type MenuLine, stepTitleMenu, type TitleAction, titleMenu } from "../lib/titlemenu.ts";
 import { deviceCapSet } from "../lib/device.ts";
 import { parseStreamInfo, type Stream, type StreamClient } from "../lib/streams.ts";
-import { typeLabel } from "../lib/animeguard.ts";
+import { kindFor, typeLabel } from "../lib/animeguard.ts";
 import { type CatalogType, isSeries, streamType, type Title, type Video } from "../lib/types.ts";
 import { cancelPreload, deadLinks, preload, prepareAheadEnabled, sourcePrefs } from "../player/session.ts";
 import { HeroLayers, useBase, useHeroArt } from "./art.tsx";
@@ -441,7 +441,7 @@ export function Detail({
         const hint = {
           ...(target ? fileHintFor(target) : undefined),
           ...(yearNum ? { year: yearNum } : {}),
-          anime: (title.catalogType ?? type) === "anime",
+          anime: kindFor(title.catalogType ?? type, title) === "anime",
         };
         stop = streams.watch(targetId, hint, streamType(type), (s, done) => {
           if (!live) return;
