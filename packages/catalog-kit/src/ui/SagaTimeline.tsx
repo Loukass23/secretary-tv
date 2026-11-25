@@ -1,7 +1,7 @@
 import { useKeys, windowOf } from "@secretary/tv-kit";
 import { Glass, GlassRoot, MediaTile, Segmented } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { backgroundUrl, posterUrl } from "../lib/cinemeta.ts";
+import { backgroundUrl, posterUrl, ratingLabel } from "../lib/cinemeta.ts";
 import {
   type SagaDef,
   computeSagaView,
@@ -292,7 +292,7 @@ export function SagaTimeline({
               </span>
               <h2>{focusedStep.name}</h2>
               <div class="cat-meta">
-                {[focusedStep.rating && `IMDb ${focusedStep.rating}`, focusedStep.year, `${focusedStep.runtimeMin} min`, focusedStep.catalogType]
+                {[ratingLabel(focusedStep.rating), focusedStep.year, `${focusedStep.runtimeMin} min`, focusedStep.catalogType]
                   .filter(Boolean)
                   .join("  ·  ")}
               </div>

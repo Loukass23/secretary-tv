@@ -8,7 +8,7 @@ import { Glass, GlassRoot, MediaTile, RankNumber, Segmented } from "@secretary/t
 import type { CollectionFolder, NuvioCollection } from "@secretary/nuvio";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { backgroundUrl, posterUrl } from "../lib/cinemeta.ts";
+import { backgroundUrl, posterUrl, ratingLabel } from "../lib/cinemeta.ts";
 import {
   autoFolderView,
   type CardShape,
@@ -302,7 +302,7 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, row
           <h1>{current?.name ?? folder.title}</h1>
           <p>
             {current
-              ? [current.year, current.rating && `IMDb ${current.rating}`].filter(Boolean).join("  ·  ") || folder.title
+              ? [current.year, ratingLabel(current.rating)].filter(Boolean).join("  ·  ") || folder.title
               : `${sources.length} ${sources.length === 1 ? "catalog" : "catalogs"}`}
           </p>
         </div>

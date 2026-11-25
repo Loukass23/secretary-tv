@@ -1,12 +1,24 @@
-/* Catalog home in Secretary's home look (Home.tsx). The header, info panel, row labels, tiles and buttons are tv-kit
+/* Catalog home in Secretary's home look (Home.tsx). The header, row labels, tiles and buttons are tv-kit
    pieces (glass/glass.css), the backdrop layers come from art.css; the accent (--accent) is only for highlights:
    progress and kickers. */
 
-/* The focused title's caption over the art (tv-kit InfoPanel): the home caption's type, its name raised to read
-   from the sofa as the page's title. */
-.cat-caption .sg-info-title { font-size: var(--sg-t-title); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
-.cat-caption .sg-info .sg-kicker { margin-bottom: 14px; }
-.cat-caption .sg-info small.sg-info-meta { margin-top: 10px; }
+/* The hero caption (Home.tsx CAPTION): on the art's readable copy, couch-sized, every line at a fixed height. */
+.cat-caption { position: absolute; display: flex; flex-direction: column; }
+.cat-caption .sg-kicker { font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-caption-mark { margin-top: 14px; flex-shrink: 0; }
+.cat-caption small.cat-caption-meta { margin-top: 18px; height: 1.3em; font-size: var(--sg-t-m); line-height: 1.3; color: var(--sg-ink); opacity: 0.86; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-caption-about {
+  flex-shrink: 0;
+  height: 2.76em;
+  margin: 12px 0 0;
+  font-size: var(--sg-t-m);
+  line-height: 1.38;
+  color: var(--sg-ink);
+  opacity: 0.86;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
 
 /* A home row (Home.tsx sets its height from its look) and a folder row (NuvioFolder.tsx). */
 .cat-row { position: absolute; left: 0; width: 1920px; height: 372px; }

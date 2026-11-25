@@ -190,7 +190,8 @@ export function catalogRows(art: Art): HomeRow[] {
     items: Array.from({ length: n }, (_, k) => ({ ...title(art, from + k), ...extra })),
   });
   const cont = row("continue", "Continue watching", 0, 4);
-  cont.items = cont.items.map((t, k) => ({ ...t, progressPct: 20 + k * 18, badge: k === 1 ? "Next · S01E03" : undefined }));
+  // The first has a logo (the hero shows it once focus rests); the others show their names.
+  cont.items = cont.items.map((t, k) => ({ ...t, progressPct: 20 + k * 18, badge: k === 1 ? "Next · S01E03" : undefined, ...(k === 0 ? { logo: art.logo } : {}) }));
   const fresh = row("new", "New releases", 2, 10);
   fresh.items = fresh.items.map((t, k) => (k % 3 === 1 ? { ...t, watched: true } : t));
   return [cont, row("popular", "Popular", 4, 12), fresh, row("mylist", "My list", 6, 6)];
@@ -306,9 +307,9 @@ export const SETTINGS_APPS: HostApp[] = [
   { id: "111299001912", name: "YouTube", note: "Has its own card on the home screen too" },
 ];
 
-/** Settings as a viewer left them: spoiler protection on, home notifications off, the guide and YouTube hidden. */
+/** Settings as a viewer left them: spoiler protection on Blur, home notifications off, the guide and YouTube hidden. */
 export const SETTINGS_FIXTURE: DashboardSettings = {
   ...DEFAULT_SETTINGS,
-  playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: true },
+  playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: "blur" },
   home: { ...DEFAULT_SETTINGS.home, homeAlerts: false, hiddenApps: ["FFFFFFFFFF.guide", "111299001912"] },
 };

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { airLine, creditLines, episodePanel, isSpoiler, type SpoilerState } from "../src/lib/titlepage.ts";
+import { airLine, creditLines, episodeLook, episodePanel, isSpoiler, type SpoilerState } from "../src/lib/titlepage.ts";
 import { peopleOf, toTitle } from "../src/lib/cinemeta.ts";
 import { DEFAULT_SETTINGS, mergeSettings } from "../src/lib/settings.ts";
 import type { Video } from "../src/lib/types.ts";
@@ -43,7 +43,7 @@ test("specials and episodes still to come read as such", () => {
 });
 
 test("spoilers: unwatched episodes count, watched, in progress and a show marked watched do not", () => {
-  const s: SpoilerState = { on: true, watched: new Set(["1:1", "1:2"]), resumeId: "tt1:1:3" };
+  const s: SpoilerState = { mode: "blur", watched: new Set(["1:1", "1:2"]), resumeId: "tt1:1:3" };
   assert.equal(isSpoiler(ep(1, 1), s), false, "watched to the end");
   assert.equal(isSpoiler(ep(1, 3), s), false, "in progress");
   assert.equal(isSpoiler(ep(1, 4), s), true, "not watched yet");
@@ -51,21 +51,30 @@ test("spoilers: unwatched episodes count, watched, in progress and a show marked
   assert.equal(isSpoiler(ep(0, 1), s), true, "a special not watched");
   assert.equal(isSpoiler(ep(1, 9, { released: "2027-01-01T00:00:00Z" }), s), true, "not aired yet");
   assert.equal(isSpoiler(ep(1, 4), { ...s, titleWatched: true }), false, "the whole show marked watched");
-  assert.equal(isSpoiler(ep(1, 4), { ...s, on: false }), false, "protection off");
+  assert.equal(isSpoiler(ep(1, 4), { ...s, mode: "off" }), false, "protection off");
+  assert.equal(episodeLook(ep(1, 4), s), "blur");
+  assert.equal(episodeLook(ep(1, 4), { ...s, mode: "hide" }), "hide");
+  assert.equal(episodeLook(ep(1, 1), { ...s, mode: "hide" }), "clear", "a watched episode shows whole");
+  assert.equal(episodeLook(ep(1, 4), { ...s, mode: "off" }), "clear");
 });
 
 test("spoilers hide only the episode's own synopsis, never the show's fallback", () => {
-  const s: SpoilerState = { on: true, watched: new Set() };
+  const s: SpoilerState = { mode: "blur", watched: new Set() };
   assert.equal(episodePanel(show, ep(1, 4, { overview: "A twist." }), s, NOW).hidden, true);
   assert.equal(episodePanel(show, ep(1, 4), s, NOW).hidden, false);
   // The title always stays readable.
   assert.equal(episodePanel(show, ep(1, 4, { name: "The Twist", overview: "A twist." }), s, NOW).title, "The Twist");
 });
 
-test("spoiler protection is a setting, off by default, kept when saved on", () => {
-  assert.equal(DEFAULT_SETTINGS.playback.spoilerProtection, false);
-  assert.equal(mergeSettings({}).playback.spoilerProtection, false);
-  assert.equal(mergeSettings({ playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: true } }).playback.spoilerProtection, true);
+test("spoiler protection is Off, Blur or Hide, Off by default; the old switch saved on becomes Blur", () => {
+  assert.equal(DEFAULT_SETTINGS.playback.spoilerProtection, "off");
+  assert.equal(mergeSettings({}).playback.spoilerProtection, "off");
+  const saved = (v: unknown) => mergeSettings({ playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: v } } as never).playback.spoilerProtection;
+  assert.equal(saved(true), "blur", "the old switch, on");
+  assert.equal(saved(false), "off", "the old switch, off");
+  assert.equal(saved("hide"), "hide");
+  assert.equal(saved("blur"), "blur");
+  assert.equal(saved("loud"), "off");
 });
 
 test("a film's people: from the meta's fields or its links, as Director and Starring lines", () => {

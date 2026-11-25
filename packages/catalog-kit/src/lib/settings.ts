@@ -27,6 +27,19 @@ export type ClockFormat = "24h" | "12h";
 export type AccentTheme = "raptor" | "rose" | "blue" | "gold";
 export type ArtworkProviderPref = "fanart" | "tmdb" | "addon";
 export type ReminderSource = "companion" | "local";
+/**
+ * Spoiler protection on a show's page, for episodes not yet watched (lib/titlepage.ts `isSpoiler`). `blur`: their
+ * stills and synopses are shown blurred; `hide`: only their number and title show. The titles always stay readable.
+ */
+export type SpoilerMode = "off" | "blur" | "hide";
+export const SPOILER_MODES: readonly SpoilerMode[] = ["off", "blur", "hide"];
+export const SPOILER_LABELS: Record<SpoilerMode, string> = { off: "Off", blur: "Blur", hide: "Hide" };
+
+/** A stored spoiler setting: the old switch (on) is Blur; anything unknown is Off. */
+export function spoilerModeOf(v: unknown): SpoilerMode {
+  if (v === true) return "blur";
+  return SPOILER_MODES.includes(v as SpoilerMode) ? (v as SpoilerMode) : "off";
+}
 
 /**
  * Settings' categories, as its tabs show them (ui/HubOverlay.tsx). "Apps" lists the TV's apps for the Apps card, and
@@ -94,11 +107,8 @@ export interface DashboardSettings {
     audioLangs: string[];
     /** Subtitle languages for a source in another language (VOSTFR-style); empty is the audio languages. */
     subLangs: string[];
-    /**
-     * Spoiler protection on a show's page: the still and the synopsis of every episode not yet watched are blurred
-     * (lib/titlepage.ts `isSpoiler`); the titles stay readable. Off by default.
-     */
-    spoilerProtection: boolean;
+    /** Spoiler protection on a show's page (`SpoilerMode`): Off by default. Saved as a boolean before 2026-11-25 (on: Blur). */
+    spoilerProtection: SpoilerMode;
   };
   /**
    * Secretary's own home screen (launcher/src/features.ts): what the Apps card leaves out, and the features a viewer can
@@ -197,7 +207,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
     pausePanel: true,
     audioLangs: [],
     subLangs: [],
-    spoilerProtection: false,
+    spoilerProtection: "off",
   },
   home: {
     hiddenApps: [],
@@ -320,7 +330,7 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null, legac
       pausePanel: p.pausePanel ?? true,
       audioLangs: langList(p.audioLangs, []),
       subLangs: langList(p.subLangs, []),
-      spoilerProtection: p.spoilerProtection === true,
+      spoilerProtection: spoilerModeOf(p.spoilerProtection),
     },
     home: {
       hiddenApps: idList(h.hiddenApps),
@@ -409,9 +419,9 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.spoilerProtection",
     section: "Watching",
     label: "Spoiler protection",
-    description: "On a show's page, the still and the synopsis of every episode you have not watched are blurred; the titles stay readable",
-    getValue: (s) => (s.playback.spoilerProtection ? "On" : "Off"),
-    cycle: (s) => ({ ...s, playback: { ...s.playback, spoilerProtection: !s.playback.spoilerProtection } }),
+    description: "On a show's page, episodes you have not watched: Blur shows their stills and synopses blurred, Hide shows only their number and title",
+    getValue: (s) => SPOILER_LABELS[s.playback.spoilerProtection],
+    cycle: (s, dir) => ({ ...s, playback: { ...s.playback, spoilerProtection: cycleOption(SPOILER_MODES, s.playback.spoilerProtection, dir) } }),
   },
   {
     id: "playback.autoSkip",

@@ -174,7 +174,7 @@ const fanartAt = (url: string | undefined, size: ArtSize) =>
 const tmdbAt = (url: string, size: ArtSize) =>
   url.replace(/(image\.tmdb\.org\/t\/p\/)(?:w\d+|original)(?=\/)/, `$1${size === "card" ? "w780" : "w1280"}`);
 
-type ArtTitle = Pick<Title, "id" | "poster" | "background" | "logo">;
+export type ArtTitle = Pick<Title, "id" | "poster" | "background" | "logo">;
 
 function sized(t: ArtTitle, found: Found, size: ArtSize): TitleArt {
   const backdrop = tmdbAt(backgroundUrl(t), size);

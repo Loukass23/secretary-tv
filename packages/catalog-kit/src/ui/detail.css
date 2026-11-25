@@ -1,17 +1,42 @@
-/* Detail page in glass (Detail.tsx). The title's art fills the page (art.tsx layers) under the shade;
-   the info panel and the sources sheet are frosted from that art. */
+/* Title page (Detail.tsx), in the catalog home hero's look: the title's art fills the page (art.tsx layers, with its
+   readable copy darkening the left) and the caption sits straight on it, no panel. The sources sheet, the menu and the
+   party card are frosted from that art. */
 .detail-glass { position: fixed; inset: 0; z-index: 2; }
-/* The panel is tv-kit's InfoPanel on glass (pieces.tsx), the home screen's type; these are only its title-page extras. */
-.det .sg-info.is-glass .sg-info-about { flex-shrink: 0; }
-.det-credit { display: block; margin-top: 8px; font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.det-credit:first-of-type { margin-top: 14px; }
+.det-caption { position: absolute; display: flex; flex-direction: column; }
+.det-caption .sg-kicker { font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.det-mark { margin-top: 14px; flex-shrink: 0; }
+/* A show's mark is smaller (its episode's line comes under it): the name on one line, a step down. */
+.det-mark.is-small .cat-mark-name { font-size: var(--sg-t-title); -webkit-line-clamp: 1; }
+/* A show's focused episode under the show's mark: its place, then its title. */
+.det-ep-name { display: block; margin-top: 12px; height: 1.25em; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.det-ep-tag { margin-right: 16px; font-family: var(--sg-font-num); color: var(--sg-accent); }
+.det-caption small.det-meta { margin-top: 6px; height: 1.3em; font-size: var(--sg-t-m); line-height: 1.3; color: var(--sg-ink); opacity: 0.86; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.det-mark + small.det-meta { margin-top: 18px; }
+/* The synopsis: one height whatever it says (Detail.tsx ABOUT_*), so nothing under it moves between episodes. */
+.det-about {
+  flex-shrink: 0;
+  margin: 12px 0 0;
+  font-size: var(--sg-t-m);
+  line-height: 1.38;
+  color: var(--sg-ink);
+  opacity: 0.86;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.det-credit { display: block; margin-top: 14px; font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--sg-ink); }
+.det-credit span + span { margin-left: 30px; }
 .det-credit em { margin-right: 12px; font-style: normal; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
-/* Spoiler protection: the hidden synopsis is soft bars in a flat fill, as tall as the text it stands for. */
-.det-redact { margin-top: 14px; height: 85px; }
-.det-redact i { display: block; height: 18px; margin-bottom: 15px; border-radius: 9px; background: var(--sg-raised); }
+/* Spoiler protection, Blur: the synopsis as its blurred picture (ui/stillblur.ts), soft bars until it is made. */
+.det-redact { display: block; opacity: 1; }
+.det-redact-img { display: block; width: 100%; height: 100%; }
+.det-redact i { display: block; height: 18px; margin: 10px 0 11px; border-radius: 9px; background: var(--sg-raised); }
 .det-redact i:first-child { width: 92%; }
-.det-redact i:nth-child(2) { width: 64%; }
-.det-redact small { display: block; font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
+.det-redact i:nth-child(2) { width: 74%; }
+.det-redact i:nth-child(3) { width: 58%; }
+/* Buttons on the art: a flat fill under the hairline so they read on any picture; focus is the white sheet as everywhere. */
+.det-caption .sg-btn { background: rgba(255, 255, 255, 0.1); }
+.det-caption .sg-btn.is-primary { background: var(--sg-raised); }
 
 .det-will { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: var(--sg-t-xs); }
 .det-will-k { font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
@@ -27,6 +52,8 @@
 
 /* --- episodes: tv-kit LandscapeTile, the title on the art --- */
 .det-ep.is-soon img { opacity: 0.5; }
+/* Spoiler protection, Hide: no still, the number and the title on the tile's flat fill. */
+.det-ep.is-hide { background: var(--sg-raised); }
 
 /* --- sources sheet --- */
 .det-scrim { left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(0, 0, 0, 0.45); }
@@ -67,7 +94,7 @@
 /* Waiting for the title's details: only the art and the bird show, then the page appears whole. */
 .detail-glass.is-waiting .sg-head-items,
 .detail-glass.is-waiting .sg-head-clock,
-.detail-glass.is-waiting .sg-info,
+.detail-glass.is-waiting .det-caption,
 .detail-glass.is-waiting .sg-row-label,
 .detail-glass.is-waiting .sg-tabs,
 .detail-glass.is-waiting .sg-clip { visibility: hidden; }

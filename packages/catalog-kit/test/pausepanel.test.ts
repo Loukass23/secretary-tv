@@ -17,7 +17,7 @@ test("pause panel: after 4 s paused with no key; a key restarts the wait; never 
 test("pause panel facts: episode line, year · runtime · rating, the episode's synopsis first", () => {
   const title = { id: "tt3032476", name: "Better Call Saul", year: "2015", rating: "9.0", runtime: "50 min", description: "Show." } as Title;
   const ep = { id: "tt3032476:1:2", season: 1, episode: 2, name: "Mijo", overview: "Episode." } as Video;
-  assert.deepEqual(pauseFacts(title, ep), { episodeLine: "S1E2 · Mijo", facts: "2015  ·  50 min  ·  IMDb 9.0", synopsis: "Episode." });
+  assert.deepEqual(pauseFacts(title, ep), { episodeLine: "S1E2 · Mijo", facts: "2015  ·  50 min  ·  ★ 9.0", synopsis: "Episode." });
   assert.deepEqual(pauseFacts(title).synopsis, "Show.");
   assert.equal(logoUrl("tt3032476"), "https://images.metahub.space/logo/medium/tt3032476/img");
   assert.equal(logoUrl("kitsu:7442"), null);

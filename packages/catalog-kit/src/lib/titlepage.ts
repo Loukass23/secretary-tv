@@ -1,14 +1,16 @@
 // What a title page's panel says (ui/Detail.tsx), kept apart from the screen so the rules are tested: on a show, the
-// panel follows the focused episode; with spoiler protection on, an unwatched episode's still and synopsis are blurred.
+// panel follows the focused episode; with spoiler protection on, an unwatched episode's still and synopsis are blurred
+// (Blur) or left out (Hide).
 import { episodeLabel, hasAired } from "./episodes.ts";
+import type { SpoilerMode } from "./settings.ts";
 import type { Title, Video } from "./types.ts";
 
 /** `season:episode`, as lib/resume.ts keys watched episodes. */
 const keyOf = (v: Pick<Video, "season" | "episode">) => `${v.season}:${v.episode}`;
 
 export interface SpoilerState {
-  /** Settings › Playback "Spoiler protection" (lib/settings.ts `spoilerProtection`). */
-  on: boolean;
+  /** Settings › Watching "Spoiler protection" (lib/settings.ts `spoilerProtection`). */
+  mode: SpoilerMode;
   /** Episodes watched to the end, `season:episode` (lib/resume.ts `watchedEpisodes`). */
   watched: ReadonlySet<string>;
   /** The episode in progress (Resume): started, so not a spoiler any more. */
@@ -18,11 +20,18 @@ export interface SpoilerState {
 }
 
 /**
- * An episode counts as unwatched, and so is blurred, when spoiler protection is on and it is neither watched to the
+ * An episode counts as unwatched, and so is protected, when spoiler protection is on and it is neither watched to the
  * end, nor the one in progress, nor part of a show marked watched as a whole. Unaired episodes count as unwatched.
  */
 export function isSpoiler(v: Pick<Video, "id" | "season" | "episode">, s: SpoilerState): boolean {
-  return s.on && !s.titleWatched && v.id !== s.resumeId && !s.watched.has(keyOf(v));
+  return s.mode !== "off" && !s.titleWatched && v.id !== s.resumeId && !s.watched.has(keyOf(v));
+}
+
+/** How an episode's still and synopsis show: as they are, blurred, or not at all (its number and title only). */
+export type EpisodeLook = "clear" | "blur" | "hide";
+
+export function episodeLook(v: Pick<Video, "id" | "season" | "episode">, s: SpoilerState): EpisodeLook {
+  return isSpoiler(v, s) ? (s.mode as Exclude<SpoilerMode, "off">) : "clear";
 }
 
 /** "S1 · E3", or "Special 2": an episode's place, on its tile and over the panel. */
@@ -46,7 +55,7 @@ export interface PanelText {
   about?: string;
   /** The synopsis is the show's, because the episode has none. */
   aboutIsShow: boolean;
-  /** The synopsis is blurred: the episode's own, of an unwatched episode, with spoiler protection on. */
+  /** The synopsis is protected (the episode's own, of an unwatched episode): shown blurred, or left out with Hide. */
   hidden: boolean;
 }
 

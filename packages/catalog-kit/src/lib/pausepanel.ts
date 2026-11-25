@@ -1,3 +1,4 @@
+import { ratingLabel } from "./cinemeta.ts";
 import type { Title, Video } from "./types.ts";
 
 /**
@@ -33,6 +34,6 @@ export function pauseFacts(title: Title, episode?: Video): { episodeLine: string
   const episodeLine = episode
     ? `${episode.season === 0 ? `Special ${episode.episode}` : `S${episode.season}E${episode.episode}`}${episode.name ? ` · ${episode.name}` : ""}`
     : "";
-  const facts = [title.year, title.runtime, title.rating && `IMDb ${title.rating}`].filter(Boolean).join("  ·  ");
+  const facts = [title.year, title.runtime, ratingLabel(title.rating)].filter(Boolean).join("  ·  ");
   return { episodeLine, facts, synopsis: episode?.overview || title.description || "" };
 }

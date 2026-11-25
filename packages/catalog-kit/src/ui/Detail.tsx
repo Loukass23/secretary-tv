@@ -6,7 +6,7 @@ import {
   Header,
   type HeaderAt,
   headerStart,
-  InfoPanel,
+  Kicker,
   LANDSCAPE,
   LandscapeTile,
   ListCard,
@@ -19,7 +19,8 @@ import {
   Tabs,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import { backgroundUrl, fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, similarUrl } from "../lib/cinemeta.ts";
+import { fetchMeta, fetchRow, mergeMeta, pickSimilar, posterUrl, ratingLabel, similarUrl } from "../lib/cinemeta.ts";
+import { cachedTitleArt, titleArt } from "../lib/fanart.ts";
 import { searchSummary } from "../lib/searchsummary.ts";
 import { LoadingScreen } from "./Loading.tsx";
 import {
@@ -39,10 +40,10 @@ import {
   toggleTitleWatched,
   watchedEpisodes,
 } from "../lib/resume.ts";
-import { audioLangsOf, type ClockFormat, subLangsOf } from "../lib/settings.ts";
+import { audioLangsOf, type ClockFormat, type SpoilerMode, subLangsOf } from "../lib/settings.ts";
 import type { HostHeader } from "../host.ts";
-import { creditLines, episodePanel, episodeTag, isSpoiler, type SpoilerState } from "../lib/titlepage.ts";
-import { BLANK, blurredStill } from "./stillblur.ts";
+import { creditLines, type EpisodeLook, episodeLook, episodePanel, episodeTag, seasonsLabel, type SpoilerState } from "../lib/titlepage.ts";
+import { BLANK, blurredStill, blurredText } from "./stillblur.ts";
 import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
 import { releaseOf } from "../lib/party.ts";
@@ -56,7 +57,7 @@ import { parseStreamInfo, type Stream, type StreamClient } from "../lib/streams.
 import { kindFor, typeLabel } from "../lib/animeguard.ts";
 import { type CatalogType, isSeries, streamType, type Title, type Video } from "../lib/types.ts";
 import { cancelPreload, deadLinks, preload, prepareAheadEnabled, sourcePrefs } from "../player/session.ts";
-import { HeroLayers, useBase, useHeroArt } from "./art.tsx";
+import { HeroLayers, TitleMark, useBase, useHeroArt, useLogo } from "./art.tsx";
 import { island } from "./Island.tsx";
 import { applyFilters, type Filter, filterChips, filterLabel, focusable, isVerified, type SheetOrder, sheetRows, sourceLanguages } from "./sheet.ts";
 import "./detail.css";
@@ -74,18 +75,23 @@ const PAD = 80;
 /** Episodes are the home row's landscape tiles (tv-kit pieces), the title on the art. */
 const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
 /**
- * The info panel, under the collapsed header (the clock alone, top right): taller for films, which list their people,
- * shorter for series to leave room for the season tabs and the episodes.
+ * The caption, straight on the art as on the catalog home's hero (no panel), under the collapsed header (the clock
+ * alone, top right). It is anchored by its foot, just over what comes under it (a film's "More like this", a show's
+ * seasons), and every line in it keeps its height, so nothing moves as focus does. The mark is the title's logo, else
+ * its name in the display face.
  */
-const INFO_MOVIE = { x: PAD, y: 140, w: 1000, h: 564 };
-const INFO_SERIES = { x: PAD, y: 140, w: 1000, h: 440 };
-const SEASONS_Y = 616;
-const EPS_Y = 712;
+const CAPTION_MOVIE = { x: PAD, foot: 772, w: 1060, mark: { w: 720, h: 160 } };
+const CAPTION_SERIES = { x: PAD, foot: 612, w: 1060, mark: { w: 600, h: 110 } };
+/** The synopsis' lines, as `.det-about` sets them (detail.css): the blurred copy (Blur) is laid out the same. */
+const ABOUT_SERIES = { lines: 2, lineH: 39 };
+const ABOUT_MOVIE = { lines: 3, lineH: 39 };
+const SEASONS_Y = 636;
+const EPS_Y = 728;
 /** How long the page waits for a title's details before it shows what it has. */
 const META_WAIT_MS = 6000;
 /** "More like this" under a film's panel: a row label, then the home row's posters, smaller. */
-const SIM_SCALE = 0.68;
-const SIM = { labelY: 724, y: 768, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
+const SIM_SCALE = 0.6;
+const SIM = { labelY: 792, y: 836, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
 /** The sources sheet, on the right; rows scroll inside it. */
 const SHEET = { x: 1060, y: 60, w: 800, h: 960 };
 const SOURCE_H = 112;
@@ -111,8 +117,8 @@ interface Props {
   clockFormat?: ClockFormat;
   /** Secretary's header (host.ts): drawn collapsed to the clock, expanded by Up from the top of the page. */
   header?: HostHeader;
-  /** Settings › Playback "Spoiler protection": unwatched episodes' stills and synopses are blurred (lib/titlepage.ts). */
-  spoilerProtection?: boolean;
+  /** Settings › Watching "Spoiler protection": unwatched episodes' stills and synopses blurred or left out (lib/titlepage.ts). */
+  spoilerProtection?: SpoilerMode;
   /** Settings › Playback: how long Play waits for slower providers (lib/autoplay.ts). */
   startAfter?: StartAfter;
   /** Settings › Playback size limits, which autoplay prefers to stay inside (lib/rules.ts). */
@@ -195,14 +201,15 @@ function SourceDetails({
 }
 
 /**
- * One episode, as the home row's landscape tiles: the still with the title and its place on the art. With spoiler
- * protection on an unwatched episode, the still is swapped for its pre-blurred copy (ui/stillblur.ts): the title stays.
+ * One episode, as the home row's landscape tiles: the still with the title and its place on the art. Spoiler protection
+ * on an unwatched episode (lib/titlepage.ts `episodeLook`): Blur swaps the still for its pre-blurred copy
+ * (ui/stillblur.ts), Hide shows no still at all; the number and the title always stay.
  */
 function EpisodeTile({
   x,
   v,
   fallback,
-  blur,
+  look,
   progress,
   watched,
   focused,
@@ -210,14 +217,17 @@ function EpisodeTile({
   x: number;
   v: Video;
   fallback: string;
-  blur: boolean;
+  look: EpisodeLook;
   progress?: number;
   watched: boolean;
   focused: boolean;
 }) {
+  // The show's own art is no spoiler: an episode without a still shows it under Blur; Hide shows no picture at all.
   const src = v.thumbnail ?? fallback;
-  const [shown, setShown] = useState(() => (blur ? BLANK : src));
+  const blur = look === "blur" && Boolean(v.thumbnail);
+  const [shown, setShown] = useState(() => (look === "hide" || blur ? BLANK : src));
   useEffect(() => {
+    if (look === "hide") return void setShown(BLANK);
     if (!blur) return void setShown(src);
     let live = true;
     setShown(BLANK);
@@ -228,7 +238,7 @@ function EpisodeTile({
     return () => {
       live = false;
     };
-  }, [src, blur]);
+  }, [src, blur, look]);
   const aired = hasAired(v);
   return (
     <LandscapeTile
@@ -240,8 +250,33 @@ function EpisodeTile({
       progress={progress}
       watched={watched}
       focused={focused}
-      class={`det-ep${aired ? "" : " is-soon"}${blur ? " is-spoiler" : ""}`}
+      class={`det-ep${aired ? "" : " is-soon"}${look === "clear" ? "" : ` is-${look}`}`}
     />
+  );
+}
+
+/**
+ * A protected synopsis under Blur: its blurred picture (ui/stillblur.ts `blurredText`), laid out as the caption sets
+ * text, with soft bars in its place until it is made (or if it cannot be).
+ */
+function BlurredAbout({ text, w, lines, lineH }: { text: string; w: number; lines: number; lineH: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setSrc(null);
+    const face = getComputedStyle(document.documentElement).getPropertyValue("--sg-font-body").trim() || "sans-serif";
+    blurredText(text, { w, lines, lineH, font: `${Math.round(lineH / 1.38)}px ${face}`, color: "rgba(244,244,246,0.85)" }).then(
+      (u) => live && setSrc(u),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [text, w, lines, lineH]);
+  return (
+    <div class="det-about det-redact" style={{ height: `${lines * lineH}px` }}>
+      {src ? <img class="det-redact-img" src={src} alt="" /> : Array.from({ length: lines }, (_, i) => <i key={i} />)}
+    </div>
   );
 }
 
@@ -254,7 +289,7 @@ export function Detail({
   autoPlay,
   clockFormat = "24h",
   header,
-  spoilerProtection = false,
+  spoilerProtection = "off",
   startAfter = "5",
   limits,
   remember = true,
@@ -340,10 +375,20 @@ export function Detail({
   );
 
   const series = isSeries(type);
-  const artSrc = backgroundUrl(meta);
+  // The title's full-size art (lib/fanart.ts): the cache's at once, the lookup's if it answers before the art is up.
+  const [art, setArt] = useState(() => cachedTitleArt(type, title, "hero"));
+  useEffect(() => {
+    let live = true;
+    void titleArt(type, meta, "hero").then((a) => live && setArt(a));
+    return () => {
+      live = false;
+    };
+  }, [type, meta.id, meta.background, meta.logo]);
+  const artSrc = art.background;
   const base = useBase(type);
-  // One title on a page that does not move: its art and its frost go up at once, under the veil (below).
-  const hero = useHeroArt(meta.id, artSrc, active, true, 0);
+  // One title on a page that does not move: its art, its readable copy and its frost go up at once, under the veil.
+  const hero = useHeroArt(meta.id, artSrc, active, true, 0, true);
+  const logo = useLogo(type, meta);
   const videos = meta.videos ?? [];
 
   const seasons = useMemo(() => seasonsOf(videos), [videos]);
@@ -367,7 +412,7 @@ export function Detail({
   const resumeHere = !!resume && (series ? resume.episode?.id === target?.id : true);
   const startSec = resumeHere && resume ? resumeStart(resume.posSec, resume.durSec) : 0;
 
-  const revealed = capped || ((metaState !== "loading" || gaveUp) && hero.settled);
+  const revealed = capped || ((metaState !== "loading" || gaveUp) && hero.settled && logo.settled);
   const [veilGone, setVeilGone] = useState(false);
   useEffect(() => {
     if (!revealed || veilGone) return;
@@ -846,9 +891,14 @@ export function Detail({
       return false;
     }
 
-    // The header: Left and Right along it, OK acts (Secretary does), Down and Back collapse it again.
+    // The header: Left and Right along it, OK acts (Secretary does), Down collapses it again. Back leaves the page in
+    // one press, as it does with the header collapsed.
     if (head != null) {
       if (key === "Enter") return void header?.press(head);
+      if (key === "Back") {
+        setHead(null);
+        return void onBack();
+      }
       const r = stepHeader(head, key, Boolean(header?.person), header?.buttons.length ?? 0);
       setHead(r === "leave" ? null : r);
       return;
@@ -947,19 +997,26 @@ export function Detail({
 
   // Seasons as tabs (tv-kit pieces): one width each, the row scrolls to keep the focused one in view.
   const seasonLabel = (s: number) => (s === 0 ? "Specials" : `Season ${s}`);
-  const info = series ? INFO_SERIES : INFO_MOVIE;
-  // A show's panel follows the focused episode (else the one Play would start); a film's is the film's.
-  const spoilers: SpoilerState = { on: spoilerProtection, watched: epWatched, resumeId: resume?.episode?.id, titleWatched: watched };
+  const cap = series ? CAPTION_SERIES : CAPTION_MOVIE;
+  const aboutBox = series ? ABOUT_SERIES : ABOUT_MOVIE;
+  // A show's caption follows the focused episode (else the one Play would start) under the show's mark; a film's is the film's.
+  const spoilers: SpoilerState = { mode: spoilerProtection, watched: epWatched, resumeId: resume?.episode?.id, titleWatched: watched };
   const panel = series && target ? episodePanel(meta, target, spoilers) : null;
+  const look: EpisodeLook = series && target ? episodeLook(target, spoilers) : "clear";
   const credits = series ? [] : creditLines(meta);
+  const kind = typeLabel(type, meta);
+  const seasonsText = seasonsLabel(videos);
   const kicker = series
-    ? `${meta.name} · ${seasons.length} season${seasons.length === 1 ? "" : "s"}`
+    ? [kind === "Anime" ? "Anime" : "Show", seasonsText].filter(Boolean).join(" · ")
     : sagaCol
       ? `Film · ${sagaCol.title}`
-      : typeLabel(type, meta) === "Anime" ? "Anime film" : "Film";
-  const metaLine = panel
-    ? [...panel.meta, target && epWatched.has(episodeKey(target)) ? "✓ Watched" : ""]
-    : [meta.rating && `IMDb ${meta.rating}`, meta.year, meta.runtime, meta.genre?.slice(0, 3).join(", "), watched && "✓ Watched"].filter((x): x is string => Boolean(x));
+      : kind === "Anime" ? "Anime film" : "Film";
+  // A show's progress is the focused episode's, in its line; a film's has its own bar over the buttons.
+  const metaLine = (
+    panel
+      ? [...panel.meta.slice(1), progress, target && epWatched.has(episodeKey(target)) ? "✓ Watched" : ""]
+      : [ratingLabel(meta.rating), meta.year, meta.runtime, meta.genre?.slice(0, 3).join(", "), watched && "✓ Watched"]
+  ).filter((x): x is string => Boolean(x));
   const about = panel ? (panel.hidden ? undefined : panel.about) : meta.description;
   const aboutEmpty = !about && !panel?.hidden ? (metaState === "loading" ? "Loading synopsis…" : "No synopsis for this title.") : undefined;
   // The sheet's lines (ui/sheet.ts): headers and sources, laid out top to bottom; only sources take focus.
@@ -989,30 +1046,37 @@ export function Detail({
           </div>
         )}
 
-        <InfoPanel
-          {...info}
-          glass
-          kicker={kicker}
-          title={panel ? panel.title : meta.name}
-          meta={metaLine}
-          about={about ?? aboutEmpty}
-          lines={series ? 3 : progress ? 3 : 4}
-        >
-          {panel?.hidden && (
-            // Spoiler protection: the synopsis is drawn as soft bars, flat fills, never the text under a filter.
-            <div class="det-redact">
-              <i />
-              <i />
-              <small>Spoiler protection · the synopsis shows once you have watched it</small>
-            </div>
+        {/* The caption, on the art's readable copy (art.tsx), anchored by its foot; every line keeps its height. */}
+        <div class="det-caption" style={{ left: `${cap.x}px`, bottom: `${1080 - cap.foot}px`, width: `${cap.w}px` }}>
+          <Kicker>{kicker}</Kicker>
+          <TitleMark name={meta.name} logo={logo.src} w={cap.mark.w} h={cap.mark.h} shrink class={`det-mark${series ? " is-small" : ""}`} />
+          {series && (
+            <b class="det-ep-name">
+              {target && <span class="det-ep-tag">{episodeTag(target)}</span>}
+              {panel?.title ?? (seasons.length ? "" : "No episodes yet")}
+            </b>
           )}
-          {credits.map((c) => (
-            <small key={c.label} class="det-credit">
-              <em>{c.label}</em>
-              {c.names}
+          <small class="det-meta">{metaLine.join(" · ") || " "}</small>
+          {panel?.hidden && look === "blur" && panel.about ? (
+            <BlurredAbout text={panel.about} w={cap.w} lines={aboutBox.lines} lineH={aboutBox.lineH} />
+          ) : (
+            // Hide leaves the synopsis out; its room stays, so the buttons never move between episodes.
+            <p class="det-about" style={{ WebkitLineClamp: aboutBox.lines, height: `${aboutBox.lines * aboutBox.lineH}px` }}>
+              {panel?.hidden ? "" : (about ?? aboutEmpty)}
+            </p>
+          )}
+          {credits.length > 0 && (
+            // Director and cast on one line, the director first: the caption keeps to the left of the art.
+            <small class="det-credit">
+              {credits.map((c) => (
+                <span key={c.label}>
+                  <em>{c.label}</em>
+                  {c.names}
+                </span>
+              ))}
             </small>
-          ))}
-          {progress && (
+          )}
+          {progress && !series && (
             <div class="det-progress">
               <span class="det-progress-bar">
                 <i style={{ transform: `scaleX(${progressPct})` }} />
@@ -1020,7 +1084,7 @@ export function Detail({
               <span>{progress}</span>
             </div>
           )}
-          {/* One row of buttons, scrolled by transform to keep the focused one in view when they outrun the panel. */}
+          {/* One row of buttons, scrolled by transform to keep the focused one in view when they outrun the caption. */}
           <div class="det-actions">
             <div ref={actionsRun} class="det-actions-run" style={{ transform: `translate3d(${-actShift}px,0,0)` }}>
               <ButtonRow
@@ -1050,7 +1114,7 @@ export function Detail({
               </>
             )}
           </div>
-        </InfoPanel>
+        </div>
 
         {!series && similar.length > 0 && (
           <>
@@ -1098,8 +1162,7 @@ export function Detail({
                     x={c * EP_STRIDE}
                     v={v}
                     fallback={artSrc}
-                    // The show's own art is no spoiler: only an episode's still is blurred.
-                    blur={Boolean(v.thumbnail) && isSpoiler(v, spoilers)}
+                    look={episodeLook(v, spoilers)}
                     progress={resume?.episode?.id === v.id && resume.durSec > 0 ? resume.posSec / resume.durSec : undefined}
                     watched={epWatched.has(episodeKey(v))}
                     focused={focus.row === 2 && c === focus.col && head == null && !sourcesOpen}

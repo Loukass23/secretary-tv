@@ -11,6 +11,22 @@ export interface Art {
   /** Landscape stills for tiles and episodes. */
   stills: string[];
   icons: string[];
+  /** A title logo on a transparent ground (a title page's and the catalog home hero's mark). */
+  logo: string;
+}
+
+/** A stylized two-line title logo, transparent around the letters, as Fanart.tv's are. */
+function logo(): HTMLCanvasElement {
+  const [c, g] = canvas(900, 280);
+  g.textBaseline = "alphabetic";
+  g.fillStyle = "#f3ead8";
+  g.font = "700 46px Georgia, serif";
+  g.fillText("T H E   Q U I E T", 8, 70);
+  g.font = "700 150px Georgia, serif";
+  g.fillText("HARBOUR", 0, 220);
+  g.fillStyle = "hsl(18 80% 60%)";
+  g.fillRect(8, 244, 330, 8);
+  return c;
 }
 
 function poster(i: number, title: string): HTMLCanvasElement {
@@ -87,13 +103,14 @@ let cached: Promise<Art> | null = null;
 
 export function drawArt(): Promise<Art> {
   cached ??= (async () => {
-    const [posters, backgrounds, stills, icons] = await Promise.all([
+    const [posters, backgrounds, stills, icons, logoUrl] = await Promise.all([
       Promise.all(TITLES.map((t, i) => blob(poster(i, t)))),
       Promise.all(TITLES.slice(0, 6).map((_, i) => blob(still(i, 1280, 720)))),
       Promise.all(TITLES.map((_, i) => blob(still(i, 480, 270)))),
       Promise.all(["C", "S", "A", "M", "P", "W"].map((l, i) => blob(icon(i, l), "image/png"))),
+      blob(logo(), "image/png"),
     ]);
-    return { posters, backgrounds, stills, icons };
+    return { posters, backgrounds, stills, icons, logo: logoUrl };
   })();
   return cached;
 }
