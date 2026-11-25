@@ -90,8 +90,9 @@ launcher, and have a way back that does not depend on the launcher (a second `sd
 ## Search
 
 One search screen for the whole app (`src/search.tsx`), opened by the header's search button, the Search key and CH-,
-on the home screen and inside the catalog (`EmbeddedHost.onSearch`). Back with nothing typed returns where it was
-opened from: the home screen, or the catalog screen Secretary had opened (as first opened, never playing).
+on the home screen and inside the catalog (`EmbeddedHost.onSearch`). One Back returns where it was opened from,
+whatever is typed: the home screen, or the catalog screen Secretary had opened (as first opened, never playing). The
+text is kept: the next search opened without a query of its own opens on it (Clear empties it).
 
 - **Layout**: the shared header on top (its search button carries the small bar); a compact keyboard in a glass panel
   on the right (six keys a row, letters then digits, then Space, Delete and Clear); on the left, the results as a grid
@@ -100,18 +101,20 @@ opened from: the home screen, or the catalog screen Secretary had opened (as fir
 - **As you type** (`src/live-search.ts`): from two characters on, at most one request every 300 ms while typing, and
   always one for the last text. Starting a request aborts the one before it, and an answer that comes back after a
   newer request started is dropped. An answer for an earlier text stays on screen ("updating") until the latest
-  arrives. The last 24 answers are kept, so Delete back shows earlier results at once. Requests go to the server's
-  `/search` (cached there), or straight to the catalogs without a server or when it does not answer.
+  arrives. The last 24 answers are kept, so Delete back shows earlier results at once. Requests go straight from the
+  TV to the film, series and anime catalogs (`findCatalogs` in `packages/assistant/src/search.ts`), never to the home
+  server: each catalog is aborted with the request or after 8 s, one catalog down still answers with the others, and
+  when none answers the screen says "Search is not answering" instead of waiting.
 - **Only the rows around focus** are rendered (the focused row, two above, two below); the grid scrolls by transform.
 - **Navigation** (`src/search-nav.ts`): Left off the keyboard goes to the results (or the recent searches), Right off
   the results comes back to the keyboard row the remote was on; Up from the top goes to the header. OK on a header
-  button leaves the search and does what it does on the home screen. Back clears the text first, then leaves. The
-  microphone key still opens the TV's own keyboard, which can dictate.
+  button leaves the search and does what it does on the home screen. Back leaves (from the header it first comes
+  down to the keyboard). The microphone key still opens the TV's own keyboard, which can dictate.
 - **Phone keyboard**: with a server, the panel shows a QR code for Secretary Desk's `/type/<code>` page (`server/src/
   phone-keys.ts`). The code is random for each time the search opens; the phone sends its text there (at most every
   250 ms), and the TV reads it back about once a second while the search is open (`src/phone-keys.ts`) and puts it in
   the field. The server keeps the last 32 codes in memory for 30 minutes. On a hosted server the QR code carries the
-  server key, like Desk's own address.
+  server key, like Desk's own address. It goes with the server (`docs/server-retirement.md`, row 2).
 
 ## Glass components and the lab
 

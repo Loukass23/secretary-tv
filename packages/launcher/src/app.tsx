@@ -120,7 +120,7 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, searchCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const THEME_KEY = "nest.theme";
@@ -247,23 +247,13 @@ function collectionOwner(): string | null {
 }
 
 /**
- * One search request for the search screen: the home server when there is one (it caches), else the catalogs straight
- * from the TV, as also when the server does not answer.
+ * One search request for the search screen, to the catalogs straight from the TV: aborted with `signal` (a newer
+ * keystroke), given up after a few seconds, and an error when no catalog answers.
  */
-async function findTitles(q: string, signal: AbortSignal): Promise<SearchResult[]> {
-  const direct = () => searchCatalogs(q, (input, init) => fetch(input, { ...init, signal }));
-  if (!SERVER_URL) return direct();
-  let body: { results?: SearchResult[] };
-  try {
-    const res = await fetch(`${SERVER_URL}/search?q=${encodeURIComponent(q)}`, { signal });
-    if (!res.ok) return direct();
-    body = (await res.json()) as { results?: SearchResult[] };
-  } catch (e) {
-    if (signal.aborted) throw e;
-    return direct();
-  }
-  return body.results ?? [];
-}
+const findTitles = (q: string, signal: AbortSignal): Promise<SearchResult[]> => findCatalogs(q, { signal });
+
+/** What was typed in the search when it was last left: the next visit opens on it. */
+let lastSearch = "";
 
 export function App() {
   const [backdrop, setBackdrop] = useState<Backdrop | null>(null);
@@ -396,9 +386,9 @@ export function App() {
     toastTimer.current = setTimeout(() => setToast(null), EXIT_WINDOW_MS);
   };
 
-  /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog. */
+  /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog; with no query, on the last one typed. */
   const openSearch = (q = "") => {
-    setQuery(q);
+    setQuery(q.trim() ? q : lastSearch);
     setSearchFrom(null);
     setView("search");
   };
@@ -1829,6 +1819,7 @@ export function App() {
           buttons={headerButtons(pictureMode, soundOn, openReminders)}
           find={findTitles}
           initialQuery={query}
+          onQuery={(q) => (lastSearch = q)}
           desk={SERVER_URL}
           // The page opens inside Secretary, leaving the search for the catalog view.
           onOpen={(hit) => {
