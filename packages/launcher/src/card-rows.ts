@@ -2,6 +2,7 @@
 // what the remote is on in them: which row, which title, what the header calls it. Pure, so it is unit tested;
 // cards.tsx draws the rows and app.tsx runs OK, both through these, so the caption, the focused tile, the header and
 // what OK opens always name the same title.
+import { ratingLabel } from "@secretary/catalog-kit/src/lib/cinemeta.ts";
 import type { MediaItem, MoreRow, RowColumn, TileTarget } from "./cards.tsx";
 import { atEnd, rowAt } from "./nest-nav.ts";
 
@@ -66,5 +67,24 @@ export function tileKeys(items: readonly Pick<MediaItem, "title" | "poster">[]):
   });
 }
 
-/** The caption's line under a title's name: its line, rating and where its ranking comes from, when known. */
-export const captionMeta = (it: MediaItem): string[] => [it.sub ?? "", it.rating ? `★ ${it.rating}` : "", it.rank ?? ""].filter(Boolean);
+/** The caption's line under a title's name: its line, rating ("★ 7.4", catalog-kit ratingLabel) and its ranking, when known. */
+export const captionMeta = (it: MediaItem): string[] => [it.sub ?? "", ratingLabel(it.rating), it.rank ?? ""].filter(Boolean);
+
+/** A catalog's stand-in name for an episode ("Episode 24", "Ep. 3"): it says nothing the number does not. */
+const GENERIC_EPISODE = /^\s*(?:episode|ep\.?)\s*\d+\s*$/i;
+
+/** An episode as a tile names it: "S1 · E24", then its own name when it has a real one. */
+export function episodeLabel(ep: { season: number; episode: number; name?: string } | undefined): string | undefined {
+  if (!ep) return undefined;
+  const name = ep.name?.trim() && !GENERIC_EPISODE.test(ep.name) ? ep.name.trim() : "";
+  return [`S${ep.season} · E${ep.episode}`, name].filter(Boolean).join(" · ");
+}
+
+/** What is left to watch, in words ("23 min left", "1 h 5 min left"); undefined when the length is not known. */
+export function timeLeft(posSec: number, durSec: number): string | undefined {
+  if (!(durSec > 0) || !(posSec >= 0)) return undefined;
+  const min = Math.round(Math.max(0, durSec - posSec) / 60);
+  if (min < 1) return "Almost done";
+  const h = Math.floor(min / 60);
+  return `${h ? `${h} h ` : ""}${h ? min % 60 : min} min left`.replace(" 0 min", "");
+}

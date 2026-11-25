@@ -5,7 +5,7 @@
 import { useRef } from "preact/hooks";
 import { Glass, Glow, Header, type HeaderButton, Icon, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
-import { CARD_H, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
+import { CARD_H, columnHeight, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { WATCH_TOGETHER } from "./config.ts";
 import { type Focus, HEADER_BELL, HEADER_PROFILE, headerItems } from "./nest-nav.ts";
 
@@ -194,9 +194,14 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
   const rowScroll = Math.max(0, Math.min(left - PAD, left + (layout.w[colAt] ?? 0) - VIEW_RIGHT));
   const inside = focus?.area === "row" && focus.inside;
   const focusBox = inside && columns[colAt] && focus.i >= 0 ? itemBox(columns[colAt], focus.i, colAt === openCol) : null;
-  const glowAt = focusBox
-    ? { x: ROW.x + layout.x[colAt] - rowScroll + focusBox.x, y: ROW.y + LABEL_H + focusBox.y, w: focusBox.w, h: focusBox.h }
-    : null;
+  // A card picked as a whole is pushed in towards the viewer (style.css .nest-col.is-picked); the glow behind it moves
+  // with it, and the other cards step back, so the space around the card shifts as focus goes along the row.
+  const pickedCol = focus?.area === "row" && !inside && !moving && columns[colAt] ? colAt : -1;
+  // The glow goes behind cards of artwork only: through a glass card's gaps it reads as a stain, not a light.
+  const artCard = pickedCol >= 0 && ["media", "videos", "folders"].includes(columns[pickedCol].kind);
+  const pickedBox = artCard ? { x: 0, y: 0, w: columnShape(columns[pickedCol]).w, h: columnHeight(columns[pickedCol]) } : null;
+  const box = focusBox ?? pickedBox;
+  const glowAt = box ? { x: ROW.x + layout.x[colAt] - rowScroll + box.x, y: ROW.y + LABEL_H + box.y, w: box.w, h: box.h } : null;
   const menuKey = styleMenu?.key ?? removeMenu?.key ?? moving ?? null;
   // The wave shows only while someone speaks; the line under it says what is going on, else names the assistant.
   const busy = ask.wave !== "idle";
@@ -213,7 +218,10 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         focus={focus?.area !== "header" ? null : focus.i === HEADER_PROFILE ? "person" : HEADER_ORDER.indexOf(focus.i)}
       />
 
-      <Glow at={glowAt} src={glow} />
+      {/* Behind a card picked as a whole the glow is quieter than behind one title: it shows through the card's gaps. */}
+      <div class={`nest-glow${!focusBox && pickedBox ? " is-card" : ""}`}>
+        <Glow at={glowAt} src={glow} />
+      </div>
 
       {/* In the full chat the cards stay put but defocus (dimmed, blurred) behind the line. */}
       <div class={`nest-stage${ask.full ? " is-away" : ""}`}>
@@ -229,6 +237,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
               focus={inside && colAt === c ? focus!.i : null}
               dim={menuKey != null && menuKey !== col.key}
               away={openCol >= 0 && openCol !== c}
+              behind={pickedCol >= 0 && pickedCol !== c && menuKey == null}
             />
           ))}
         </Scroller>

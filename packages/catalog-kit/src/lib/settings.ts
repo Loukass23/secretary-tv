@@ -66,6 +66,11 @@ export interface DashboardSettings {
     /** The type style and text size (tv-kit glass tokens.ts TYPE_STYLES, TEXT_SIZES); Settings offers them in wave 3. */
     typeStyle: TypeStyle;
     textSize: TextSize;
+    /**
+     * Reduce motion: no push-in on a focused home card and no transition when a card opens (Secretary's home). On the
+     * page as `data-sg-motion="reduced"` (applyLook). The Settings row comes in wave 3.
+     */
+    reduceMotion: boolean;
   };
   domotics: {
     cinemaAutoDim: boolean;
@@ -187,6 +192,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
     accentTheme: "raptor",
     typeStyle: "studio",
     textSize: "normal",
+    reduceMotion: false,
   },
   domotics: {
     cinemaAutoDim: false,
@@ -238,9 +244,17 @@ export function applyThemeToDocument(theme: AccentTheme): void {
 }
 
 /** The page's look from the settings: the accent, the type style and the text size. */
-export function applyLook(general: Pick<DashboardSettings["general"], "accentTheme" | "typeStyle" | "textSize">): void {
+export function applyLook(general: Pick<DashboardSettings["general"], "accentTheme" | "typeStyle" | "textSize"> & { reduceMotion?: boolean }): void {
   applyThemeToDocument(general.accentTheme);
   applyType(general.typeStyle, general.textSize);
+  applyMotion(general.reduceMotion === true);
+}
+
+/** Reduce motion on the page: `data-sg-motion="reduced"` on `<html>`, which the screens' CSS reads. */
+export function applyMotion(reduced: boolean): void {
+  if (typeof document === "undefined") return;
+  if (reduced) document.documentElement.setAttribute("data-sg-motion", "reduced");
+  else document.documentElement.removeAttribute("data-sg-motion");
 }
 
 const SETTINGS_KEY = "sectv:settings:v1";
@@ -305,6 +319,7 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null, legac
       accentTheme: g.accentTheme ?? DEFAULT_SETTINGS.general.accentTheme,
       typeStyle: isTypeStyle(g.typeStyle) ? g.typeStyle : DEFAULT_SETTINGS.general.typeStyle,
       textSize: isTextSize(g.textSize) ? g.textSize : DEFAULT_SETTINGS.general.textSize,
+      reduceMotion: typeof g.reduceMotion === "boolean" ? g.reduceMotion : DEFAULT_SETTINGS.general.reduceMotion,
     },
     domotics: {
       cinemaAutoDim: d.cinemaAutoDim ?? DEFAULT_SETTINGS.domotics.cinemaAutoDim,

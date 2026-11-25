@@ -145,24 +145,31 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Assistant (first card) | the greeting, the open reminders and the last exchange | the **full chat**: the cards defocus (dimmed, blurred) and the orb moves to the middle of the screen. Opening it starts listening: the line (blue while you speak, amber while Nest answers) shows only then, and your words and the answer are written around it; otherwise it is the orb. OK or the mic key listens again, Back returns to this card |
 | Weather | a full card: now, the next 5 hours and the next 4 days | OK says it in the toast; the old forecast drop-down is gone |
 | Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
-| Assistant under the cards | fixed at the bottom centre, under the orb | the **compact** mode. Down from a card, or from the last line inside a card that is not a media card, focuses it **and starts listening at once** (an opened media card ends on its own bar instead: "You're all caught up", Back to top, Recommend me, which asks the assistant for picks of the card's kind and adds them as a row above the bar, and See all, which opens that catalog); an opened Weather card keeps the remote too; the ribbons show only while the room speaks or Nest answers, otherwise it is the orb (pulsing faster while it thinks), with a line of text under it (status, the answer, or "Ask Assistant"). Leaving it drops the clip. What it is asked moves focus to the card concerned: films open Cinema (or Shows, Anime) onto the picks, with what you asked and what the assistant did shown beside the card's label; the weather opens Weather, a reminder opens Reminders, the lights focus Home. Back returns to the first card |
+| Assistant under the cards | fixed at the bottom centre, under the orb | the **compact** mode. Down from a card, or from the last line inside a card that is not a media card, focuses it **and starts listening at once** (an opened media card ends on its own bar instead: the assistant's orb and "Ask Assistant", then Recommend me, which asks the assistant for picks of the card's kind and adds them as a row above the bar, See all, which opens that catalog, and Back to top; the bar takes the last row's caption place, so it is never cut off); an opened Weather card keeps the remote too; the ribbons show only while the room speaks or Nest answers, otherwise it is the orb (pulsing faster while it thinks), with a line of text under it (status, the answer, or "Ask Assistant"). Leaving it drops the clip. What it is asked moves focus to the card concerned: films open Cinema (or Shows, Anime) onto the picks, with what you asked and what the assistant did shown beside the card's label; the weather opens Weather, a reminder opens Reminders, the lights focus Home. Back returns to the first card |
 | Recent | after Today, while there is an answer | goes back to that answer (the picks, the weather, the lights, the reminder, or asks again) |
-| Continue · Cinema | a tall poster (the card's style) | opens the card: every film; a film resumes or opens; with nothing in progress, tonight's picks |
-| Next up · Shows | two stacked stills | opens the card: every show, then "Open Shows"; resumes the episode or opens the show |
-| Anime | a 3×2 grid of covers | opens the card: every title, then "Open Anime"; resumes or opens the title |
-| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them. Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows , the stack sliding up by transform; OK on a title opens its page inside Secretary; Down from the last row reaches the end bar (Back to top; Recommend me: the assistant's picks as a row on the card, `src/recommend.ts`; See all: the catalog home for that kind). With something in progress the first row is Continue watching, drawn as landscape stills, and the picks follow as a row of their own; Up from the picks folds the card |
+| Cinema | a tall poster (the card's style); the label is one word, whatever the card holds | opens the card: every film; a film resumes or opens; with nothing in progress, tonight's picks |
+| Shows | two stacked stills with the title's logo (catalog-kit `titleArt`, Fanart.tv, else the name) | opens the card: every show; resumes the episode or opens the show |
+| Anime | a 3×2 grid of covers | opens the card: every title; resumes or opens the title |
+| My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them (a line of synopsis). Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows , the stack sliding up by transform; OK on a title opens its page inside Secretary; Down from the last row reaches the end bar (Back to top; Recommend me: the assistant's picks as a row on the card, `src/recommend.ts`; See all: the catalog home for that kind). With something in progress the first row is Continue watching: large landscape thumbs with the title's logo (Fanart.tv), a thick progress bar, and the episode ("S1 · E5 · its name", a generic "Episode 5" left out) with the time left under it (bigger tiles for Shows and Anime than for films); the picks follow as a row of their own. Posters in the opened rows are 280×420. Up from the picks folds the card |
 | YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
 | Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog inside Secretary (`folder`; it shows once the collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
-| Reminders | up to three cards and "+ Add reminder" | marks it done or open again; adds one with the TV keyboard |
-| Apps | the TV's other apps, two to a line | opens the app |
+| Reminders | up to three cards and "+ Add reminder"; under each, where it came from only when the reminders came from more than one place (or not from the TV) | marks it done or open again; adds one with the TV keyboard. Left and Right at the card's edges go on to the cards beside it (the bell lands inside it) |
+| Apps | the TV's other apps, two to a line; YouTube and Workspace with their own icons (`src/app-icons.ts`: the TV reports a placeholder for them), an app whose icon is a placeholder with its initial | opens the app |
 | Add to home | the last card, listing what was removed | puts that element back on the home screen; with nothing removed it says so |
 
-Left and Right move from card to card, a ring around the whole card. OK goes inside it, on its first item. A long OK on
+Left and Right move from card to card, a ring around the whole card. The card picked as a whole moves a little towards
+the viewer: 4% larger about its centre, on its own layer, while the other cards step back to 72% opacity and, behind a
+card of artwork, the glow moves with it (transform and opacity only). OK goes inside it, on its first item. A long OK on
 a card (`useOkHold`, 600 ms) opens its menu: on a media card the style menu with "Remove from home" as its last line, on
 the others a menu with that one line. Removed cards are kept in `localStorage["nest.hiddenCards"]` (`src/home-cards.ts`);
 the Assistant and Add to home cards stay. A card is removed or put back without restarting. Inside,
-the arrows stay in the card, Up from the top goes back to the card, and Back leaves it.
+the arrows move within the card; past its left or right edge they go on to the card beside it (a card that opens across
+the screen keeps its sides), Up from the top goes back to the card, and Back leaves it.
+
+**Reduce motion** (`settings.general.reduceMotion`, off by default, validated in `mergeSettings`): catalog-kit
+`applyLook` puts `data-sg-motion="reduced"` on `<html>`, and Secretary's CSS then drops the push-in, the step-back and
+the open transition. The Settings row comes with the Settings work of wave 3; the workbench toolbar has the switch.
 
 ### Moving cards (long OK, "Move")
 
@@ -175,10 +182,11 @@ the saved keys of removed cards are kept so a card put back finds its place.
 ### Opening a media card
 
 Cinema, Shows and Anime hold up to 8 titles each: what is in progress first, then the catalog's picks. OK opens the card
-in place into one row of all of them, at the Ask results size (`src/cards.tsx`,
-`MediaRow`). The cards after it slide right by transform and every other card steps back to 35% opacity; the folded
-tiles fade out and the titles rise in a beat apart (opacity and transform only, on their own layers). Focus lands on the
-first title. The focused title's name, its line (episode or year) and up to three lines of its synopsis sit in a fixed
+in place into its rows (`src/cards.tsx`, `MediaRow`). The opened rows open out of the card's place: they grow from a
+smaller copy at the card's top left to full size while the folded tiles grow and fade out (`nest-open-in`, 380 ms),
+and the titles rise in a beat apart. The cards after it slide right by transform and every other card fades out
+(opacity and transform only, on their own layers). Focus lands on the
+first title. The focused title's name, its line (episode or year) and a line of its synopsis sit in a fixed
 panel at the left under the row (from the catalog, or Cinemeta and Kitsu for titles in progress). Up or Back folds the card again.
 
 ### Title menu (long OK on a tile)

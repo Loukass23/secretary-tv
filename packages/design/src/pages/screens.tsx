@@ -321,7 +321,7 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
     poster: art.posters[0],
     background: art.backgrounds[0],
     // The film has a logo (shown as its mark); the show has none, so its name shows in the display face.
-    ...(series ? {} : { logo: art.logo }),
+    ...(series ? {} : { logo: art.logos[0] }),
     ...(slim ? {} : { description: LONG, genre: ["Crime", "Drama", "Thriller"], runtime: "170 min" }),
   };
   const [ready, setReady] = useState(false);

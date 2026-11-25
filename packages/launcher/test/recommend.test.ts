@@ -52,9 +52,11 @@ test("nothing new is an empty answer, a failing catalog an error", async () => {
 });
 
 test("the end bar says what is going on", () => {
-  assert.equal(recLine(undefined, "films").title, "You're all caught up");
+  assert.equal(recLine(undefined, "films").title, "Ask Assistant");
+  assert.equal(recLine(undefined, "films").sub, "");
   assert.equal(recLine({ status: "loading" }, "films").title, "Asking the assistant…");
-  assert.match(recLine({ status: "ready", items: [hit("movie", "tt01")], reply: "" }, "films").sub, /^1 films/);
+  const ready = recLine({ status: "ready", items: [hit("movie", "tt01")], reply: "" }, "films");
+  assert.doesNotMatch(`${ready.title} ${ready.sub}`, /Picked for you/, "the row already says it");
   assert.equal(recLine({ status: "empty", reply: "" }, "films").title, "No new picks this time");
   assert.equal(recLine({ status: "error" }, "films").title, "Couldn't reach the assistant");
 });

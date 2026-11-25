@@ -67,6 +67,9 @@ import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
 import { expandedRows, expands, type MediaItem, type MoreRow, type RowColumn, rowLayout, type TileTarget, targetAt } from "./cards.tsx";
+import { episodeLabel, timeLeft } from "./card-rows.ts";
+import { appIcon } from "./app-icons.ts";
+import { cachedTitleArt, type TitleArt, titleArt } from "@secretary/catalog-kit/src/lib/fanart.ts";
 import { recommend, type RecState } from "./recommend.ts";
 import { type CardMenu, HEADER_ITEMS, HEADER_ORDER, headerButtons, Home, shownStyle, type TileMenu } from "./home.tsx";
 import {
@@ -183,12 +186,15 @@ function loadablePosters(items: SearchResult[]): Promise<SearchResult[]> {
 }
 
 /** The media cards, in row order: what fills each and how it is named (cards.tsx, card-style.ts). */
-// `list` names the day's list the picks are ranked on, for their caption ("No. 3 in today's popular films").
+// The card's label is its one-word name ("Shows"), whatever it holds. `list` names the day's list the picks are ranked
+// on, for their caption ("No. 3 in today's popular films").
 const MEDIA = [
-  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", going: "Continue · Cinema", picks: "Tonight · Cinema", pickBadge: "Top film", list: "today's popular films" },
-  { key: "shows", kind: "series", name: "Shows", unit: "shows", going: "Next up · Shows", picks: "Top · Shows", pickBadge: "Top series", list: "today's popular shows" },
-  { key: "anime", kind: "anime", name: "Anime", unit: "titles", going: "Anime", picks: "Anime", pickBadge: undefined, list: "today's trending anime" },
+  { key: "cinema", kind: "movie", name: "Cinema", unit: "films", pickBadge: "Top film", list: "today's popular films" },
+  { key: "shows", kind: "series", name: "Shows", unit: "shows", pickBadge: "Top series", list: "today's popular shows" },
+  { key: "anime", kind: "anime", name: "Anime", unit: "titles", pickBadge: undefined, list: "today's trending anime" },
 ] as const;
+/** Titles per media card whose artwork is looked up (catalog-kit titleArt): what the folded card and Continue watching show. */
+const ART_PER_CARD = 6;
 /** The row "Recommend me" fills; it is the last row, just above the end bar. */
 const PICKED_ROW = "Picked for you";
 /** Titles an opened media card holds at most. */
@@ -204,6 +210,15 @@ const SOURCE_LABEL: Record<Reminder["source"], [string, string]> = {
   companion: ["From Secretary Desk", "#e0792a"],
   gemini: ["From the assistant", "#ffb52e"],
   local: ["Added on the TV", "#3ccf6e"],
+};
+/**
+ * The line under a reminder: when it is due, else where it came from, but only when that tells the viewer something
+ * (not every reminder being "Added on the TV" when they all were).
+ */
+const reminderLine = (r: Reminder, all: readonly Reminder[]): string | undefined => {
+  if (r.completed) return undefined;
+  const mixed = all.some((o) => o.source !== r.source);
+  return mixed || r.source !== "local" ? (SOURCE_LABEL[r.source] ?? SOURCE_LABEL.local)[0] : undefined;
 };
 const SCENES: readonly [Scene, string][] = [
   ["cinema", "🎬 Cinema lights"],
@@ -264,6 +279,8 @@ export function App() {
   const [mood, setMood] = useState<Palette | null>(null);
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [continueItems, setContinueItems] = useState<UnifiedResumeEntry[]>([]);
+  // The home cards' artwork (catalog-kit titleArt: Fanart.tv thumbs and logos), by `kind:id`; the cache's art until then.
+  const [arts, setArts] = useState<Record<string, TitleArt>>({});
   // The profile's My List (mylist.ts), for its card; the last pull shows at once.
   const [myList, setMyList] = useState<LibraryItem[]>(() => loadMylist(storage, collectionOwner()));
   // Genre rows after My List (discover.ts); the last pull shows at once.
@@ -1086,6 +1103,10 @@ export function App() {
     return new Set(knownAnime());
   }, [animeRev, trending, discover]);
   const progressOf = (e: UnifiedResumeEntry) => (e.durSec > 0 ? e.posSec / e.durSec : undefined);
+  /** A title's card artwork: what the lookup brought, else the cache's (or the catalog's own) art, for the first frame. */
+  const artOf = (kind: CatalogKind, t: SlimTitle): TitleArt => arts[`${kind}:${t.id}`] ?? cachedTitleArt(kind, t, "card");
+  /** The titles whose artwork is looked up: those the folded cards and Continue watching show. */
+  const artWanted: { kind: CatalogKind; title: SlimTitle }[] = [];
   const byKind = (k: CatalogKind) => onlyKind(k, continueItems, animeIds);
   const columns: RowColumn[] = [];
   /** The artwork behind each column's items, for the glow. */
@@ -1149,22 +1170,36 @@ export function App() {
       rating: r.title.rating || undefined,
       about: r.title.description,
     });
-    const goingItems: MediaItem[] = going.map((e) => ({
-      poster: posterUrl(e.title),
-      still: backdropUrl(e),
-      title: e.title.name,
-      sub: e.episode ? `S${e.episode.season} · E${e.episode.episode}  ${e.episode.name}` : "Continue watching",
-      resume: true,
-      progress: progressOf(e),
-      rating: e.title.rating || undefined,
-      about: e.title.description,
-    }));
+    // On the folded card and Continue watching: the lookup's landscape thumb and logo (Fanart.tv, else the catalog's).
+    const styled = (it: MediaItem, kind: CatalogKind, t: SlimTitle): MediaItem => {
+      const a = artOf(kind, t);
+      return { ...it, still: a.thumb, logo: a.logo };
+    };
+    const goingItems: MediaItem[] = going.map((e) =>
+      styled(
+        {
+          poster: posterUrl(e.title),
+          still: backdropUrl(e),
+          title: e.title.name,
+          // The row is named Continue watching already: a film's line is its year.
+          sub: episodeLabel(e.episode) ?? (e.title.year || undefined),
+          episode: episodeLabel(e.episode),
+          left: timeLeft(e.posSec, e.durSec),
+          resume: true,
+          progress: progressOf(e),
+          rating: e.title.rating || undefined,
+          about: e.title.description,
+        },
+        e.type,
+        e.title,
+      ),
+    );
     // The day's list ranks the picks; the assistant's own picks have no ranking.
     const ranked = mine ? [] : onlyKind(m.kind, trending[m.kind], animeIds);
     const pickItems: MediaItem[] = picks.map((r, k) => {
       const place = ranked.findIndex((t) => t.title.id === r.title.id);
       return {
-        ...tile(r),
+        ...(k < ART_PER_CARD ? styled(tile(r), r.type, r.title) : tile(r)),
         badge: k === 0 && !going.length && !mine ? m.pickBadge : undefined,
         rank: place >= 0 ? `No. ${place + 1} in ${m.list}` : undefined,
       };
@@ -1193,6 +1228,7 @@ export function App() {
       })),
     ];
     const items = going.length ? goingItems : pickItems;
+    for (const t of [...going, ...picks].slice(0, ART_PER_CARD + going.length)) artWanted.push({ kind: t.type, title: t.title });
     // Everything the card already shows, so the assistant's picks bring something new.
     const shownIds = new Set([...going.map((e) => e.title.id), ...picks.map((r) => r.title.id), ...rowsHere.flatMap((r) => r.hits.map((h) => h.title.id))]);
     push(
@@ -1201,7 +1237,7 @@ export function App() {
         key: m.key,
         name: m.name,
         unit: m.unit,
-        label: mine ? `For you · ${m.name}` : going.length ? m.going : m.picks,
+        label: m.name,
         items,
         // Folded, the card shows what is in progress first, then the picks.
         small: going.length ? [...goingItems, ...pickItems] : undefined,
@@ -1210,6 +1246,8 @@ export function App() {
         // Continue watching draws landscape stills unless the viewer picked another look for it.
         shape: rowLooks[going.length ? `${m.key}/continue` : `${m.key}/picks`],
         wide: going.length > 0,
+        // Shows and Anime list episodes in Continue watching: the bigger tiles.
+        episodes: m.kind !== "movie",
         more,
         note: mine ? { prompt: mine.prompt, reply: mine.reply } : undefined,
         run: (i) => (going.length ? going[i] && resume(going[i]) : picks[i] && openHit(picks[i])),
@@ -1227,6 +1265,19 @@ export function App() {
       [...items, ...more.flatMap((r) => r.items)].map((it) => ({ src: it.poster, type: m.kind })),
     );
   }
+  // The artwork lookups for the titles on the cards (catalog-kit titleArt: at most 3 at once, cached), applied in one go.
+  const artKey = artWanted.map((t) => `${t.kind}:${t.title.id}`).join();
+  useEffect(() => {
+    const todo = artWanted.filter((t) => !arts[`${t.kind}:${t.title.id}`]);
+    if (!todo.length) return;
+    let live = true;
+    void Promise.all(todo.map((t) => titleArt(t.kind, t.title, "card").then((a) => [`${t.kind}:${t.title.id}`, a] as const))).then((found) => {
+      if (live) setArts((was) => ({ ...was, ...Object.fromEntries(found) }));
+    });
+    return () => {
+      live = false;
+    };
+  }, [artKey]);
   // The YouTube card: what is popular (with a key), or one way into the app; OK opens the video there.
   const shownVideos = youtube.slice(0, CARD_VIDEOS);
   if (shownVideos.length) {
@@ -1278,7 +1329,7 @@ export function App() {
     label: "Reminders",
     items: shownReminders.map((r) => {
       const [from, color] = SOURCE_LABEL[r.source] ?? SOURCE_LABEL.local;
-      return { title: r.text, sub: from, meta: r.completed ? "✓" : r.due ? `⏰ ${r.due}` : undefined, color: r.completed ? "#6d6c68" : color, done: r.completed };
+      return { title: r.text, sub: reminderLine(r, reminders), meta: r.completed ? "✓" : r.due ? `⏰ ${r.due}` : undefined, color: r.completed ? "#6d6c68" : color, done: r.completed };
     }),
     add: "+ Add reminder",
     run: (i) => (i < shownReminders.length ? toggleReminderAt(shownReminders[i]) : newReminder()),
@@ -1289,7 +1340,7 @@ export function App() {
       kind: "apps",
       key: "apps",
       label: "Apps",
-      apps: otherApps.map((a) => ({ icon: a.iconPath, label: a.name.replace(/^Secretary\s+/, "") })),
+      apps: otherApps.map((a) => ({ icon: appIcon(a), label: a.name.replace(/^Secretary\s+/, "") })),
       run: (i) => void openApp(otherApps[i].id).catch(failed(otherApps[i].name)),
     });
   }
