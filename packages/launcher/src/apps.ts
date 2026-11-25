@@ -98,6 +98,14 @@ export function visibleApps(raw: readonly RawApp[], { pins, hide, self }: Option
   return [...pinned, ...rest].map(({ id, name, iconPath }) => ({ id, name, iconPath }));
 }
 
+/**
+ * The Apps card's apps: `visibleApps`' list without Secretary's own places (the TV's settings) and without the apps the
+ * viewer hid in Settings › Apps. Only hidden ids are stored, so an app installed later shows.
+ */
+export function appsOnCard<T extends { id: string }>(apps: readonly T[], hidden: readonly string[], ownPlaces: readonly string[] = []): T[] {
+  return apps.filter((a) => !ownPlaces.includes(a.id) && !hidden.includes(a.id));
+}
+
 type TizenApp = {
   getAppsInfo(ok: (apps: RawApp[]) => void, err?: (e: unknown) => void): void;
   launch(id: string, ok?: () => void, err?: (e: unknown) => void): void;

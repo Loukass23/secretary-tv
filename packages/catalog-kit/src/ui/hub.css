@@ -1,20 +1,12 @@
-/* The in-app Hub in glass (HubOverlay.tsx): the catalog's Settings, over the app's tinted wallpaper. Search is
+/* Settings in glass (HubOverlay.tsx), under Secretary's header, over the app's tinted wallpaper. Search is
    Secretary's (launcher/src/search.tsx). */
 .hub-glass { position: fixed; inset: 0; z-index: 5; }
-.hub-clock { right: 80px; top: 64px; font-size: 44px; font-weight: 600; line-height: 1; }
-
-.hub-search { display: flex; align-items: center; gap: 16px; padding: 0 20px 0 24px; border-radius: 34px; }
-.hub-search-icon { font-size: 28px; }
-.hub-search-hint { flex: 1; font-size: 24px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sg-glass.is-focus .hub-search-hint { color: var(--sg-focus-ink-dim); }
-.hub-keycap { padding: 4px 12px; border-radius: 10px; background: var(--sg-raised); font-size: 16px; font-weight: 700; letter-spacing: 0.06em; }
 
 .hub-title { font-size: 46px; font-weight: 700; letter-spacing: -0.02em; }
-.hub-title small { margin-top: 6px; font-size: 21px; font-weight: 400; letter-spacing: 0; }
+.hub-title small { display: block; margin-top: 6px; font-size: 21px; font-weight: 400; letter-spacing: 0; color: var(--sg-ink-dim); }
 .hub .sg-card-row { font-size: 28px; }
 .hub .sg-card-meta { font-size: 24px; font-weight: 600; }
 .hub .sg-card small { font-size: 19px; margin-left: 0; }
 
 .hub-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 21px; font-weight: 600; }
 .hub-toast::after { background: rgba(10, 11, 14, 0.7); }
-.hub-section { position: absolute; left: 6px; height: 56px; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }

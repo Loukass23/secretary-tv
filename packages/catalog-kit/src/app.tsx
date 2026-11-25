@@ -42,6 +42,7 @@ import {
   applyThemeToDocument,
   type DashboardSettings,
   loadSettings,
+  onSettings,
   type OverlayTab,
   saveSettings,
 } from "./lib/settings.ts";
@@ -89,6 +90,8 @@ export interface EmbeddedHost {
   person?: import("@secretary/tv-kit/src/glass/Header.tsx").HeaderPerson;
   /** Secretary's header, which title pages draw collapsed to the clock (host.ts). Absent: the clock alone. */
   header?: import("./host.ts").HostHeader;
+  /** The TV's apps, for Settings › Apps to pick which the Apps card shows (`settings.home.hiddenApps`). */
+  apps?: readonly import("./host.ts").HostApp[];
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -221,6 +224,9 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const [ccClock, setCcClock] = useState("");
   const chPlus = useRef({ open: false, openNest: () => {} });
   chPlus.current.open = controlCentre;
+
+  // Secretary saves settings too (Blue mutes the spoken replies): the catalog keeps the latest, so its own saves never undo them.
+  useEffect(() => onSettings(setSettings), []);
 
   useEffect(() => {
     applyThemeToDocument(settings.general.accentTheme);
@@ -643,6 +649,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         activeType={activeType}
         settings={settings}
         onUpdateSettings={setSettings}
+        header={embedded.header}
+        apps={embedded.apps}
         onSearch={() => embedded.onSearch?.()}
         onOpenNest={openNest}
         onClose={goHome}

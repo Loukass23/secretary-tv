@@ -1,5 +1,7 @@
 // Fixture data for the real screens, typed against their own props so `pnpm typecheck` catches drift.
 // Invented titles and places only (CLAUDE.md: no sources).
+import type { HostApp } from "@secretary/catalog-kit/src/host.ts";
+import { type DashboardSettings, DEFAULT_SETTINGS } from "@secretary/catalog-kit/src/lib/settings.ts";
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
@@ -281,4 +283,22 @@ export const LIGHTS_API: LightsApi = {
   runScene: (id) => new Promise((ok, no) => setTimeout(() => (id === "scene-fail" ? no(new Error("refused")) : ok({ status: "success" })), 900)),
   command: () => new Promise((ok) => setTimeout(() => ok({ results: [] }), 300)),
   roomsIn: () => new Promise((ok) => setTimeout(() => ok(LIGHT_ROOMS), 400)),
+};
+
+/** The TV's apps as Settings › Apps lists them (made-up ids; the TV's own settings are left out, as Secretary does). */
+export const SETTINGS_APPS: HostApp[] = [
+  { id: "AAAAAAAAAA.browser", name: "Browser" },
+  { id: "BBBBBBBBBB.gallery", name: "Gallery" },
+  { id: "CCCCCCCCCC.music", name: "Music" },
+  { id: "DDDDDDDDDD.photos", name: "Photos" },
+  { id: "EEEEEEEEEE.radio", name: "Radio" },
+  { id: "FFFFFFFFFF.guide", name: "User Guide" },
+  { id: "111299001912", name: "YouTube", note: "Has its own card on the home screen too" },
+];
+
+/** Settings as a viewer left them: spoiler protection on, home notifications off, the guide and YouTube hidden. */
+export const SETTINGS_FIXTURE: DashboardSettings = {
+  ...DEFAULT_SETTINGS,
+  playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: true },
+  home: { ...DEFAULT_SETTINGS.home, homeAlerts: false, hiddenApps: ["FFFFFFFFFF.guide", "111299001912"] },
 };

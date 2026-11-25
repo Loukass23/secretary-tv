@@ -1,6 +1,7 @@
 // The real screens on fixture data: Nest's home (launcher/src/home.tsx) with its own remote navigation
 // (nest-nav.ts), and the catalog home (catalog-kit/src/ui/Home.tsx), which handles its own keys.
-import { DEFAULT_SETTINGS } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { type DashboardSettings, DEFAULT_SETTINGS, type SettingTab } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { HubOverlay } from "@secretary/catalog-kit/src/ui/HubOverlay.tsx";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
 import { Detail } from "@secretary/catalog-kit/src/ui/Detail.tsx";
@@ -21,7 +22,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
 import { SearchScreen } from "@secretary/launcher/src/search.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, SETTINGS_APPS, SETTINGS_FIXTURE } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
@@ -40,6 +41,9 @@ export const SCREENS = [
   "Show page · spoilers",
   "Search",
   "Search · results",
+  "Settings",
+  "Settings · home screen",
+  "Settings · apps",
 ] as const;
 
 const MENU = ["Profiles", "TV settings", "Theme: Night", "🔇 Spoken replies: off"];
@@ -48,6 +52,7 @@ const CATALOG: Record<string, CatalogType> = { Cinema: "movie", Shows: "series",
 export function ScreensPage(props: PageProps & { art: Art; screen: number }) {
   const name = SCREENS[props.screen] ?? SCREENS[0];
   const type = CATALOG[name];
+  if (name.startsWith("Settings")) return <SettingsPage key={name} tab={name === "Settings · apps" ? "Apps" : name === "Settings · home screen" ? "Home screen" : "Watching"} />;
   if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} />;
   if (name === "Lights") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
@@ -197,6 +202,27 @@ function SearchPage({ mode, theme, backdrop, art, results }: PageProps & { art: 
         onClose={noop}
       />
     </GlassRoot>
+  );
+}
+
+/**
+ * Settings (catalog-kit ui/HubOverlay.tsx) under Secretary's header, on fixture settings and apps: "Settings" opens on
+ * Watching, the other two on Home screen's feature switches and on the Apps picker. Changes live in this page only.
+ */
+function SettingsPage({ tab }: { tab: SettingTab }) {
+  const [settings, setSettings] = useState<DashboardSettings>(SETTINGS_FIXTURE);
+  return (
+    <HubOverlay
+      active
+      settings={settings}
+      onUpdateSettings={setSettings}
+      header={HEADER}
+      apps={SETTINGS_APPS}
+      initialTab={tab}
+      onSearch={noop}
+      onOpenNest={noop}
+      onClose={noop}
+    />
   );
 }
 

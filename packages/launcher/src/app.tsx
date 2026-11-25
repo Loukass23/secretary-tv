@@ -7,6 +7,7 @@ import { Profiles, SignIn } from "./account.tsx";
 import {
   addReminder,
   type AppEntry,
+  appsOnCard,
   backdropUrl,
   type CatalogKind,
   fetchReminders,
@@ -49,7 +50,8 @@ import {
 } from "./assistant.ts";
 import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
-import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY } from "./config.ts";
+import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY, YOUTUBE_APP_ID } from "./config.ts";
+import { alertsShown, mayListen, remindersShown, speaksReply } from "./features.ts";
 import { applyOrder, keepOrder, loadOrder, moveKey, saveOrder } from "./card-order.ts";
 import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
 import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
@@ -59,7 +61,7 @@ import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./di
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
-import { loadSettings } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { loadSettings, onSettings, saveHome } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
 import { loadRowLooks, ROW_SHAPE_LABEL, type RowShape, rowShape, saveRowLooks, stepShape } from "./row-look.ts";
 import { canRemove, labelOf, loadHidden, removed, saveHidden } from "./home-cards.ts";
@@ -122,7 +124,6 @@ import { AssistantUnavailable, discoverCatalog, searchCatalogs, transcribeGroq, 
 
 const EXIT_WINDOW_MS = 2000;
 const THEME_KEY = "nest.theme";
-const SPEAK_KEY = "nest.speak";
 /** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
 const ASSISTANT_POLL_MS = 2500;
 /** Open-Meteo updates every 15 min; the header has no need to be fresher than half an hour. */
@@ -145,15 +146,6 @@ function loadThemePref(): ThemePref {
     return THEME_PREFS.includes(v as ThemePref) ? (v as ThemePref) : "auto";
   } catch {
     return "auto";
-  }
-}
-
-/** Spoken replies, on unless muted with Blue. */
-function loadSpeakReplies(): boolean {
-  try {
-    return localStorage.getItem(SPEAK_KEY) !== "0";
-  } catch {
-    return true;
   }
 }
 
@@ -288,9 +280,14 @@ export function App() {
   const [youtube, setYoutube] = useState<Video[]>(() => loadVideos(storage).videos);
   // The profile's Nuvio collections, one home card each (collections.ts); the last pull shows at once.
   const [collectionCards, setCollectionCards] = useState<CollectionCard[]>(() => loadCards(storage, collectionOwner()));
+  // Secretary's own settings (Settings › Home screen and Apps): the features switched off and the apps hidden.
+  const [prefs, setPrefs] = useState(() => loadSettings().home);
+  useEffect(() => onSettings((s) => setPrefs(s.home)), []);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   const [serverReminders, setReminders] = useState<Reminder[]>([]);
   const [localItems, setLocalItems] = useState<Reminder[]>(() => localRem.list());
-  const reminders = useMemo(() => orderReminders([...serverReminders, ...localItems]), [serverReminders, localItems]);
+  const reminders = useMemo(() => remindersShown(prefs, orderReminders([...serverReminders, ...localItems])), [serverReminders, localItems, prefs.reminders]);
   const [summary, setSummary] = useState<string | undefined>();
   const [serverOnline, setServerOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -358,7 +355,7 @@ export function App() {
   /** What the home reported lately (the phone came home, the vacuum finished), for the Recent row. */
   const [alerts, setAlerts] = useState<{ text: string; at: number }[]>([]);
   const [themePref, setThemePref] = useState<ThemePref>(loadThemePref);
-  const [speakReplies, setSpeakReplies] = useState(loadSpeakReplies);
+  const speakReplies = prefs.spokenReplies;
   /** The clip being recorded from the room microphone. */
   const recording = useRef<Recording | null>(null);
   /** The latest answer when the assistant was entered: earlier exchanges stay out of its view. */
@@ -515,7 +512,7 @@ export function App() {
       return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
     }
     setAsking(true);
-    const wantSpeech = spoken && speakReplies;
+    const wantSpeech = speaksReply(prefs, spoken);
     let speech: string | Uint8Array | null | undefined;
     try {
       // The server first when it is up (the phone shares its turns and reminders), else the TV answers itself.
@@ -623,12 +620,8 @@ export function App() {
 
   const toggleSpeech = () => {
     const next = !speakReplies;
-    setSpeakReplies(next);
-    try {
-      localStorage.setItem(SPEAK_KEY, next ? "1" : "0");
-    } catch {
-      // the choice lasts until the app restarts
-    }
+    // A setting now (Settings › Home screen); saving also keeps the old nest.speak key in step.
+    saveHome({ spokenReplies: next });
     flash(next ? "🔊 Spoken replies on" : "🔇 Spoken replies off");
   };
 
@@ -891,7 +884,7 @@ export function App() {
     home.devices().then(
       (next) => {
         if (lastDevices.current) {
-          const news = homeAlerts(lastDevices.current, next);
+          const news = alertsShown(prefsRef.current, homeAlerts(lastDevices.current, next));
           for (const a of news) flash(a.text);
           if (news.length) setAlerts((prev) => [...news.map((a) => ({ text: a.text, at: Date.now() })), ...prev].slice(0, MAX_RECENT));
         }
@@ -1063,6 +1056,12 @@ export function App() {
     person: headerPerson,
     onExit: leaveCatalog,
     onSearch: searchFromCatalog,
+    // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
+    apps: appsOnCard(apps, [], OWN_PLACES).map((a) => ({
+      id: a.id,
+      name: a.name.replace(/^Secretary\s+/, ""),
+      note: a.id === YOUTUBE_APP_ID ? "Has its own card on the home screen too" : undefined,
+    })),
     // Secretary's one header, which the catalog's title pages draw collapsed to the clock (catalog-kit host.ts).
     header: {
       time,
@@ -1273,7 +1272,7 @@ export function App() {
     run: (i) => runScene(SCENES[i][0], SCENES[i][1]),
   });
   const shownReminders = reminders.slice(0, 3);
-  push({
+  if (prefs.reminders) push({
     kind: "list",
     key: "reminders",
     label: "Reminders",
@@ -1284,7 +1283,7 @@ export function App() {
     add: "+ Add reminder",
     run: (i) => (i < shownReminders.length ? toggleReminderAt(shownReminders[i]) : newReminder()),
   });
-  const otherApps = apps.filter((a) => !OWN_PLACES.includes(a.id)).slice(0, 6);
+  const otherApps = appsOnCard(apps, prefs.hiddenApps, OWN_PLACES).slice(0, 6);
   if (otherApps.length) {
     push({
       kind: "apps",
@@ -1407,9 +1406,9 @@ export function App() {
   useEffect(() => {
     if (!talking || view !== "home") return;
     setSince(talk.turns[talk.turns.length - 1]?.id ?? 0);
-    if (!recording.current && !keyboardOnly.current && (SERVER_URL || GEMINI_KEY || GROQ_KEY)) void listen(true);
+    if (mayListen(prefs, true) && !recording.current && !keyboardOnly.current && (SERVER_URL || GEMINI_KEY || GROQ_KEY)) void listen(true);
     return () => recording.current?.cancel();
-  }, [talking, view]);
+  }, [talking, view, prefs.listenOnFocus]);
 
   // An answer that is about a card puts focus on it, once the row holds what the answer found.
   // The Recent card joins the row once Nest is idle, which moves every card after it, so wait for that first.
@@ -1545,6 +1544,7 @@ export function App() {
     // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
     if (i === HEADER_SETTINGS) return browse({ type: "movie", hub: { tab: "settings" } });
     if (i === HEADER_BELL) {
+      if (!prefs.reminders) return flash("Reminders are off · Settings › Home screen");
       const due = reminders.findIndex((r) => !r.completed);
       if (due < 0) return flash("No open reminders");
       return focusReminders(due);

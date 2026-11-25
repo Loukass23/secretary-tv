@@ -14,3 +14,11 @@ export interface HostHeader {
   /** OK on the person or a button. Most leave the catalog for Secretary (search, settings, lights...). */
   press(at: HeaderAt): void;
 }
+
+/** An app the TV has, as Settings › Apps lists it for the Apps card (Secretary's `visibleApps`, without its own places). */
+export interface HostApp {
+  id: string;
+  name: string;
+  /** A line under the name, e.g. that it has a card of its own. */
+  note?: string;
+}

@@ -227,11 +227,32 @@ a catalog slower than 6 s shows what it has.
 
 ### Settings
 
-Nest's header has a Settings button (sliders icon, left of the bell): it opens the catalog's Hub on its Settings tab
-(`hub: { tab: "settings" }` in `CatalogConfig`; Back returns to Nest). The page groups its lines under headings
-(Playback, Appearance, Collections, Lights, Sources and addons, Reset); "Restore default settings" needs a second OK.
-"Resume from Continue watching" (Playback) decides whether OK on a title in progress plays it at once or opens its page
-first; the Nest menu's "Play" always plays.
+Nest's header has a Settings button (sliders icon, left of the bell): it opens Settings (`catalog-kit/src/ui/HubOverlay.tsx`,
+`hub: { tab: "settings" }` in `CatalogConfig`; Back returns to Nest) under Secretary's own header, which Up from the
+tabs reaches. Its categories are tabs (`SETTING_TABS` in `catalog-kit/src/lib/settings.ts`); Left and Right on them show
+the next category, Down goes into its lines, and only the lines around focus are drawn:
+
+| Tab | What is in it |
+| --- | --- |
+| Watching | Resume from Continue watching, spoiler protection (off by default: the still and synopsis of unwatched episodes are blurred, titles stay readable), skipping intros, the pause panel, Up next, audio and subtitle languages, movie lights |
+| Sources | How a source is picked (start after, remember my source, file sizes, list order), then the repositories, debrid keys and addons |
+| Home screen | Secretary's feature switches (below) |
+| Apps | One line per app the Apps card could show; OK hides or shows it |
+| Appearance | Accent colour, clock, boot animation, poster colour and the collection looks |
+| Advanced | The autoplay patterns and "Restore default settings" (a second OK confirms) |
+
+Secretary's own preferences are the `home` section of the same settings (`sectv:settings:v1`), read by the launcher
+through `launcher/src/features.ts` and kept in step with `onSettings`:
+
+- **Reminders**: off hides the Reminders card, the bell's count and reminders in the assistant's greeting. Nothing is deleted.
+- **Home notifications**: off, SmartThings changes are neither toasted nor kept in the Recent card.
+- **Spoken replies**: as Blue on the home screen. Settings saved before this kept it in `nest.speak` ("0" off); that key is
+  still read until the setting is saved, and still written, so an older build agrees.
+- **Listen when the assistant is focused**: off, the microphone waits for OK or the mic key.
+- **Apps**: only the ids hidden are stored (`home.hiddenApps`), so an app installed later shows on the Apps card.
+
+"Resume from Continue watching" decides whether OK on a title in progress plays it at once or opens its page first; the
+Nest menu's "Play" always plays.
 
 ### Card styles (long OK)
 
@@ -328,8 +349,7 @@ profile is what makes the microphone appear.
 - **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
   speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on
   the speakerphone's own output when it has one (`setSinkId`; the TV would otherwise keep its own speakers), and the
-  wave speaks until it ends. Blue mutes or unmutes this
-  (`localStorage["nest.speak"]`).
+  wave speaks until it ends. Blue mutes or unmutes this, as does Settings › Home screen ("Spoken replies").
 - **Fallbacks**: if the TV gives the app no microphone, or the server has no `GEMINI_API_KEY`, the key opens the TV
   keyboard as before for the rest of the session. Secretary Desk has a "Hold" button that records on the phone (a
   speakerphone paired to the phone over Bluetooth works there); phones only open the microphone on https or localhost.
