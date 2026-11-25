@@ -601,3 +601,5 @@
   isolation: isolate;
 }
 .sg-tab.is-picked { background: var(--sg-raised); color: var(--sg-ink); }
+/* Picked and focused (Settings' categories, the season being shown): the focus sheet's ink, not the picked one's. */
+.sg-tab.is-picked.is-focus { color: var(--sg-focus-ink); }

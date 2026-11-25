@@ -19,7 +19,7 @@ This project contains no media, no catalog of releases, no stream sources, no ad
 credentials. You bring your own accounts and your own sources:
 
 - **Sources** are [Nuvio](https://github.com/NuvioMedia)-format plugin repositories or Stremio-protocol addons that
-  you add yourself on the TV (Settings › Sources, Settings › Addons). None ship with this project, and none are
+  you add yourself on the TV (Settings › Sources, where the addons are listed too). None ship with this project, and none are
   recommended here.
 - **Playback** goes through your own debrid account, which only serves files it already has cached.
 
