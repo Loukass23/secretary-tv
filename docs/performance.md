@@ -487,3 +487,29 @@ longer rise again cost nothing measurable there. The heap is a few MB higher; wa
   and the veil lifted at 1.96 s and was gone at 2.6 s. There was no frost swap after the veil, and the page opened on
   the up-next episode with its watched episodes ticked from the Nuvio history.
 - **Nest's opened card** ends on its own bar, and rows under the picks no longer replay `nestRise` when they mount.
+
+## Screen review round: one header, restyled catalog screens, one search, Settings (Secretary, 2026-11-25)
+
+PRs #16 to #23 (anime rule, shared header and glass pieces, catalog home, lights, title pages, opened cards, one
+search, Settings), measured together on the Samsung TV inside Secretary at `9bbf610`, against `2093685` (`main` before
+the round) deployed the same way from a worktree. Same walk as the section above: Nest's opened Cinema card, `cdp.mjs
+walk 250 Right,Right,Right,Right,Down,Right,Right,Right,Down,Left,Left,Left,Up,Left,Left,Up,Right,Right,Right,Down,Left,Left`,
+four times in a row right after opening the card.
+
+| Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- |
+| `2093685` | 33 ms | 117-150 ms | 64, 63, 53, 34 | 4-10 MB |
+| `9bbf610` | 33 ms | 83-117 ms | 47, 51, 41, 33 | 5-6 MB |
+
+No regression: slightly fewer long frames and a steadier heap, within the run-to-run spread noted above. The opened card
+now draws fewer slivers and a shorter peek of the next row, which likely accounts for part of it.
+
+- **Budget**: Secretary's JS grew from 155.2 KB to 162.5 KB gzip over the round (shared header, one search with the
+  phone keyboard, Recommend me, Settings categories and switches). `budget.json` was raised from 160 KB to 168 KB.
+- **Settings** (header settings button from a title page, then Left and Right across the categories and Down and Up
+  through Apps): `cdp.mjs walk 250
+  Left,Left,Left,Right,Right,Right,Down,Down,Down,Down,Down,Down,Up,Up,Up,Up,Up,Up,Right,Left,Left,Right`, three runs:
+  17 ms median, 33 ms p95, 0-2 frames over 50 ms of ~390, heap 6-11 MB. The windowed list and the tabs cost nothing
+  measurable.
+- **Title page header**: on a film page only the clock shows; Up from the buttons brings back the full header and the
+  remote moves along it to Settings.
