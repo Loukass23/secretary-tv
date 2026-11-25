@@ -122,17 +122,33 @@ html, body {
 .nest-col.is-dim { opacity: 0.35; }
 /* Another card is open across the screen: the rest fade out whole, so no sliver of them shows at either edge. */
 .nest-col.is-away { opacity: 0; }
-/* A card being moved (card-order.ts): lifted on its own layer while it slides; transform and opacity only. */
-.nest-col.is-lifted .nest-col-body { transform: scale(1.04); transform-origin: 0 0; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
-/* A media card folded, and fading out under its row when it opens. */
+/* A card picked as a whole moves a little towards the viewer: about 4% on its own layer, about its centre, while the
+   other cards step back by opacity and the glow moves behind it (home.tsx). Transform and opacity only. */
+.nest-col-body { transform-origin: 50% 50%; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
+.nest-col.is-picked .nest-col-body { transform: scale(1.04); }
+.nest-col.is-behind { opacity: 0.72; }
+.nest-glow { position: absolute; left: 0; top: 0; transition: opacity var(--sg-move) var(--sg-ease); will-change: opacity; }
+.nest-glow > .sg-glow { position: absolute; }
+.nest-glow.is-card { opacity: 0.45; }
+/* A card being moved (card-order.ts): lifted the same way while it slides. */
+.nest-col.is-lifted .nest-col-body { transform: scale(1.04); }
+/* A media card folded; opening, its tiles grow out towards the opened rows as they fade (from the card's top left). */
 .nest-media-small {
   position: absolute;
   left: 0;
   top: 0;
-  transition: opacity var(--sg-fade) var(--sg-ease);
-  will-change: opacity;
+  transform-origin: 0 0;
+  transition: opacity var(--sg-fade) var(--sg-ease), transform var(--sg-move) var(--sg-ease);
+  will-change: transform, opacity;
 }
-.nest-media-small.is-out { opacity: 0; }
+.nest-media-small.is-out { opacity: 0; transform: scale(1.2); }
+/* The opened rows (or the forecast) open out of the card's place: from a smaller copy at its top left, to full size. */
+.nest-open-in { position: absolute; left: 0; top: 0; transform-origin: 0 0; animation: nestOpen 380ms var(--sg-ease) both; will-change: transform, opacity; }
+@keyframes nestOpen {
+  from { opacity: 0; transform: scale(0.55); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
 /* Any other card that opens (the weather): the folded card fades out under what it opens into. */
 .nest-fold { position: absolute; left: 0; top: 0; transition: opacity var(--sg-fade) var(--sg-ease); will-change: opacity; }
 .nest-fold.is-out { opacity: 0; }
@@ -451,36 +467,64 @@ html, body {
 .nest-more.is-peek { opacity: 0.55; }
 /* Rows under the picks come into view by sliding and fading only; their tiles do not rise again on every mount. */
 .nest-more .nest-rise { animation: none; }
-/* The end of an opened card (cards.tsx EndBar): flat fill, inset hairline, buttons that focus by fill and scale. */
+/* The end of an opened card (cards.tsx EndBar): the assistant's orb and its words, as under the home's cards, then the
+   buttons. Flat fill, inset hairline; it rises into the last row's caption place when Down reaches it. */
 .nest-end {
   position: absolute;
   left: 0;
   width: 1760px;
-  height: 120px;
+  height: 116px;
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 0 36px;
+  padding: 0 30px 0 24px;
   box-sizing: border-box;
   border-radius: var(--sg-r-panel);
   background: var(--sg-fill);
   box-shadow: inset 0 0 0 1.5px var(--sg-line);
-  transition: opacity var(--sg-fade) var(--sg-ease), transform var(--sg-move) var(--sg-ease);
+  animation: nestRise 320ms var(--sg-ease) both;
   will-change: transform, opacity;
 }
-.nest-end.is-peek { opacity: 0.55; }
+.nest-end-orb { flex: none; width: 68px; height: 68px; border-radius: 50%; background: center / 100% 100% no-repeat; }
+.nest-end.is-loading .nest-end-orb { animation: nestPulse 1.2s var(--sg-ease) infinite alternate; }
+@keyframes nestPulse { from { transform: scale(0.9); opacity: 0.75; } to { transform: scale(1.05); opacity: 1; } }
 .nest-end.is-loading .nest-end-text { opacity: 0.7; }
-/* See all: the same pill, smaller, beside Recommend me. */
-.nest-end-small .sg-btn { height: 48px; padding: 0 22px; font-size: var(--sg-t-s); }
-.nest-end-text { flex: 1; min-width: 0; }
-.nest-end-text b { display: block; font-size: var(--sg-t-l); font-weight: 700; }
-.nest-end-text small { font-size: var(--sg-t-s); }
+.nest-end-text { flex: 0 1 auto; min-width: 0; max-width: 620px; margin-right: 10px; }
+.nest-end-text b { display: block; font-size: var(--sg-t-l); font-weight: 600; white-space: nowrap; }
+.nest-end-text small { display: block; font-size: var(--sg-t-s); color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-end-gap { flex: 1; }
+
+/* Continue watching in an opened card (cards.tsx ContinueTile): the logo on the thumb, a thick bar and the episode
+   with the time left under it. The line under the art is quiet until its tile has focus (opacity only). */
+.nest-cw-art .sg-tile-cap { left: 26px; bottom: 22px; right: 26px; font-size: var(--sg-t-l); }
+.nest-cw-art .sg-tile-logo { max-width: 56%; max-height: 104px; }
+.nest-cw-below { position: absolute; left: 0; top: 0; opacity: 0.62; transition: opacity var(--sg-fade) var(--sg-ease); will-change: opacity; }
+.nest-cw-below.is-focus { opacity: 1; }
+.nest-cw-bar { display: block; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
+.sg-day .nest-cw-bar { background: rgba(42, 24, 16, 0.16); }
+.nest-cw-bar i { display: block; height: 100%; border-radius: inherit; background: var(--sg-accent); transform-origin: left; }
+.nest-cw-line { display: flex; align-items: baseline; gap: 18px; margin-top: 12px; }
+.nest-cw-line b { flex: 1; min-width: 0; font-size: var(--sg-t-m); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-cw-line small { flex: none; font-size: var(--sg-t-m); color: var(--sg-accent); font-family: var(--sg-font-num); }
+
+/* Badges on the home's tiles ("Top film", "▶ Resume") take the theme accent. */
+.nest .sg-tile-badge { background: var(--sg-accent); color: var(--sg-accent-ink); }
+
+/* Reduce motion (Settings, catalog-kit applyLook: data-sg-motion="reduced"): no push-in, no open transition. */
+html[data-sg-motion="reduced"] .nest-col.is-picked .nest-col-body,
+html[data-sg-motion="reduced"] .nest-col.is-lifted .nest-col-body,
+html[data-sg-motion="reduced"] .nest-media-small.is-out { transform: none; }
+html[data-sg-motion="reduced"] .nest-col.is-behind { opacity: 1; }
+html[data-sg-motion="reduced"] .nest-open-in,
+html[data-sg-motion="reduced"] .nest-rise,
+html[data-sg-motion="reduced"] .nest-end,
+html[data-sg-motion="reduced"] .nest-end-orb { animation: none; }
 .nest-more-label em, .nest-col-label em { margin-left: 14px; font-size: var(--sg-t-s); font-style: normal; font-weight: 500; color: var(--sg-ink-dim); }
 .nest-crumb { margin: 0 14px; font-style: normal; color: var(--sg-ink-dim); }
 .nest-more:not(.is-peek) .nest-more-label { visibility: hidden; }
 
 /* --- type style (glass tokens.ts TYPE_STYLES): Secretary's titles and numbers --- */
-.nest-account h1, .nest-home-card b, .nest-assist-card > b, .nest-calendar-card > b, .nest-end-text b, .nest-result-cap b, .nest-wc-say b, .nest-label {
+.nest-account h1, .nest-home-card b, .nest-assist-card > b, .nest-calendar-card > b, .nest-end-text b, .nest-cw-line b, .nest-result-cap b, .nest-wc-say b, .nest-label {
   font-family: var(--sg-font-title);
   letter-spacing: var(--sg-title-track);
 }

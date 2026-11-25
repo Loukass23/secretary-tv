@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { MediaItem, RowColumn } from "../src/cards.tsx";
-import { captionMeta, expandedRows, focusedItem, onRow, rowItems, rowTitle, targetAt, tileKey, tileKeys } from "../src/card-rows.ts";
+import { captionMeta, episodeLabel, expandedRows, focusedItem, onRow, rowItems, rowTitle, targetAt, tileKey, tileKeys, timeLeft } from "../src/card-rows.ts";
 import { END_ALL, END_RECOMMEND, END_TOP } from "../src/nest-nav.ts";
 
 type Media = Extract<RowColumn, { kind: "media" }>;
@@ -78,4 +78,21 @@ test("targets follow the same rows", () => {
 test("the caption's line carries the rating and the ranking when known", () => {
   assert.deepEqual(captionMeta(item("X", { sub: "2026", rating: "7.4", rank: "No. 1 in Popular films" })), ["2026", "★ 7.4", "No. 1 in Popular films"]);
   assert.deepEqual(captionMeta(item("X", { sub: "S1 · E2" })), ["S1 · E2"]);
+  assert.deepEqual(captionMeta(item("X", { rating: "8" })), ["★ 8.0"], "one rating format (catalog-kit ratingLabel)");
+});
+
+test("an episode is named by its number, and by its own name only when it has a real one", () => {
+  assert.equal(episodeLabel({ season: 1, episode: 24, name: "Episode 24" }), "S1 · E24");
+  assert.equal(episodeLabel({ season: 2, episode: 3, name: "Ep. 3" }), "S2 · E3");
+  assert.equal(episodeLabel({ season: 1, episode: 5, name: "The Long Night" }), "S1 · E5 · The Long Night");
+  assert.equal(episodeLabel({ season: 1, episode: 5, name: "" }), "S1 · E5");
+  assert.equal(episodeLabel(undefined), undefined);
+});
+
+test("time left is said in minutes, then hours", () => {
+  assert.equal(timeLeft(600, 2400), "30 min left");
+  assert.equal(timeLeft(0, 5100), "1 h 25 min left");
+  assert.equal(timeLeft(0, 3600), "1 h left");
+  assert.equal(timeLeft(2390, 2400), "Almost done");
+  assert.equal(timeLeft(100, 0), undefined, "no length, nothing said");
 });

@@ -36,6 +36,8 @@ interface State {
   accent: AccentTheme;
   type: TypeStyle;
   text: TextSize;
+  /** Settings' Reduce motion (no push-in, no open transition). */
+  calm: boolean;
   mode: GlassMode;
   fit: boolean;
   safe: boolean;
@@ -55,6 +57,7 @@ const DEFAULTS: State = {
   accent: "raptor",
   type: "studio",
   text: "normal",
+  calm: false,
   mode: "fake",
   fit: true,
   safe: false,
@@ -118,7 +121,7 @@ export function App() {
     void drawBackdrop(TINTS[s.tint], s.theme).then(setBackdrop);
   }, [s.tint, s.theme]);
   // The accent and the type go on the page as the TV's settings put them there (catalog-kit applyLook).
-  useLayoutEffect(() => applyLook({ accentTheme: s.accent, typeStyle: s.type, textSize: s.text }), [s.accent, s.type, s.text]);
+  useLayoutEffect(() => applyLook({ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, reduceMotion: s.calm }), [s.accent, s.type, s.text, s.calm]);
 
   // The stage: 1920x1080, scaled to fit the room the chrome leaves.
   const room = useRef<HTMLDivElement>(null);
@@ -178,6 +181,7 @@ export function App() {
         <Choice items={TEXT_NAMES} value={s.text} label={(t) => TEXT_SIZES[t].label} onPick={(text) => set({ text })} />
         <Choice items={MODES} value={s.mode} onPick={(mode) => set({ mode })} />
         <span class="dz-sep" />
+        <Toggle on={s.calm} onFlip={() => set({ calm: !s.calm })}>Reduce motion</Toggle>
         <Toggle on={s.focusAll} onFlip={() => set({ focusAll: !s.focusAll })}>Focus all</Toggle>
         <Toggle on={s.safe} onFlip={() => set({ safe: !s.safe })}>Safe area</Toggle>
         <Toggle on={s.grid} onFlip={() => set({ grid: !s.grid })}>Grid</Toggle>

@@ -2,6 +2,7 @@
 // card's style menu, OK opens it into all of it). Pure apart from the store it is handed, so it is unit tested.
 import type { LibraryItem } from "@secretary/nuvio";
 import type { MediaItem } from "./cards.tsx";
+import { ratingLabel } from "@secretary/catalog-kit/src/lib/cinemeta.ts";
 import { posterUrl } from "./apps.ts";
 
 export const MYLIST_KEY = "nest.myList";
@@ -20,7 +21,7 @@ export function mylistItems(list: readonly LibraryItem[], max = MYLIST_MAX): { i
         poster: posterUrl(item.title),
         still: item.title.background,
         title: item.title.name,
-        sub: [item.title.year, item.title.rating ? `★ ${item.title.rating}` : ""].filter(Boolean).join(" · ") || undefined,
+        sub: [item.title.year, ratingLabel(item.title.rating)].filter(Boolean).join(" · ") || undefined,
         about: item.title.description,
       },
     }));

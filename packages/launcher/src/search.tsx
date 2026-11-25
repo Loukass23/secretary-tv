@@ -6,6 +6,7 @@
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass, Header, type HeaderButton, type HeaderPerson, InfoPanel, ListCard, POSTER, PosterTile, Scroller } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { ratingLabel } from "@secretary/catalog-kit/src/lib/cinemeta.ts";
 import { badgeFor, posterUrl, type SearchResult } from "./apps.ts";
 import { HEADER_ORDER } from "./home.tsx";
 import { liveSearch, type LiveSearchState } from "./live-search.ts";
@@ -295,7 +296,7 @@ function captionFor(
   if (q.length < 2) return { kicker: "Search", title: "Keep typing…" };
   if (count > 0) {
     const kicker = `${count} result${count === 1 ? "" : "s"}${found.searching ? " · updating" : ""}`;
-    if (focused) return { kicker, title: focused.title.name, meta: [KIND[focused.type], focused.title.year ?? "", focused.title.rating ? `★ ${focused.title.rating}` : ""] };
+    if (focused) return { kicker, title: focused.title.name, meta: [KIND[focused.type], focused.title.year ?? "", ratingLabel(focused.title.rating)] };
     return { kicker, title: `Results for “${found.answered}”` };
   }
   if (found.searching) return { kicker: "Searching…", title: `“${q}”` };

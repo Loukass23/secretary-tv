@@ -62,16 +62,19 @@ export async function recommend(
   }
 }
 
-/** The end bar's line for a state: what is going on, in words. */
+/**
+ * The end bar's words beside the orb (cards.tsx EndBar): "Ask Assistant", as under the home's cards, then a quiet line
+ * when there is something to say. Picks that came are named by their own row ("Picked for you"), never again here.
+ */
 export function recLine(s: RecState | undefined, unit: string): { title: string; sub: string } {
-  if (!s) return { title: "You're all caught up", sub: "That's every row in this card" };
+  if (!s) return { title: "Ask Assistant", sub: "" };
   switch (s.status) {
     case "loading":
       return { title: "Asking the assistant…", sub: `Looking for ${unit} you might like` };
     case "ready":
-      return { title: "Picked for you", sub: `${s.items.length} ${unit} the assistant found, in the row above` };
+      return { title: "Ask Assistant", sub: `Recommend me again for other ${unit}` };
     case "empty":
-      return { title: "No new picks this time", sub: `The assistant found nothing new; Recommend me tries other ${unit}` };
+      return { title: "No new picks this time", sub: `Recommend me tries other ${unit}` };
     case "error":
       return { title: "Couldn't reach the assistant", sub: "Check the connection and try again" };
   }

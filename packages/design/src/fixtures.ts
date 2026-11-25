@@ -8,6 +8,9 @@ import type { Weather } from "@secretary/launcher/src/assistant.ts";
 import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
 import type { RecState } from "@secretary/launcher/src/recommend.ts";
+import { appIcon } from "@secretary/launcher/src/app-icons.ts";
+import { episodeLabel } from "@secretary/launcher/src/card-rows.ts";
+import { YOUTUBE_APP_ID } from "@secretary/launcher/src/config.ts";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
 import type { LightsApi } from "@secretary/launcher/src/lights.tsx";
 import type { StDevice, StRoom, StScene } from "@secretary/smartthings";
@@ -76,9 +79,21 @@ function media(art: Art, from: number, n: number, going: number, sub: (i: number
       sub: sub(k),
       rating: (6 + ((i * 3) % 30) / 10).toFixed(1),
       about: "A placeholder synopsis drawn by the design workbench, long enough to show how three lines of a title's description sit under its name on the opened card.",
-      ...(k < going ? { resume: true, progress: 0.25 + 0.15 * k } : k === going ? { badge: "Top pick" } : {}),
+      // Most titles have a Fanart.tv logo (titleArt); every third has none, so its name shows instead.
+      ...(i % 3 !== 2 ? { logo: art.logos[i] } : {}),
+      ...(k < going ? { resume: true, progress: 0.25 + 0.15 * k, left: `${42 - k * 9} min left` } : k === going ? { badge: "Top pick" } : {}),
       ...(k >= going && list ? { rank: `No. ${k - going + 1} in ${list}` } : {}),
     };
+  });
+}
+
+/** The first `n` titles as episodes in progress, as app.tsx names them (card-rows.ts episodeLabel): one with no real name. */
+function withEpisodes(items: MediaItem[], n: number): MediaItem[] {
+  const names = ["The Long Night", "Episode 5", "A Door in the Fog"];
+  return items.map((it, k) => {
+    if (k >= n) return it;
+    const episode = episodeLabel({ season: k + 1, episode: k + 3, name: names[k % names.length] });
+    return { ...it, sub: episode, episode };
   });
 }
 
@@ -97,12 +112,14 @@ const RECS: Record<string, RecState | undefined> = {
 export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): RowColumn[] {
   // As app.tsx builds them: Continue watching first (landscape stills), then the picks, My List, the genres, and on
   // Anime the assistant's picks above the end bar.
-  const card = (key: string, name: string, unit: string, label: string, all: MediaItem[], going: number): RowColumn => ({
+  const card = (key: string, name: string, unit: string, all: MediaItem[], going: number): RowColumn => ({
     kind: "media",
     key,
     name,
     unit,
-    label,
+    // One word, whatever the card holds (app.tsx MEDIA).
+    label: name,
+    episodes: key !== "cinema",
     items: going ? all.slice(0, going) : all,
     small: going ? all : undefined,
     heading: going ? "Continue watching" : "Tonight's picks",
@@ -133,9 +150,9 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     },
     { kind: "weather", key: "weather", label: "Weather", run: noop, weather: WEATHER },
     { kind: "calendar", key: "calendar", label: "Calendar", run: noop, date: new Date(2026, 10, 20) },
-    card("cinema", "Cinema", "films", "Continue · Cinema", media(art, 0, 10, 2, (k) => (k < 2 ? "42 min left" : "2019"), "today's popular films"), 2),
-    card("shows", "Shows", "shows", "Next up · Shows", media(art, 2, 8, 3, (k) => (k < 3 ? `S0${k + 1} · E0${k + 3}  An episode` : "2022"), "today's popular shows"), 3),
-    card("anime", "Anime", "titles", "Anime", media(art, 4, 8, 0, () => "12 episodes", "today's trending anime"), 0),
+    card("cinema", "Cinema", "films", media(art, 0, 10, 2, () => "2019", "today's popular films"), 2),
+    card("shows", "Shows", "shows", withEpisodes(media(art, 2, 8, 3, (k) => (k < 3 ? "" : "2022"), "today's popular shows"), 3), 3),
+    card("anime", "Anime", "titles", media(art, 4, 8, 0, () => "12 episodes", "today's trending anime"), 0),
     {
       kind: "videos",
       key: "youtube",
@@ -174,8 +191,9 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
         { icon: art.icons[1], label: "Browser" },
         { icon: art.icons[2], label: "Gallery" },
         { icon: art.icons[3], label: "User Guide" },
-        { label: "Photos" },
-        { label: "Workspace" },
+        // Their own icons (launcher app-icons.ts): the TV reports a placeholder for these two.
+        { icon: appIcon({ id: YOUTUBE_APP_ID, name: "YouTube" }), label: "YouTube" },
+        { icon: appIcon({ id: "dz.workspace", name: "Workspace" }), label: "Workspace" },
       ],
     },
     // Last, as on the TV: it puts back the cards taken off the home row (none here).

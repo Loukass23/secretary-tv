@@ -86,7 +86,13 @@ export function collapsedShape(style: CardStyle): CardShape {
 
 // --- the expanded card: every item in one row, as the Ask answer row shows titles, then the app's Open tile ---
 
-export const EXPANDED = { w: 252, h: 378, stride: 278 } as const;
+/** A poster in an opened card's rows: larger than the folded card's, so the opened card fills the screen down to its peek. */
+export const EXPANDED = { w: 280, h: 420, stride: 306 } as const;
+/**
+ * Continue watching in an opened card: a landscape thumb with the title's logo on it, then a thick progress bar and a
+ * line with the episode and the time left under it. Episodes (Shows, Anime) take the bigger tile.
+ */
+export const CONTINUE = { episodes: 600, films: 520, gap: 32, below: 84 } as const;
 /** The expanded card spans the screen between the 80px insets. */
 export const EXPANDED_W = 1920 - 2 * 80;
 /** The focused title's caption under the opened row (name, line, a few lines of synopsis), fixed at its left edge. */
@@ -100,8 +106,12 @@ export const CAPTION = { top: 44, h: 176 } as const;
  * peeks in at the bottom of the screen, whatever the row's look.
  */
 export const MORE = { labelH: 52, gap: 72 } as const;
-/** Where extra row `k` (0-based) starts in the opened card: under the picks and their caption, then a block apiece. */
-export const moreTop = (k: number): number => EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap + k * (MORE.labelH + EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap);
+/**
+ * Where extra row `k` (0-based) starts in the opened card: under the first row (`firstH` tall: a Continue watching row
+ * is taller than a poster row) and its caption, then a block apiece.
+ */
+export const moreTop = (k: number, firstH: number = EXPANDED.h): number =>
+  firstH + CAPTION.top + CAPTION.h + MORE.gap + k * (MORE.labelH + EXPANDED.h + CAPTION.top + CAPTION.h + MORE.gap);
 /** How far a row of `n` tiles (`stride` apart, `w` wide) scrolls so tile `i` stays in view, a few in from the left. */
 export function rowScroll(i: number, n: number, stride: number, w: number): number {
   const max = Math.max(0, n * stride - stride + w - EXPANDED_W);

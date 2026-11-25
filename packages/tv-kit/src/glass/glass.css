@@ -329,6 +329,9 @@
 /* Captions sit on artwork, so they keep a light ink in both themes (sg-ink is dark by day). */
 .sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: var(--sg-t-s); color: #f4f4f6; }
 .sg-tile-cap small { font-size: var(--sg-t-xs); color: rgba(255, 255, 255, 0.75); }
+/* A title's logo (MediaTile logo): in place of its name, kept inside the caption's box whatever its shape. */
+.sg-tile-logo { display: block; max-width: 62%; max-height: 84px; margin-bottom: 6px; object-fit: contain; object-position: left bottom; }
+.sg-tile-cap b[hidden] { display: none; }
 .sg-tile-count {
   position: absolute;
   color: #f4f4f6;

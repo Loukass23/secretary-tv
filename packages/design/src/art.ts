@@ -11,6 +11,8 @@ export interface Art {
   /** Landscape stills for tiles and episodes. */
   stills: string[];
   icons: string[];
+  /** Stylized title logos on transparency, as Fanart.tv gives them (titleArt's `logo`). */
+  logos: string[];
 }
 
 function poster(i: number, title: string): HTMLCanvasElement {
@@ -54,6 +56,24 @@ function icon(i: number, letter: string): HTMLCanvasElement {
   return c;
 }
 
+/** A placeholder title logo: the name in a heavy face with an outline, on transparency, as Fanart.tv logos are. */
+function logo(i: number, title: string): HTMLCanvasElement {
+  const [c, g] = canvas(400, 155);
+  g.font = `${i % 2 ? "italic 800" : "900"} 56px Georgia, serif`;
+  g.textBaseline = "middle";
+  g.lineWidth = 6;
+  g.strokeStyle = "rgba(0,0,0,0.55)";
+  g.fillStyle = `hsl(${HUES[i % HUES.length]} 90% 88%)`;
+  const words = title.toUpperCase().split(" ");
+  const half = Math.ceil(words.length / 2);
+  [words.slice(0, half).join(" "), words.slice(half).join(" ")].filter(Boolean).forEach((l, k, all) => {
+    const y = all.length === 1 ? 78 : 44 + k * 66;
+    g.strokeText(l, 8, y, 384);
+    g.fillText(l, 8, y, 384);
+  });
+  return c;
+}
+
 function wrap(g: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, lh: number) {
   let line = "";
   const lines: string[] = [];
@@ -87,13 +107,14 @@ let cached: Promise<Art> | null = null;
 
 export function drawArt(): Promise<Art> {
   cached ??= (async () => {
-    const [posters, backgrounds, stills, icons] = await Promise.all([
+    const [posters, backgrounds, stills, icons, logos] = await Promise.all([
       Promise.all(TITLES.map((t, i) => blob(poster(i, t)))),
       Promise.all(TITLES.slice(0, 6).map((_, i) => blob(still(i, 1280, 720)))),
       Promise.all(TITLES.map((_, i) => blob(still(i, 480, 270)))),
       Promise.all(["C", "S", "A", "M", "P", "W"].map((l, i) => blob(icon(i, l), "image/png"))),
+      Promise.all(TITLES.map((t, i) => blob(logo(i, t), "image/png"))),
     ]);
-    return { posters, backgrounds, stills, icons };
+    return { posters, backgrounds, stills, icons, logos };
   })();
   return cached;
 }
