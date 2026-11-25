@@ -1,5 +1,6 @@
 import { readJson, writeJson } from "@secretary/tv-kit";
 import { kindFor } from "./animeguard.ts";
+import { stripSeasonSuffix } from "./cinemeta.ts";
 import type { CatalogType, Title, Video } from "./types.ts";
 
 const EDGE_SEC = 5;
@@ -129,19 +130,22 @@ export function loadResume(type: CatalogType): ResumeEntry[] {
  * series is listed as Anime (the anime rule, animeguard.ts).
  */
 export function loadAllResume(ids?: ReadonlySet<string>): UnifiedResumeEntry[] {
-  const byKey = new Map<string, UnifiedResumeEntry>();
+  const all: UnifiedResumeEntry[] = [];
   for (const stored of ALL_TYPES) {
-    for (const entry of loadResume(stored)) {
-      if (!entry?.title?.id) continue;
-      const type = kindFor(stored, entry.title, ids);
-      const nameKey = `${type}:${(entry.title.name || entry.title.id).trim().toLowerCase()}`;
-      const prev = byKey.get(nameKey);
-      if (!prev || (entry.updated ?? 0) >= (prev.updated ?? 0)) {
-        byKey.set(nameKey, { ...entry, type });
-      }
-    }
+    for (const entry of loadResume(stored)) if (entry?.title?.id) all.push({ ...entry, type: kindFor(stored, entry.title, ids) });
   }
-  return [...byKey.values()].sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)).slice(0, MAX);
+  // One entry per title, the newest: the same id, or the same name ("Season 2" aside on a show), is the same title.
+  const seen = new Set<string>();
+  return all
+    .sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0))
+    .filter(({ type, title }) => {
+      const name = (type === "movie" ? (title.name ?? "") : stripSeasonSuffix(title.name ?? "")).trim().toLowerCase();
+      const keys = [`${type}:${title.id}`, `${type}:${name || title.id}`];
+      if (keys.some((k) => seen.has(k))) return false;
+      for (const k of keys) seen.add(k);
+      return true;
+    })
+    .slice(0, MAX);
 }
 
 /** Where to start: nothing in the first or last seconds, or when the duration is unknown. */
@@ -184,6 +188,8 @@ const slim = (t: Title): Title => ({
   rating: t.rating,
   poster: t.poster,
   background: t.background,
+  ...(t.logo ? { logo: t.logo } : {}),
+  ...(t.japanese ? { japanese: true } : {}),
   ...(t.description ? { description: clipText(t.description, 320) } : {}),
   ...(t.genre?.length ? { genre: t.genre.slice(0, 3) } : {}),
   ...(t.runtime ? { runtime: t.runtime } : {}),

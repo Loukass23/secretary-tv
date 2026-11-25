@@ -92,6 +92,9 @@ export interface RawMeta {
   runtime?: string;
   poster?: string;
   background?: string;
+  logo?: string;
+  /** "Japan", or "Japan, United States". */
+  country?: string;
   videos?: RawVideo[];
   cast?: string[];
   director?: string[] | string;
@@ -130,6 +133,28 @@ export function toVideo(v: RawVideo): Video | null {
     absoluteEpisode: v.absoluteEpisode,
   };
 }
+
+/**
+ * A rating as every surface shows it: one decimal out of ten ("7.0", never "7" or "7.35"), empty when unknown or 0.
+ * Ratings stored by older builds go through it too, so it takes what they held.
+ */
+export function ratingOf(v: unknown): string {
+  const n = typeof v === "number" ? v : Number.parseFloat(String(v ?? ""));
+  return n > 0 && n <= 10 ? n.toFixed(1) : "";
+}
+
+/** The rating's label on a card or page: "★ 7.0" (not "IMDb": TMDB rates too). Empty when there is none. */
+export const ratingLabel = (v: unknown): string => {
+  const r = ratingOf(v);
+  return r && `★ ${r}`;
+};
+
+/** A synopsis without the box-office line some catalogs lead with ("Currently in theaters." and the like). */
+export const cleanSynopsis = (text: string | undefined): string | undefined =>
+  text?.replace(/^\s*(?:currently|now)\s+(?:playing\s+)?(?:in|at)\s+(?:the\s+)?(?:theat(?:er|re)s?|cinemas?)\s*[.!:\-–—]*\s*/i, "").trim() || undefined;
+
+/** The metadata gives Japan as the country (lib/animeguard.ts decides what that means). */
+const fromJapan = (country?: string) => (country && /\bjapan\b/i.test(country) ? { japanese: true } : {});
 
 /** IMDb ids ("tt…") for movies and series, Kitsu ids ("kitsu:…") for ungrouped anime fallback. */
 const isKnownId = (id: string) => id.startsWith("tt") || id.startsWith("kitsu:");
@@ -186,12 +211,14 @@ export function toTitle(m: RawMeta): Title | null {
     id,
     name: m.name,
     year: m.year ?? m.releaseInfo?.slice(0, 4) ?? "",
-    rating: m.imdbRating ?? "",
-    description: m.description,
+    rating: ratingOf(m.imdbRating),
+    description: cleanSynopsis(m.description),
     genre: m.genre ?? m.genres,
     runtime: m.runtime,
     poster: keepArt ? m.poster : undefined,
     background: keepArt ? m.background : undefined,
+    ...(m.logo?.startsWith("http") ? { logo: m.logo } : {}),
+    ...fromJapan(m.country),
     videos: videos?.length ? videos : undefined,
     ...peopleOf(m),
   };
@@ -244,6 +271,7 @@ interface TvdbSeriesExtended {
   year?: string;
   averageRuntime?: number;
   overview?: string;
+  originalCountry?: string;
   genres?: { name?: string }[];
   translations?: {
     nameTranslations?: { name?: string; language?: string; isAlias?: boolean }[];
@@ -382,6 +410,7 @@ export async function fetchTvdbAnimeMeta(
     runtime: ext.averageRuntime ? `${ext.averageRuntime} min` : undefined,
     poster: ext.image || undefined,
     background: `https://images.metahub.space/background/medium/${imdbId}/img`,
+    ...(ext.originalCountry === "jpn" ? { japanese: true } : {}),
     videos,
   };
 }
@@ -403,6 +432,7 @@ interface TmdbMovieDetail {
   backdrop_path?: string;
   genres?: { name?: string }[];
   belongs_to_collection?: { id?: number; name?: string } | null;
+  original_language?: string;
   /** With `append_to_response=credits`. */
   credits?: { cast?: { name?: string }[]; crew?: { name?: string; job?: string }[] };
 }
@@ -428,6 +458,8 @@ interface TmdbTvDetail {
   backdrop_path?: string;
   genres?: { name?: string }[];
   seasons?: { season_number?: number }[];
+  original_language?: string;
+  origin_country?: string[];
   [seasonKey: `season/${number}`]: { episodes?: TmdbEpisode[] } | undefined;
 }
 
@@ -464,6 +496,7 @@ export async function fetchTmdbMeta(
       background: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : undefined,
       cast: names(m.credits?.cast?.slice(0, 12).map((c) => c.name)),
       director: names(m.credits?.crew?.filter((c) => c.job === "Director").map((c) => c.name)),
+      ...(m.original_language === "ja" ? { japanese: true } : {}),
       tmdbCollection:
         m.belongs_to_collection?.id && m.belongs_to_collection?.name
           ? { id: m.belongs_to_collection.id, name: m.belongs_to_collection.name }
@@ -520,6 +553,7 @@ export async function fetchTmdbMeta(
     runtime: tv.episode_run_time?.[0] ? `${tv.episode_run_time[0]} min` : undefined,
     poster: tv.poster_path ? `https://image.tmdb.org/t/p/w342${tv.poster_path}` : undefined,
     background: tv.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tv.backdrop_path}` : undefined,
+    ...(tv.original_language === "ja" || tv.origin_country?.includes("JP") ? { japanese: true } : {}),
     videos,
   };
 }
@@ -616,10 +650,14 @@ export async function searchCatalogsClient(
 
 const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** Layers `over` onto `base`, skipping fields `over` leaves empty so a known synopsis, year or genre is never erased. */
+/**
+ * Layers `over` onto `base`, skipping fields `over` leaves empty so a known synopsis, year or genre is never erased.
+ * The name is the one exception: a title keeps the name it was opened with (its card's), so a card and its page never
+ * show two names for one title when the page's metadata comes from another provider.
+ */
 export function mergeMeta<T extends object>(base: T, over: Partial<T> | null | undefined): T {
   const out = { ...base } as Record<string, unknown>;
-  for (const [k, v] of Object.entries(over ?? {})) if (!empty(v)) out[k] = v;
+  for (const [k, v] of Object.entries(over ?? {})) if (!empty(v) && !(k === "name" && !empty(out.name))) out[k] = v;
   return out as T;
 }
 
@@ -649,6 +687,8 @@ export async function fetchMeta(type: CatalogType, id: string, f: typeof fetch =
       };
     }
   }
+  // Every provider's answer in one format: the rating, and the synopsis without a box-office lead-in.
+  if (title) title = { ...title, rating: ratingOf(title.rating), description: cleanSynopsis(title.description) };
   if (title && f === fetch) metaCache.set(key, title);
   return title;
 }

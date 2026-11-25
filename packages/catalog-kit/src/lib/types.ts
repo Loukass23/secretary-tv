@@ -33,6 +33,10 @@ export interface Title {
   /** Artwork the catalog gave. Titles without it use the IMDb-id artwork service. */
   poster?: string;
   background?: string;
+  /** The metadata's own title logo, when it has one (lib/fanart.ts `titleArt` prefers Fanart.tv's). */
+  logo?: string;
+  /** The metadata gives Japan as the country or Japanese as the original language (lib/animeguard.ts weighs it). */
+  japanese?: boolean;
   /** Series only, from the meta endpoint. */
   videos?: Video[];
   /** The cast, billing order, when the catalog has it (a film's page lists the first few). */

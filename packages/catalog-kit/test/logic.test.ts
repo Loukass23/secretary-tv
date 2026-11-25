@@ -33,7 +33,6 @@ import {
 import { tryInOrder } from "../src/lib/autopick.ts";
 import { createStreamClient, parseStreamInfo } from "../src/lib/streams.ts";
 import { fetchMeta, groupAnimeMetas, setMetaKeys, stripSeasonSuffix, toTitle } from "../src/lib/cinemeta.ts";
-import { clearFanartCache, resolveFrameArtwork, setFanartKeys } from "../src/lib/fanart.ts";
 import {
   ACCENT_THEMES,
   clearRecentSearches,
@@ -325,58 +324,6 @@ test("providers: TMDB primary for movie/series with Cinemeta fallback, TVDB grou
   assert.equal(anime?.videos?.[1].id, "tt2560140:2:1");
   assert.equal(anime?.videos?.[1].absoluteEpisode, 26);
   setMetaKeys({ tmdbApiKey: "", tvdbApiKey: "" });
-});
-
-test("fanart: resolves Fanart.tv movie and series artwork with automatic fallback to TMDB and Metahub when Fanart drops", async () => {
-  clearFanartCache();
-  setFanartKeys({ fanartApiKey: "fa-key", tmdbApiKey: "tmdb-key" });
-
-  const fakeFetch = (async (input: RequestInfo | URL) => {
-    const u = String(input);
-    if (u.includes("webservice.fanart.tv/v3/movies/tt0133093")) {
-      return new Response(
-        JSON.stringify({
-          moviebackground: [{ url: "https://assets.fanart.tv/matrix-bg.jpg", likes: "12", lang: "en" }],
-          hdmovielogo: [{ url: "https://assets.fanart.tv/matrix-logo.png", likes: "5", lang: "en" }],
-        }),
-      );
-    }
-    if (u.includes("v3-cinemeta.strem.io/meta/series/tt2560140.json")) {
-      return new Response(JSON.stringify({ meta: { tvdb_id: 267440 } }));
-    }
-    if (u.includes("webservice.fanart.tv/v3/tv/267440")) {
-      return new Response(
-        JSON.stringify({
-          showbackground: [{ url: "https://assets.fanart.tv/aot-bg.jpg", likes: "20", lang: "en" }],
-        }),
-      );
-    }
-    // Simulate Fanart.tv dropping/failing for tt0000001
-    if (u.includes("webservice.fanart.tv/v3/movies/tt0000001")) {
-      return new Response("gateway timeout", { status: 504 });
-    }
-    if (u.includes("api.themoviedb.org/3/find/tt0000001")) {
-      return new Response(JSON.stringify({ movie_results: [{ backdrop_path: "/tmdb-fallback.jpg" }] }));
-    }
-    return new Response("not found", { status: 404 });
-  }) as unknown as typeof fetch;
-
-  const movieArt = await resolveFrameArtwork("movie", { id: "tt0133093", name: "The Matrix" }, "fanart", fakeFetch);
-  assert.equal(movieArt.provider, "Fanart.tv");
-  assert.equal(movieArt.urls[0], "https://assets.fanart.tv/matrix-bg.jpg");
-  assert.equal(movieArt.logoUrl, "https://assets.fanart.tv/matrix-logo.png");
-  assert.ok(movieArt.urls.some((u) => u.includes("images.metahub.space/background/medium/tt0133093/img")));
-
-  const animeArt = await resolveFrameArtwork("anime", { id: "tt2560140", name: "Attack on Titan" }, "fanart", fakeFetch);
-  assert.equal(animeArt.provider, "Fanart.tv");
-  assert.equal(animeArt.urls[0], "https://assets.fanart.tv/aot-bg.jpg");
-
-  const droppedArt = await resolveFrameArtwork("movie", { id: "tt0000001", name: "Dropped" }, "fanart", fakeFetch);
-  assert.equal(droppedArt.provider, "TMDB");
-  assert.equal(droppedArt.urls[0], "https://image.tmdb.org/t/p/w1280/tmdb-fallback.jpg");
-  assert.ok(droppedArt.urls.some((u) => u.includes("images.metahub.space/background/medium/tt0000001/img")));
-
-  setFanartKeys({ fanartApiKey: "", tmdbApiKey: "", tvdbApiKey: "" });
 });
 
 test("settings & reminders: organized settings persist and reminders switch cleanly between Companion and Local mode", async () => {

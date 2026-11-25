@@ -474,8 +474,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const openPartyContent = async (s: PartySession, tl: Timeline) => {
     partyContent.current = tl.contentId;
     const app = contentApp(tl.contentId);
-    // Anime with IMDb ids is numbered like a series; this app keeps its own kind for it.
-    const itemType: CatalogType = app.type === "series" && type === "anime" ? "anime" : app.type;
+    // Anime with IMDb ids is numbered like a series: the anime rule (lib/animeguard.ts) gives its kind back.
+    const itemType: CatalogType = app.type === "series" && type === "anime" ? "anime" : kindFor(app.type, { id: app.titleId });
     const meta = (await fetchMeta(itemType, app.titleId).catch(() => null)) ?? { id: app.titleId, name: tl.title, year: "", rating: "" };
     const episode = meta.videos?.find((v) => v.id === tl.contentId);
     const stream = streamFor(tl.release, debrids()[0]?.id, tl.title, episode ? fileHintFor(episode) : undefined);
