@@ -81,16 +81,31 @@ test("OK goes inside: the Launch button first on app cards, the first item on th
   assert.deepEqual(leave(card(2)), card(2));
 });
 
-test("inside a card, the arrows stay in it", () => {
+test("inside a card, the arrows move within it, and past a side edge to the card beside it", () => {
   assert.deepEqual(step(inside(2, 1), "Down", full), inside(2, 4));
   assert.deepEqual(step(inside(2, 4), "Down", full), { area: "ask", i: 0 });
   assert.deepEqual(step(inside(2, 4), "Up", full), inside(2, 1));
   assert.deepEqual(step(inside(2, 1), "Up", full), inside(2, LAUNCH));
-  assert.deepEqual(step(inside(2, 2), "Right", full), inside(2, 2));
-  assert.deepEqual(step(inside(2, 0), "Left", full), inside(2, 0));
   assert.deepEqual(step(inside(2, 4), "Right", full), inside(2, 5));
+  assert.deepEqual(step(inside(2, 2), "Right", full), card(3), "the right edge goes on to the next card");
+  assert.deepEqual(step(inside(2, 0), "Left", full), card(1), "the left edge goes back to the card before");
   assert.deepEqual(step(inside(5, 0), "Down", full), inside(5, 2));
-  assert.deepEqual(step(inside(0, LAUNCH), "Right", full), inside(0, LAUNCH));
+  assert.deepEqual(step(inside(5, 1), "Right", full), inside(5, 1), "the last card keeps its right edge");
+  assert.deepEqual(step(inside(0, LAUNCH), "Right", full), card(1));
+  assert.deepEqual(step(inside(0, LAUNCH), "Left", full), inside(0, LAUNCH), "the first card keeps its left edge");
+});
+
+test("the bell lands inside Reminders, and Left leaves it without Back", () => {
+  // Reminders is card 4, a stack of three: Left goes to the card before, Right to the one after.
+  assert.deepEqual(step(inside(4, 1), "Left", full), card(3));
+  assert.deepEqual(step(inside(4, 1), "Right", full), card(5));
+  assert.deepEqual(step(inside(4, 1), "Down", full), inside(4, 2));
+});
+
+test("an opened card that holds the remote keeps its sides", () => {
+  const held: Layout = { ...full, cols: [{ count: 1, across: 1 }, { count: 1, across: 1, hold: true }, { count: 1, across: 1 }] };
+  assert.deepEqual(step(inside(1, 0), "Left", held), inside(1, 0));
+  assert.deepEqual(step(inside(1, 0), "Right", held), inside(1, 0));
 });
 
 test("empty cards are skipped; an app card with only its Launch button still counts", () => {
@@ -141,14 +156,14 @@ test("an opened card of several rows: Down and Up move between rows, the sides s
   assert.deepEqual(step(inside(0, 3), "Down", len), inside(0, 12), "same place in the next row");
   assert.deepEqual(step(inside(0, 8), "Down", len), inside(0, 13), "clamped to the shorter row");
   assert.deepEqual(step(inside(0, 12), "Down", len), inside(0, 17));
-  assert.deepEqual(step(inside(0, 19), "Down", len), inside(0, END_TOP), "Down from the last row reaches the end bar, not the assistant");
-  assert.deepEqual(step(inside(0, END_TOP), "Down", len), inside(0, END_TOP), "the end bar is the end");
-  assert.deepEqual(step(inside(0, END_TOP), "Right", len), inside(0, END_RECOMMEND));
-  assert.deepEqual(step(inside(0, END_RECOMMEND), "Right", len), inside(0, END_ALL), "See all is last");
-  assert.deepEqual(step(inside(0, END_ALL), "Right", len), inside(0, END_ALL));
+  assert.deepEqual(step(inside(0, 19), "Down", len), inside(0, END_RECOMMEND), "Down from the last row reaches Recommend me, not the assistant");
+  assert.deepEqual(step(inside(0, END_RECOMMEND), "Down", len), inside(0, END_RECOMMEND), "the end bar is the end");
+  assert.deepEqual(step(inside(0, END_RECOMMEND), "Right", len), inside(0, END_ALL));
+  assert.deepEqual(step(inside(0, END_ALL), "Right", len), inside(0, END_TOP), "Back to top is last");
+  assert.deepEqual(step(inside(0, END_TOP), "Right", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_TOP), "Left", len), inside(0, END_ALL));
   assert.deepEqual(step(inside(0, END_ALL), "Left", len), inside(0, END_RECOMMEND));
-  assert.deepEqual(step(inside(0, END_RECOMMEND), "Left", len), inside(0, END_TOP));
-  assert.deepEqual(step(inside(0, END_TOP), "Left", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_RECOMMEND), "Left", len), inside(0, END_RECOMMEND), "the opened card keeps its sides");
   assert.deepEqual(step(inside(0, END_ALL), "Up", len), inside(0, 14), "Up goes back to the last row");
   assert.deepEqual(clamp(inside(0, END_TOP), len), inside(0, END_TOP), "the end bar survives a layout change");
   assert.deepEqual(step(inside(0, 19), "Up", len), inside(0, 13), "clamped to the shorter row above");

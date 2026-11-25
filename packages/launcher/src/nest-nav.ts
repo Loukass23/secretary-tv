@@ -3,12 +3,15 @@
 //   header    profile, then Watch together, Search, Lights, Picture mode, Sound and Bell, across the top
 //   ask       the assistant under the cards (the compact mode), fixed at the bottom centre; Down from a card or the last
 //             line inside one goes straight to it, except in an opened media card, whose rows end on a bar of their
-//             own (Back to top, Recommend me, See all), and an opened weather card keeps it. What it is asked moves
+//             own (Recommend me, See all, Back to top), and an opened weather card keeps it. What it is asked moves
 //             focus to the card concerned
 //   chat      the full-screen assistant, opened with OK on the Assistant card (the first card); Back leaves it
 //   row       the content cards (Assistant, At a glance, Recent, Cinema, Shows, Anime, Home, Reminders, Apps). Left and
 //             Right move from card to card;
-//             OK goes inside one (`inside`), where an app card offers its Launch button (i = -1) before its items
+//             OK goes inside one (`inside`), where an app card offers its Launch button (i = -1) before its items.
+//             Inside a card that does not open across the screen (Reminders, Apps, Home), Left at its left edge and
+//             Right at its right edge go on to the card beside it, so focus never sits trapped in one (the bell lands
+//             inside Reminders)
 //   menu      the profile menu, while it is open
 export type Area = "header" | "ask" | "chat" | "row" | "menu";
 
@@ -68,11 +71,11 @@ export const HEADER_ALL: readonly number[] = Array.from({ length: HEADER_LENGTH 
 export const headerItems = (party: boolean): readonly number[] => (party ? HEADER_ALL : HEADER_ALL.filter((i) => i !== HEADER_PARTY));
 /** The Launch button's index inside an app card. */
 export const LAUNCH = -1;
-/** The bar under an opened media card's last row, left to right: Back to top, Recommend me, See all. */
+/** The bar under an opened media card's last row, left to right: Recommend me (beside the orb), See all, Back to top. */
 export const END_TOP = -3;
 export const END_RECOMMEND = -4;
 export const END_ALL = -5;
-export const END_BUTTONS = [END_TOP, END_RECOMMEND, END_ALL] as const;
+export const END_BUTTONS = [END_RECOMMEND, END_ALL, END_TOP] as const;
 export const atEnd = (i: number) => (END_BUTTONS as readonly number[]).includes(i);
 
 const header = (i: number): Focus => ({ area: "header", i });
@@ -147,12 +150,19 @@ export function step(at: Focus, key: string, len: Layout): Focus {
         if (key === "Down" && len.ask > 0) return { area: "ask", i: 0 };
         return at;
       }
-      // Inside: the Launch button, then the items as a stack or a grid; the sides keep focus in the card, and Down
-      // from the last line goes to the assistant.
+      // Inside: the Launch button, then the items as a stack or a grid; Down from the last line goes to the assistant.
       const toAsk: Focus = len.ask > 0 && !col.hold ? { area: "ask", i: 0 } : at;
+      // A card that stays its own size: past its side edges, the card beside it (as a whole). Opened cards keep the sides.
+      const beside = (dir: 1 | -1): Focus => {
+        if (col.rows || col.hold) return at;
+        const n = columnFrom(len.cols, c + dir, dir);
+        return n < 0 ? at : card(n);
+      };
       if (i === LAUNCH) {
         if (key === "Down") return col.count > 0 ? { ...at, i: 0 } : toAsk;
         if (key === "Up") return card(c);
+        if (key === "Left") return beside(-1);
+        if (key === "Right") return beside(1);
         return at;
       }
       if (col.rows) {
@@ -166,7 +176,7 @@ export function step(at: Focus, key: string, len: Layout): Focus {
         }
         const { r, x, start } = rowAt(col.rows, i);
         const len = col.rows[r];
-        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : { ...at, i: END_TOP };
+        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : { ...at, i: END_BUTTONS[0] };
         if (key === "Up") return r > 0 ? { ...at, i: start - col.rows[r - 1] + Math.min(x, col.rows[r - 1] - 1) } : col.launch ? { ...at, i: LAUNCH } : card(c);
         if (key === "Right") return x < len - 1 ? { ...at, i: i + 1 } : at;
         if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;
@@ -176,8 +186,8 @@ export function step(at: Focus, key: string, len: Layout): Focus {
       const x = i % a;
       if (key === "Down") return i + a < col.count ? { ...at, i: i + a } : toAsk;
       if (key === "Up") return i - a >= 0 ? { ...at, i: i - a } : col.launch ? { ...at, i: LAUNCH } : card(c);
-      if (key === "Right") return x < a - 1 && i + 1 < col.count ? { ...at, i: i + 1 } : at;
-      if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;
+      if (key === "Right") return x < a - 1 && i + 1 < col.count ? { ...at, i: i + 1 } : beside(1);
+      if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : beside(-1);
       return at;
     }
   }

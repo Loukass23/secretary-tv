@@ -57,6 +57,13 @@ export function AppChip({ icon, label, ...box }: BoxProps & { icon?: string; lab
   );
 }
 
+/** A logo that does not load gives its place back to the title's name. */
+function logoFailed(e: Event) {
+  const img = e.currentTarget as HTMLImageElement;
+  img.style.display = "none";
+  img.nextElementSibling?.removeAttribute("hidden");
+}
+
 function hideImg(e: Event) {
   (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
 }
@@ -99,10 +106,12 @@ interface TileProps {
   progress?: number;
   /** Watched to the end: a tick in the top-right corner, and the art dimmed while the tile is not focused. */
   watched?: boolean;
+  /** The title's stylized logo (Fanart.tv), drawn in place of its name; the name comes back if the logo fails. */
+  logo?: string;
 }
 
 /** Artwork with a caption; the focused tile lifts (transform only) and gets a white ring. */
-export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched }: Omit<BoxProps, "page"> & TileProps) {
+export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched, logo }: Omit<BoxProps, "page"> & TileProps) {
   return (
     <div
       class={`sg-tile${focused ? " is-focus" : ""}${watched ? " is-watched" : ""}${cls ? ` ${cls}` : ""}`}
@@ -111,9 +120,10 @@ export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, co
       <img class="sg-fade" src={src} alt="" decoding="async" onLoad={showImg} onError={hideImg} />
       {badge && <span class="sg-tile-badge">{badge}</span>}
       {watched && <span class="sg-tile-tick">✓</span>}
-      {(title || sub) && (
+      {(title || sub || logo) && (
         <div class="sg-tile-cap">
-          {title && <b>{title}</b>}
+          {logo && <img class="sg-tile-logo" src={logo} alt="" decoding="async" onError={logoFailed} />}
+          {title && <b hidden={!!logo}>{title}</b>}
           {sub && <small>{sub}</small>}
         </div>
       )}

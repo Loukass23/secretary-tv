@@ -17,7 +17,7 @@ import {
   styleFor,
   STYLES_KEY,
 } from "../src/card-style.ts";
-import { enter, type Layout, leave, step } from "../src/nest-nav.ts";
+import { END_RECOMMEND, enter, type Layout, leave, step } from "../src/nest-nav.ts";
 
 test("the default styles keep today's cards", () => {
   assert.deepEqual(collapsedShape(DEFAULT_STYLES.cinema), {
@@ -58,14 +58,15 @@ test("smaller sizes shrink every layout, and every layout fits the card height",
   assert.deepEqual(styleFor({ cinema: { layout: "row", size: "s" } }, "cinema"), { layout: "row", size: "s" });
 });
 
-test("the opened row scrolls only once focus passes the fourth title, and stops at the last one", () => {
-  // 9 titles: 2474px, so the row moves 716px at most.
+test("the opened row scrolls only once focus passes the third title, and stops at the last one", () => {
+  // 9 posters of 280px, 306px apart: 2728px, so the row moves 968px at most.
   assert.equal(expandedScroll(0, 9), 0);
-  assert.equal(expandedScroll(3, 9), 0);
+  assert.equal(expandedScroll(2, 9), 0);
+  assert.equal(expandedScroll(3, 9), EXPANDED.stride);
   assert.equal(expandedScroll(8, 9), 8 * EXPANDED.stride + EXPANDED.w - EXPANDED_W);
-  assert.equal(expandedScroll(8, 9), 716);
-  // A longer row scrolls one stride per title past the fourth.
-  assert.equal(expandedScroll(4, 13), EXPANDED.stride);
+  assert.equal(expandedScroll(8, 9), 968);
+  // A longer row scrolls one stride per title past the third.
+  assert.equal(expandedScroll(4, 13), 2 * EXPANDED.stride);
   assert.equal(expandedScroll(2, 3), 0);
 });
 
@@ -114,8 +115,8 @@ test("the last line of the menu removes the card from home, and Left and Right l
 });
 
 test("an opened media card is one row: OK lands on the first title, the Open tile is last, Up and Back fold it", () => {
-  // Cinema opened with 5 titles (+ Open), then Shows and Home folded.
-  const open: Layout = { ask: 1, cols: [{ count: 6, across: 6 }, { count: 2, across: 1 }, { count: 3, across: 1 }], menu: 0 };
+  // Cinema opened on one row of 6, then Shows and Home folded.
+  const open: Layout = { ask: 1, cols: [{ count: 6, across: 6, rows: [6] }, { count: 2, across: 1 }, { count: 3, across: 1 }], menu: 0 };
   const card = { area: "row" as const, col: 0, i: 0 };
   const at = (i: number) => ({ area: "row" as const, col: 0, i, inside: true });
   assert.deepEqual(enter(card, open), at(0));
@@ -123,6 +124,6 @@ test("an opened media card is one row: OK lands on the first title, the Open til
   assert.deepEqual(step(at(5), "Right", open), at(5));
   assert.deepEqual(step(at(0), "Left", open), at(0));
   assert.deepEqual(step(at(3), "Up", open), card);
-  assert.deepEqual(step(at(3), "Down", open), { area: "ask", i: 0 });
+  assert.deepEqual(step(at(3), "Down", open), at(END_RECOMMEND), "Down from the last row is the end bar, beginning with Recommend me");
   assert.deepEqual(leave(at(4)), card);
 });

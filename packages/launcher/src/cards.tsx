@@ -13,16 +13,15 @@ import {
   type IconName,
   InfoPanel,
   Kicker,
-  LANDSCAPE,
-  LandscapeTile,
   ListCard,
   MediaTile,
   RankNumber,
   Scroller,
+  WAVE_ORB,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import type { Weather } from "./assistant.ts";
 import type { CatalogKind, SlimTitle } from "./apps.ts";
-import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, EXPANDED, EXPANDED_W, MORE, moreTop, rowScroll } from "./card-style.ts";
+import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, CONTINUE, EXPANDED_W, MORE, moreTop, rowScroll } from "./card-style.ts";
 import { captionMeta, expandedRows, focusedItem, onRow, rowItems, rowsOf, rowTitle, targetAt, tileKey, tileKeys } from "./card-rows.ts";
 import { recLine, type RecState } from "./recommend.ts";
 import { type RowShape, type TileBox, tileBox } from "./row-look.ts";
@@ -51,6 +50,12 @@ export interface MediaItem {
   rating?: string;
   /** Where it ranks and on whose list, when known ("No. 3 in Popular films"). */
   rank?: string;
+  /** Its stylized logo (catalog-kit titleArt, Fanart.tv), drawn on landscape art in place of the name. */
+  logo?: string;
+  /** In progress, a show: the episode ("S1 · E5 · The Long Night"), on its Continue watching tile. */
+  episode?: string;
+  /** In progress: what is left ("23 min left"), on its Continue watching tile. */
+  left?: string;
 }
 
 /** A row under the first one in an opened media card (My List, a genre): `run(i)` opens its item `i`. */
@@ -104,6 +109,8 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       shape?: RowShape;
       /** The first row is Continue watching: landscape stills unless `shape` says otherwise. */
       wide?: boolean;
+      /** Continue watching lists episodes (Shows, Anime): its tiles are the bigger ones (card-style.ts CONTINUE). */
+      episodes?: boolean;
       /** What the assistant understood and did, shown beside the label while the card holds its suggestions. */
       note?: { prompt: string; reply: string };
       /** Rows under the first once the card is opened (Down): the picks, My List, the genres, the assistant's picks. */
@@ -150,11 +157,21 @@ const PANEL_W = 460;
 
 type MediaColumn = Extract<RowColumn, { kind: "media" }>;
 
-/** A Continue watching still: LandscapeTile's size. */
-const WIDE_BOX: TileBox = { w: LANDSCAPE.w, h: LANDSCAPE.h, stride: LANDSCAPE.w + LANDSCAPE.gap, art: "still", lead: 0, caption: true };
-/** How a row draws its tiles: the look the viewer picked, else stills for Continue watching, else posters. */
-const rowBox = (shape: RowShape | undefined, wide: boolean | undefined): TileBox => (shape ? tileBox(shape) : wide ? WIDE_BOX : tileBox("poster"));
-const rowLook = (c: MediaColumn, r: number): { shape?: RowShape; wide?: boolean } => (r === 0 ? { shape: c.shape, wide: c.wide } : (rowsOf(c)[r - 1] ?? {}));
+/** The art of a Continue watching tile is 16:9; the bar and the episode line sit under it, inside the tile's box. */
+const artH = (w: number) => Math.round((w * 9) / 16);
+const continueBox = (w: number): TileBox => ({ w, h: artH(w) + CONTINUE.below, stride: w + CONTINUE.gap, art: "still", lead: 0, caption: true });
+/** Continue watching tiles: the bigger one for episodes (Shows, Anime), the other for films. */
+const CW_EPISODES = continueBox(CONTINUE.episodes);
+const CW_FILMS = continueBox(CONTINUE.films);
+const isContinue = (b: TileBox) => b === CW_EPISODES || b === CW_FILMS;
+/** How a row draws its tiles: the look the viewer picked, else Continue watching tiles, else posters. */
+const rowBox = (shape: RowShape | undefined, wide: boolean | undefined, episodes?: boolean): TileBox =>
+  shape ? tileBox(shape) : wide ? (episodes ? CW_EPISODES : CW_FILMS) : tileBox("poster");
+type Look = { shape?: RowShape; wide?: boolean; episodes?: boolean };
+const rowLook = (c: MediaColumn, r: number): Look => (r === 0 ? { shape: c.shape, wide: c.wide, episodes: c.episodes } : (rowsOf(c)[r - 1] ?? {}));
+const lookBox = (l: Look) => rowBox(l.shape, l.wide, l.episodes);
+/** The first row's height: the rows under it start lower when it is Continue watching (card-style.ts moreTop). */
+const firstH = (c: MediaColumn) => lookBox(rowLook(c, 0)).h;
 /** What the folded card shows. */
 const smallItems = (c: MediaColumn): MediaItem[] => c.small ?? c.items;
 
@@ -231,11 +248,11 @@ export function itemBox(c: RowColumn, i: number, expanded = false): { x: number;
   if (c.kind !== "media" || i < 0) return null;
   if (expanded) {
     const { r, x } = rowAt(expandedRows(c), i);
-    const look = rowLook(c, r);
-    const b = rowBox(look.shape, look.wide);
+    const b = lookBox(rowLook(c, r));
     const n = rowItems(c, r).length;
-    // Each row's tiles sit at the top of its block, under its label (the first row's name is in the header).
-    return { x: x * b.stride + b.lead - rowScroll(x, n, b.stride, b.w), y: r === 0 ? 0 : MORE.labelH, w: b.w - b.lead, h: b.h };
+    // Each row's tiles sit at the top of its block, under its label (the first row's name is in the header). The glow
+    // sits behind a Continue watching tile's art only.
+    return { x: x * b.stride + b.lead - rowScroll(x, n, b.stride, b.w), y: r === 0 ? 0 : MORE.labelH, w: b.w - b.lead, h: isContinue(b) ? artH(b.w) : b.h };
   }
   const s = collapsedShape(c.style);
   if (i >= Math.min(smallItems(c).length, s.count)) return null;
@@ -258,6 +275,8 @@ interface ColumnProps {
   away?: boolean;
   /** This card is being moved: lifted a little while Left and Right slide it along the row. */
   lifted?: boolean;
+  /** Another card is picked: this one steps back a little, behind the one pushed in. */
+  behind?: boolean;
 }
 
 const dayName = (iso: string, k: number) =>
@@ -396,7 +415,8 @@ function MediaSmall({ col, out }: { col: MediaColumn; out: boolean }) {
               h={b.h}
               src={still ? (it.still ?? it.poster) : it.poster}
               title={still ? it.title : undefined}
-              sub={still ? it.sub : undefined}
+              logo={still ? it.logo : undefined}
+              sub={still ? (it.episode ?? it.sub) : undefined}
               badge={badgeOf(it, small)}
               progress={it.progress}
             />
@@ -423,8 +443,8 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
         return (
           <div key={keys[i]} class="nest-rise" style={{ animationDelay: `${Math.min(i, 7) * 30}ms` }}>
             {b.lead > 0 && <RankNumber x={x} w={b.lead} h={b.h} n={i + 1} focused={at === i} />}
-            {b === WIDE_BOX ? (
-              <LandscapeTile x={x} y={0} src={it.still ?? it.poster} title={it.title} sub={it.sub} badge={badgeOf(it, false)} progress={it.progress} focused={at === i} />
+            {isContinue(b) ? (
+              <ContinueTile x={x} box={b} it={it} focused={at === i} />
             ) : (
               <MediaTile
                 x={x + b.lead}
@@ -444,9 +464,33 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
   );
 }
 
+/**
+ * A Continue watching tile in an opened card: the landscape thumb with the title's logo (else its name) on it, then a
+ * thick bar of how far in it is, and the episode and the time left on one line under the bar.
+ */
+function ContinueTile({ x, box, it, focused }: { x: number; box: TileBox; it: MediaItem; focused: boolean }) {
+  const h = artH(box.w);
+  const p = Math.max(0, Math.min(1, it.progress ?? 0));
+  return (
+    <>
+      <MediaTile x={x} y={0} w={box.w} h={h} src={it.still ?? it.poster} title={it.title} logo={it.logo} focused={focused} class="nest-cw-art" />
+      <div class={`nest-cw-below${focused ? " is-focus" : ""}`} style={{ transform: `translate3d(${x}px,${h + 22}px,0)`, width: `${box.w}px` }}>
+        <span class="nest-cw-bar">
+          <i style={{ transform: `scaleX(${p})` }} />
+        </span>
+        <span class="nest-cw-line">
+          <b>{it.episode ?? (it.resume ? "Resume" : it.sub)}</b>
+          {it.left && <small>{it.left}</small>}
+        </span>
+      </div>
+    </>
+  );
+}
+
 /** The focused title's caption, fixed at the row's left edge under its tiles so the eye does not chase the focus. */
 function Caption({ hit, top }: { hit: MediaItem; top: number }) {
-  return <InfoPanel x={0} y={top} w={CAPTION_W} h={CAPTION.h} title={hit.title} meta={captionMeta(hit)} about={hit.about} />;
+  // A line of synopsis, ended with an ellipsis: at the couch-readable type size there is room for one under the name.
+  return <InfoPanel x={0} y={top} w={CAPTION_W} h={CAPTION.h} title={hit.title} meta={captionMeta(hit)} about={hit.about} lines={1} />;
 }
 
 interface MoreBlockProps {
@@ -500,16 +544,19 @@ class MoreBlock extends Component<MoreBlockProps> {
 /** A media card opened: its first row, then the rows under it as Down reaches them, then the end bar. */
 function MediaRow({ col, focus: flat }: { col: MediaColumn; focus: number }) {
   const rows = expandedRows(col);
-  // On the end bar the stack stays on the last row, with the bar under it where the next row would peek.
+  // On the end bar the stack stays on the last row, with the bar in the place of that row's caption.
   const { r: on, x: onX, end } = onRow(col, flat);
+  const fh = firstH(col);
   // Down moves to the rows under the first: the whole stack slides up by transform until that row is at the top.
-  const offY = on === 0 ? 0 : moreTop(on - 1);
-  const b = rowBox(col.shape, col.wide);
+  const offY = on === 0 ? 0 : moreTop(on - 1, fh);
+  const b = lookBox(rowLook(col, 0));
   const at = on === 0 ? onX : -1;
   const scroll = rowScroll(Math.max(0, at), col.items.length, b.stride, b.w);
   // The caption and the focused tile are the same title (card-rows.ts focusedItem).
   const hit = on === 0 ? focusedItem(col, flat) : undefined;
   const more = rowsOf(col);
+  // The end bar takes the last row's caption place, under its tiles, so it is never cut off by the screen's bottom.
+  const endTop = (on === 0 ? 0 : moreTop(on - 1, fh) + MORE.labelH) + lookBox(rowLook(col, on)).h + CAPTION.top;
   return (
     <div class="nest-stack" style={{ transform: `translate3d(0,${-offY}px,0)` }}>
       {/* The first row fades out as the stack slides up past it (opacity only). */}
@@ -524,14 +571,14 @@ function MediaRow({ col, focus: flat }: { col: MediaColumn; focus: number }) {
         // The focused row, the one just left and the one just below (a peek) are drawn; a row is mounted as it
         // comes into view, so it rises in.
         if (r < on - 1 || r > on + 1) return null;
-        const bm = rowBox(m.shape, m.wide);
+        const bm = lookBox(m);
         return (
           <MoreBlock
             key={m.label}
             label={m.label}
             items={m.items}
             box={bm}
-            top={moreTop(k)}
+            top={moreTop(k, fh)}
             gone={r < on}
             peek={r > on}
             at={r === on ? onX : -1}
@@ -539,35 +586,30 @@ function MediaRow({ col, focus: flat }: { col: MediaColumn; focus: number }) {
           />
         );
       })}
-      {on === rows.length - 1 && (
-        <EndBar
-          col={col}
-          top={moreTop(on)}
-          // Focused, the bar rises into the caption's place under the last row (no title is focused there); otherwise it
-          // peeks where the next row would.
-          lift={end ? moreTop(on) - (on === 0 ? 0 : moreTop(on - 1) + MORE.labelH) - rowBox(rowLook(col, on).shape, rowLook(col, on).wide).h - CAPTION.top : 0}
-          focus={end ? flat : null}
-          peek={!end}
-        />
-      )}
+      {end && on === rows.length - 1 && <EndBar col={col} top={endTop} focus={flat} />}
     </div>
   );
 }
 
-/** Under an opened card's last row: the end, with Back to top, Recommend me and See all, so Down never leaves the card. */
-function EndBar({ col, top, lift, focus, peek }: { col: MediaColumn; top: number; lift: number; focus: number | null; peek: boolean }) {
+/**
+ * Under an opened card's last row, reached with Down: the assistant's orb and its words, as at the bottom of the home,
+ * offering Recommend me; then See all (the catalog home) and Back to top. Down never leaves the card.
+ */
+function EndBar({ col, top, focus }: { col: MediaColumn; top: number; focus: number }) {
   const line = recLine(col.recs, col.unit);
   const loading = col.recs?.status === "loading";
   return (
-    <div class={`nest-end${peek ? " is-peek" : ""}${loading ? " is-loading" : ""}`} style={{ top: `${top}px`, transform: `translate3d(0,${-lift}px,0)` }}>
+    <div class={`nest-end${loading ? " is-loading" : ""}`} style={{ top: `${top}px` }}>
+      <i class="nest-end-orb" style={{ backgroundImage: WAVE_ORB }} />
       <div class="nest-end-text">
         <b>{line.title}</b>
-        <small>{line.sub}</small>
+        {line.sub && <small>{line.sub}</small>}
       </div>
-      <Button label="↑ Back to top" focused={focus === END_TOP} />
       <Button label={loading ? "Asking…" : "✦ Recommend me"} primary focused={focus === END_RECOMMEND} />
-      <span class="nest-end-small">
-        <Button label="See all" focused={focus === END_ALL} />
+      <span class="nest-end-gap" />
+      <Button label="See all" focused={focus === END_ALL} />
+      <span class="nest-end-top">
+        <Button label="↑ Back to top" focused={focus === END_TOP} />
       </span>
     </div>
   );
@@ -589,14 +631,15 @@ function OpenHeader({ col, flat }: { col: RowColumn; flat: number }) {
   );
 }
 
-export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted }: ColumnProps) {
+export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted, behind }: ColumnProps) {
   const at = (dx: number, dy: number): [number, number] => [page[0] + dx, page[1] + dy];
   const focus = inside ?? -2;
   const open = expands(col) && inside !== null;
   const w = columnShape(col).w;
+  const h = columnHeight(col);
   return (
     <div
-      class={`nest-col nest-kind-${col.kind}${dim ? " is-dim" : ""}${away ? " is-away" : ""}${lifted ? " is-lifted" : ""}`}
+      class={`nest-col nest-kind-${col.kind}${dim ? " is-dim" : ""}${away ? " is-away" : ""}${lifted ? " is-lifted" : ""}${picked ? " is-picked" : ""}${behind ? " is-behind" : ""}`}
       style={{ transform: `translate3d(${x}px,0,0)` }}
     >
       <span class={`nest-col-label${open ? " is-answer" : ""}`}>{open ? <OpenHeader col={col} flat={focus} /> : col.label}</span>
@@ -605,11 +648,17 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted
           <b>“{col.note.prompt}”</b> {col.note.reply}
         </span>
       )}
-      <div class="nest-col-body">
-        {/* The whole card picked: a ring faded in on its own layer, nothing moves. */}
-        <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${columnHeight(col)}px` }} />
+      {/* Sized as the folded card, so the push-in scales it about its own centre. */}
+      <div class="nest-col-body" style={{ width: `${w}px`, height: `${h}px` }}>
+        {/* The whole card picked: pushed in a little towards the viewer (transform, style.css), its ring faded in. */}
+        <i class={`nest-col-ring${picked ? " is-on" : ""}`} style={{ width: `${w}px`, height: `${h}px` }} />
         {col.kind === "media" && <MediaSmall col={col} out={open} />}
-        {col.kind === "media" && open && <MediaRow col={col} focus={focus} />}
+        {/* Opened, the rows open out of the card's place: scale and opacity from its top left (style.css nest-open-in). */}
+        {col.kind === "media" && open && (
+          <div class="nest-open-in">
+            <MediaRow col={col} focus={focus} />
+          </div>
+        )}
         {col.kind === "home" && (
           <Glass x={0} y={0} w={HOME_W} h={CARD_H} page={page} class="nest-home-card">
             <i class="nest-home-bulb" />
@@ -636,7 +685,11 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted
           </Glass>
         )}
         {col.kind === "weather" && <WeatherCard w={col.weather} page={page} focused={false} out={open} />}
-        {col.kind === "weather" && open && <WeatherDetail w={col.weather} page={page} />}
+        {col.kind === "weather" && open && (
+          <div class="nest-open-in">
+            <WeatherDetail w={col.weather} page={page} />
+          </div>
+        )}
         {col.kind === "calendar" && <CalendarCard date={col.date} page={page} focused={focus === 0} />}
         {col.kind === "list" && (
           <>
