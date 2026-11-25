@@ -1,24 +1,29 @@
-// The one header of Secretary: the person top left, the clock and the quiet buttons top right. On the home screen and
-// opened cards it is always expanded; on title pages it collapses to the clock alone, top right, so the artwork stays
-// clear, and Up on the remote expands it again. The host screen owns `expanded` and the focus, as with every glass
-// control: the header only draws them.
+// The one header of Secretary, on every screen and panel (home, catalog home, title pages, search, Settings, Lights,
+// Watch together): the person at the left, the quiet buttons in their one order, then the clock last, at the right edge.
+// On title pages it collapses: the person and the buttons fade out and the clock stays exactly where it is, so the
+// artwork stays clear; Up on the remote brings the buttons back. The host screen owns `expanded` and the focus, as with
+// every glass control: the header only draws them.
 //
-// Collapsing moves nothing but the clock (transform, on its own layer) and fades the person and the buttons out as one
-// layer (opacity), so it costs a compositor animation and no layout or paint.
+// Collapsing moves nothing: the person and the buttons fade as one layer (opacity), so it costs a compositor animation
+// and no layout or paint.
 import type { ComponentChildren } from "preact";
 import { Avatar, Icon, IconButton } from "./controls.tsx";
 import type { IconName } from "./icons.ts";
 
 /** Where the header sits on the 1920x1080 page; `bottom` is the first free line under it. */
 export const HEADER = { pad: 80, y: 44, h: 78, bottom: 122 } as const;
-/** One header button; the gap is between two buttons, `clockGap` between the clock and the first button. */
-export const HEADER_BUTTON = { w: 88, h: 78, gap: 28, clockGap: 48 } as const;
+/** One header button; the gap is between two buttons, `clockGap` between the last button and the clock. */
+export const HEADER_BUTTON = { w: 88, h: 78, gap: 28, clockGap: 24 } as const;
+/** The clock's box at the right edge: wide enough for "12:59 PM" at the Large text size; the time is right-aligned in it. */
+export const HEADER_CLOCK = { w: 200 } as const;
+/** Where the last button ends: left of the clock. */
+const BUTTONS_RIGHT = 1920 - HEADER.pad - HEADER_CLOCK.w - HEADER_BUTTON.clockGap;
 
 export interface HeaderButton {
   /** Stable key, for Preact; the host maps its own focus indexes onto the button order. */
   key: string;
   icon: IconName;
-  /** true draws the small bar, a number the red count bubble (nothing for 0). */
+  /** true draws the small bar, a number the count bubble (nothing for 0), both in the accent. */
   badge?: boolean | number;
 }
 
@@ -31,13 +36,13 @@ export interface HeaderPerson {
 }
 
 export interface HeaderProps {
-  /** The clock's text, e.g. "20:41". Always shown. */
+  /** The clock's text, e.g. "20:41". Always shown, last at the right edge. */
   time: string;
-  /** true: person, clock and buttons. false: the clock alone, top right. Default true. */
+  /** true: person, buttons and clock. false: the clock alone, in the same place. Default true. */
   expanded?: boolean;
   /** Top left. Without it the left of the header is empty. */
   person?: HeaderPerson;
-  /** Right to left from the edge, the last one nearest the edge. */
+  /** Left to right; the last one sits just left of the clock. */
   buttons: readonly HeaderButton[];
   /** What has the remote: "person", a button's index in `buttons`, or null for nothing in the header. */
   focus?: "person" | number | null;
@@ -45,12 +50,10 @@ export interface HeaderProps {
 
 /** The x of button `k` of `n`, so a host can place a menu or a glow under it. */
 export const headerButtonX = (k: number, n: number): number =>
-  1920 - HEADER.pad - n * HEADER_BUTTON.w - (n - 1) * HEADER_BUTTON.gap + k * (HEADER_BUTTON.w + HEADER_BUTTON.gap);
+  BUTTONS_RIGHT - n * HEADER_BUTTON.w - (n - 1) * HEADER_BUTTON.gap + k * (HEADER_BUTTON.w + HEADER_BUTTON.gap);
 
 export function Header({ time, expanded = true, person, buttons, focus = null }: HeaderProps) {
   const n = buttons.length;
-  // Expanded, the clock sits left of the buttons; collapsed, it slides to the right edge.
-  const shift = n ? n * HEADER_BUTTON.w + (n - 1) * HEADER_BUTTON.gap + HEADER_BUTTON.clockGap : 0;
   return (
     <>
       <div class={`sg-head-items${expanded ? "" : " is-away"}`}>
@@ -72,10 +75,7 @@ export function Header({ time, expanded = true, person, buttons, focus = null }:
           />
         ))}
       </div>
-      <div
-        class="sg-head-clock"
-        style={{ right: `${HEADER.pad}px`, top: `${HEADER.y}px`, transform: `translate3d(${expanded ? -shift : 0}px,0,0)` }}
-      >
+      <div class="sg-head-clock" style={{ right: `${HEADER.pad}px`, top: `${HEADER.y}px`, width: `${HEADER_CLOCK.w}px` }}>
         <b>{time}</b>
       </div>
     </>

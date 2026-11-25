@@ -513,3 +513,18 @@ now draws fewer slivers and a shorter peek of the next row, which likely account
   measurable.
 - **Title page header**: on a film page only the clock shows; Up from the buttons brings back the full header and the
   remote moves along it to Settings.
+
+### Type, accent and the one header (wave 1 A, 2026-11-25, not yet measured)
+
+Not deployed: measured at integration. What changed for frames:
+
+- **The poster-tinted focus ring is gone** (`ring.ts`, `useFocusRing`): it set three custom properties on every focused
+  element after every render. Focus now takes the one accent from `:root`, set only when the setting changes. Expect the
+  same or slightly fewer long frames on the opened-card walk.
+- **The header clock no longer moves**: collapsing fades the person and buttons only (opacity), with no transform on the
+  clock.
+- **A bundled font** (Space Grotesk, 22 KB woff2, `font-display: swap`): check the first frame and that the boot splash
+  does not wait on it.
+- **Larger type** everywhere (eight steps, `--sg-t-*`): more glyph raster on text changes. Walk the opened Cinema card,
+  Settings and a title page, and compare with `main` as above. Also walk once with `data-sg-text="large"` and
+  `data-sg-type="bold"` on `<html>` (`cdp.mjs eval`).

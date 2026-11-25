@@ -589,7 +589,7 @@ export function PlayerView({
             status={
               together && partyView && !failed && loaded.current
                 ? partyView.tl?.state === "paused" && party!.canControl()
-                  ? "Ready · OK starts it for everyone · Up shows the code"
+                  ? "Ready for everyone"
                   : partyLine(partyView)
                 : status
             }
@@ -615,7 +615,7 @@ export function PlayerView({
             <div class="ply-next-text">
               <span class="ply-state">Up next</span>
               <span class="ply-title">{`${episodeLabel(next)} · ${next.name}`}</span>
-              <span class="ply-dim">{cardCount != null ? `Starts in ${cardCount} s · OK plays now · Back hides` : "OK plays now · Back hides"}</span>
+              <span class="ply-dim">{cardCount != null ? `Starts in ${cardCount} s` : ""}</span>
               {cardCount != null && (
                 <span class="ply-bar">
                   <i class="ply-count" style={{ animationDuration: `${cardCount}s` }} />

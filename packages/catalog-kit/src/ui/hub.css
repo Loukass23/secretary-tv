@@ -2,11 +2,11 @@
    Secretary's (launcher/src/search.tsx). */
 .hub-glass { position: fixed; inset: 0; z-index: 5; }
 
-.hub-title { font-size: 46px; font-weight: 700; letter-spacing: -0.02em; }
-.hub-title small { display: block; margin-top: 6px; font-size: 21px; font-weight: 400; letter-spacing: 0; color: var(--sg-ink-dim); }
-.hub .sg-card-row { font-size: 28px; }
-.hub .sg-card-meta { font-size: 24px; font-weight: 600; }
-.hub .sg-card small { font-size: 19px; margin-left: 0; }
+.hub-title { font-size: var(--sg-t-xxl); font-weight: 700; letter-spacing: -0.02em; }
+.hub-title small { display: block; margin-top: 6px; font-size: var(--sg-t-s); font-weight: 400; letter-spacing: 0; color: var(--sg-ink-dim); }
+.hub .sg-card-row { font-size: var(--sg-t-l); }
+.hub .sg-card-meta { font-size: var(--sg-t-m); font-weight: 600; }
+.hub .sg-card small { font-size: var(--sg-t-xs); margin-left: 0; }
 
-.hub-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: 21px; font-weight: 600; }
+.hub-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: var(--sg-t-s); font-weight: 600; }
 .hub-toast::after { background: rgba(10, 11, 14, 0.7); }

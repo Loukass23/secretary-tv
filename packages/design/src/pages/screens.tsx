@@ -13,7 +13,7 @@ import { GlassRoot, glowImage, TINTS } from "@secretary/tv-kit/src/glass/index.t
 import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@secretary/launcher/src/card-style.ts";
 import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-order.ts";
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
-import { headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
+import { HEADER_ITEMS, headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
 import { LightsPanel } from "@secretary/launcher/src/lights.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
 import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
@@ -84,6 +84,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
     ask: 1,
     cols: rowLayout(columns, openCol).nav,
     menu: menuOpen ? MENU.length : 0,
+    header: HEADER_ITEMS,
   };
 
   const open = () => setFocus(enter(focus, layout));
@@ -234,7 +235,7 @@ function Lights({ mode, theme, backdrop }: PageProps & { art: Art }) {
   const [visit, setVisit] = useState(0);
   return (
     <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
-      <LightsPanel key={visit} devices={LIGHT_DEVICES} scenes={LIGHT_SCENES} api={LIGHTS_API} onChange={noop} onClose={() => setVisit((v) => v + 1)} />
+      <LightsPanel key={visit} devices={LIGHT_DEVICES} scenes={LIGHT_SCENES} api={LIGHTS_API} header={PANEL_HEADER} onChange={noop} onClose={() => setVisit((v) => v + 1)} />
     </GlassRoot>
   );
 }
@@ -252,6 +253,7 @@ function Catalog({ type, art }: { type: CatalogType; art: Art }) {
       status={null}
       heading={type === "movie" ? "Cinema" : type === "series" ? "Shows" : "Anime"}
       person={{ name: "Robin", color: "#5b52e6" }}
+      header={HEADER}
       onFocus={setFocus}
       onOpen={noop}
       onOpenFolder={noop}
@@ -283,6 +285,8 @@ const HEADER: HostHeader = {
   buttons: headerButtons(undefined, true, 2),
   press: () => {},
 };
+/** The same header over a panel (launcher panel-header.tsx). */
+const PANEL_HEADER = { ...HEADER, person: { name: "Alex", color: "#5a7dff" }, press: () => {} };
 
 const streams: StreamClient = { get: async () => [], watch: (_i, _h, _t, cb) => (cb([], true), () => {}), warm: async () => {} };
 

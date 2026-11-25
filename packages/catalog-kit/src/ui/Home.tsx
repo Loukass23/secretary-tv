@@ -10,13 +10,18 @@ import {
   Glass,
   GlassRoot,
   Header,
+  type HeaderAt,
+  type HeaderButton,
+  headerStart,
   type HeaderPerson,
   InfoPanel,
   Kicker,
   LANDSCAPE,
   LandscapeTile,
   MediaTile,
+  RankNumber,
   RowLabel,
+  stepHeader,
   showImg,
 } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -35,6 +40,7 @@ import {
 import type { LookBox } from "@secretary/tv-kit/src/row-look.ts";
 import type { ClockFormat, DashboardSettings, OverlayTab } from "../lib/settings.ts";
 import type { CatalogType, HomeRow, Title } from "../lib/types.ts";
+import type { HostHeader } from "../host.ts";
 import { DWELL_MS, HeroLayers, useBase, useHeroArt } from "./art.tsx";
 import "./home.css";
 
@@ -58,11 +64,11 @@ const END_ACTIONS = [
   { id: "top", label: "Back to top", icon: undefined },
   { id: "search", label: "Search", icon: "search" },
 ] as const;
-/** Secretary's header on the catalog home: the clock, then Search and Settings, as on Secretary's home. */
-const HEAD_BUTTONS = [
+/** The header of a catalog run on its own (no Secretary around it): Search and Settings, then the clock. */
+const HEAD_BUTTONS: readonly HeaderButton[] = [
   { key: "search", icon: "search" },
   { key: "settings", icon: "settings" },
-] as const;
+];
 /** Continue watching is a row of stills with the title on the art. */
 const CONTINUE_BOX: LookBox = { w: LANDSCAPE.w, h: LANDSCAPE.h, stride: LANDSCAPE.w + LANDSCAPE.gap, art: "still", lead: 0, caption: true };
 
@@ -81,6 +87,8 @@ interface Props {
   clockFormat?: ClockFormat;
   /** The person at the top left of the header, as on Secretary's home (EmbeddedHost.person). */
   person?: HeaderPerson;
+  /** Secretary's one header (host.ts), drawn whole as on its home; without it, Search and Settings. */
+  header?: HostHeader;
   onFocus(f: Focus): void;
   onOpen(title: Title, autoPlay?: boolean): void;
   onOpenFolder(collectionId: string, folderId: string, rowLook?: CardShape): void;
@@ -130,6 +138,7 @@ export function Home({
   heading,
   clockFormat = "24h",
   person,
+  header,
   onFocus,
   onOpen,
   onOpenFolder,
@@ -140,8 +149,10 @@ export function Home({
   onOpenHub,
   onBack,
 }: Props) {
-  /** Focus on a header button (an index into HEAD_BUTTONS), or null when it is in the rows. */
-  const [topIdx, setTopIdx] = useState<number | null>(null);
+  /** Focus in the header (the person, or a button's index), or null when it is in the rows. */
+  const [topIdx, setTopIdx] = useState<HeaderAt | null>(null);
+  const headButtons = header?.buttons ?? HEAD_BUTTONS;
+  const headPerson = header?.person ?? person;
   const [clockText, setClockText] = useState(() => formatClock(clockFormat));
   // Each row's look (shared with Secretary's cards, tv-kit/src/row-look.ts): its own choice, the setting, or Automatic,
   // which makes the page's first collection a spotlight and a chart a Top 10. Continue watching is always stills.
@@ -249,14 +260,15 @@ export function Home({
     }
 
     if (topIdx !== null) {
-      if (key === "Down" || key === "Back") return void setTopIdx(null);
-      if (key === "Left") return void setTopIdx(Math.max(0, topIdx - 1));
-      if (key === "Right") return void setTopIdx(Math.min(HEAD_BUTTONS.length - 1, topIdx + 1));
       if (key === "Enter") {
         setTopIdx(null);
-        return void onOpenHub(HEAD_BUTTONS[topIdx].key);
+        if (header) return void header.press(topIdx);
+        return void (topIdx !== "person" && onOpenHub(HEAD_BUTTONS[topIdx].key as OverlayTab));
       }
-      return false;
+      const r = stepHeader(topIdx, key, Boolean(headPerson && header), headButtons.length);
+      if (r === "leave") return void setTopIdx(null);
+      if (r !== topIdx) return void setTopIdx(r);
+      return key === "Left" || key === "Right" ? undefined : false;
     }
 
     if (endIdx !== null) {
@@ -284,7 +296,7 @@ export function Home({
     }
     if (key === "Back") return void onBack();
     // Up from the first row enters the header, on Search.
-    if (key === "Up" && focus.row === 0) return void setTopIdx(0);
+    if (key === "Up" && focus.row === 0) return void setTopIdx(headButtons.length ? 0 : headerStart(Boolean(headPerson && header), 0));
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       let next = move(lengths, focus, key.toLowerCase() as Dir);
       // Down past the last row: the end bar, never out of the page.
@@ -351,8 +363,8 @@ export function Home({
     <GlassRoot mode="fake" wallpaper={backdrop?.wallpaper} frost={frost} sheen={sheen} mood={mood} class="cat-home">
       <HeroLayers hero={hero} shade={shade} />
 
-      {/* Secretary's one header: the person, the clock, Search and Settings. */}
-      <Header time={clockText} person={person} buttons={HEAD_BUTTONS} focus={topIdx} />
+      {/* Secretary's one header: the person, its buttons, the clock last. */}
+      <Header time={header?.time ?? clockText} person={headPerson} buttons={headButtons} focus={topIdx} />
 
       <div class="cat-caption">
         <InfoPanel {...INFO} kicker={kicker} title={current?.name ?? status ?? heading} meta={meta} about={current?.description || extraText || undefined} />
@@ -421,7 +433,7 @@ function RowStyleMenu({ menu }: { menu: StyleMenu }) {
   const shape = menu.style.shape ?? "auto";
   const size = menu.style.size ?? "auto";
   return (
-    <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={(SIZE_LINE + 1) * MENU_LINE + 110} class="cat-style">
+    <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={(SIZE_LINE + 1) * MENU_LINE + 72} class="cat-style">
       <Kicker>{menu.title} · row look</Kicker>
       {MENU_SHAPES.map((s, i) => (
         <div key={s} class={`cat-style-line${menu.line === i ? " is-focus" : ""}${shape === s ? " is-picked" : ""}`}>
@@ -433,7 +445,6 @@ function RowStyleMenu({ menu }: { menu: StyleMenu }) {
         <span>Size</span>
         <b>‹ {CARD_SIZE_LABELS[size]} ›</b>
       </div>
-      <small>OK keeps · Back undoes</small>
     </Glass>
   );
 }
@@ -466,7 +477,7 @@ function RowTile({ item, rank, x, box, focused }: { item: Title; rank: number; x
   if (!box.lead) return tile;
   return (
     <div class="cat-rank" style={{ left: `${x}px`, width: `${box.w}px`, height: `${box.h}px` }}>
-      <span style={{ width: `${box.lead + 30}px` }}>{rank}</span>
+      <RankNumber x={0} w={box.lead} h={box.h} n={rank} focused={focused} />
       {tile}
     </div>
   );
