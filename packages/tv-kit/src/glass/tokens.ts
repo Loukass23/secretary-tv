@@ -25,7 +25,7 @@ export const ACCENT = {
   "accent-ink": "var(--tinta, #ffffff)",
 } as const;
 
-/** The focus fill and its inks, the same in both themes: the accent. */
+/** The focus fill and its inks, the same in both themes: the accent (Secretary's home tints them per poster at night, `ring.ts`). */
 const FOCUS = {
   focus: "var(--sg-accent)",
   "focus-ink": "var(--sg-accent-ink)",
