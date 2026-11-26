@@ -5,7 +5,8 @@ import { type DashboardSettings, DEFAULT_SETTINGS } from "@secretary/catalog-kit
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
-import { type CardStyle, styleFor } from "@secretary/launcher/src/card-style.ts";
+import { type CardStyle, collapsedShape, styleFor } from "@secretary/launcher/src/card-style.ts";
+import { coverPicks } from "@secretary/launcher/src/card-covers.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
 import type { RecState } from "@secretary/launcher/src/recommend.ts";
 import { appIcon } from "@secretary/launcher/src/app-icons.ts";
@@ -109,8 +110,12 @@ const RECS: Record<string, RecState | undefined> = {
   },
 };
 
-/** Today's styles unless the workbench's own menu changed them (`styles`). */
-export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): RowColumn[] {
+/** Today's styles unless the workbench's own menu changed them (`styles`). `turn` is the covers' turn (card-covers.ts):
+ *  the folded cards show other titles on each, none twice. */
+export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}, turn = 0): RowColumn[] {
+  const onCovers = new Set<string>();
+  const covers = (all: MediaItem[], style: CardStyle) =>
+    coverPicks(all, collapsedShape(style).count, turn, onCovers, (it) => ({ id: it.title, name: it.title }));
   // As app.tsx builds them: Continue watching first (landscape stills), then the picks, My List, the genres, and on
   // Anime the assistant's picks above the end bar.
   const card = (key: string, name: string, unit: string, all: MediaItem[], going: number): RowColumn => ({
@@ -122,7 +127,7 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}): R
     label: name,
     episodes: key !== "cinema",
     items: going ? all.slice(0, going) : all,
-    small: going ? all : undefined,
+    small: covers(all, styleFor(styles, key)),
     heading: going ? "Continue watching" : "Tonight's picks",
     wide: going > 0,
     style: styleFor(styles, key),

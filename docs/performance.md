@@ -643,3 +643,24 @@ the other, 250 ms per key, 3 runs each.
 | | this change | 17-33 ms | 83-150 ms | 23, 54, 46 | 5-7 MB |
 
 The same within the run-to-run spread. One 350 ms frame in the second Cinema run, not seen in the others.
+
+## The 26 Nov screen review (Secretary, 2026-11-26)
+
+Measured on the Samsung TV inside Secretary, each change against `main` (`89fd594`) deployed the same way from a
+worktree, one right after the other, 60 s after launch, 250 ms per key, 3 runs each.
+
+### Home cards: covers that change, the logo once (A)
+
+The folded media cards pick their covers on a turn (`card-covers.ts`) that moves on at launch, on return from the
+catalog and every five minutes while no media card has focus, so nothing changes under the remote. The tiles' episode
+line sits on a flat pill; the art is the Fanart.tv thumb (logo painted in) on 16:9 tiles or the textless backdrop
+with the logo on other shapes, so no tile loads more than one picture.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home cards (`Right,Right,Right,Left,Left,Left` twice, from the Assistant card) | `main` | 33 ms | 83 ms | 19, 22, 26 | 5-7 MB |
+| | this change | 33 ms | 83-100 ms | 27, 25, 31, then 28, 23, 19 | 4-6 MB |
+
+A few more long frames on the first walks, inside the spread the earlier sections show for this walk (the same
+`main` gave 6-15 an hour before, and 21-31 on 25 Nov). The covers differ between the builds, so the pictures decoded
+differ too; no setting or effect was changed. One 1.1 s frame in the sixth run, not seen in the other five.
