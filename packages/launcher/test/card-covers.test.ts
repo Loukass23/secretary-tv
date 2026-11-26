@@ -47,3 +47,15 @@ test("a negative or huge turn still lands inside the pool", () => {
   assert.equal(coverPicks(pool, 2, -5, new Set(), me).length, 2);
   assert.equal(coverPicks(pool, 2, 1e9 + 1, new Set(), me).length, 2);
 });
+
+test("the logo is drawn once: painted on a 16:9 thumb, else over the textless art", async () => {
+  const { stillArt } = await import("../src/card-covers.ts");
+  const it = { poster: "p.jpg", still: "thumb.jpg", plain: "plain.jpg", logo: "logo.png", stillHasLogo: true };
+  // A Shows tile, a Continue watching tile: the thumb whole, nothing over it.
+  assert.deepEqual(stillArt(it, 436, 248), { src: "thumb.jpg", painted: true });
+  assert.deepEqual(stillArt(it, 600, 338), { src: "thumb.jpg", painted: true });
+  // The 4:3 row look would crop the painted title (the review's "UTSU KAISEN"): textless art and the logo.
+  assert.deepEqual(stillArt(it, 560, 420), { src: "plain.jpg", logo: "logo.png", painted: false });
+  // A catalog backdrop (no Fanart.tv thumb) gets the logo over it.
+  assert.deepEqual(stillArt({ ...it, still: "bg.jpg", stillHasLogo: false }, 600, 338), { src: "bg.jpg", logo: "logo.png", painted: false });
+});

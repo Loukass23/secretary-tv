@@ -1195,8 +1195,9 @@ export function App() {
     // On the folded card and Continue watching: the lookup's landscape thumb and logo (Fanart.tv, else the catalog's).
     const styled = (it: MediaItem, kind: CatalogKind, t: SlimTitle): MediaItem => {
       const a = artOf(kind, t);
-      // A Fanart.tv thumb has the title's logo painted in: with a logo drawn over it, the textless art.
-      return { ...it, still: a.logo ? a.plain : a.thumb, logo: a.logo };
+      // A Fanart.tv thumb has the title's logo painted in: the tile shows it whole, or the textless art under the
+      // logo when its shape would crop it (cards.tsx stillArt).
+      return { ...it, still: a.thumb, plain: a.plain, stillHasLogo: a.thumbHasLogo, logo: a.logo };
     };
     const goingItems: MediaItem[] = going.map((e) =>
       styled(

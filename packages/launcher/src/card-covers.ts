@@ -1,6 +1,7 @@
 // What the folded Cinema, Shows and Anime cards show: a few titles from what is in progress and tonight's picks,
 // changing from visit to visit (and every few minutes while the home rests) instead of always the last two played.
 // No title shows twice at once, on one card or across the cards.
+import type { MediaItem } from "./cards.tsx";
 
 /** One key per title: two ids for one show (an IMDb entry synced from a phone and a Kitsu entry played here) share
  *  their name, so the name, folded, is the key too. */
@@ -47,3 +48,15 @@ export function coverPicks<T>(
 export const COVER_TURN_KEY = "nest.coverTurn";
 /** While the home rests (no media card focused or open), the covers move on this often. */
 export const COVER_EVERY_MS = 5 * 60_000;
+
+/**
+ * What a landscape tile of `w` x `h` draws: a thumb with the logo painted in shows whole on a 16:9 tile, with no logo
+ * or name over it; a tile of another shape would crop the painted title, so it takes the textless art and draws the
+ * logo (or the name) itself. Never the logo twice.
+ */
+export function stillArt(it: Pick<MediaItem, "still" | "plain" | "poster" | "logo" | "stillHasLogo">, w: number, h: number): { src: string; logo?: string; painted: boolean } {
+  const fits = Math.abs(w / h - 16 / 9) < 0.12;
+  if (it.stillHasLogo && it.still && fits) return { src: it.still, painted: true };
+  if (it.stillHasLogo) return { src: it.plain ?? it.still ?? it.poster, logo: it.logo, painted: false };
+  return { src: it.still ?? it.poster, logo: it.logo, painted: false };
+}

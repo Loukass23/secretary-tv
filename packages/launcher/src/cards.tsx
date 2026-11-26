@@ -23,6 +23,7 @@ import type { Weather } from "./assistant.ts";
 import type { CatalogKind, SlimTitle } from "./apps.ts";
 import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, CONTINUE, EXPANDED_W, MORE, moreTop, rowScroll } from "./card-style.ts";
 import { captionMeta, expandedRows, focusedItem, onRow, rowItems, rowsOf, rowTitle, targetAt, tileKey, tileKeys } from "./card-rows.ts";
+import { stillArt } from "./card-covers.ts";
 import { recLine, type RecState } from "./recommend.ts";
 import { type RowShape, type TileBox, tileBox } from "./row-look.ts";
 import { Component } from "preact";
@@ -56,7 +57,12 @@ export interface MediaItem {
   episode?: string;
   /** In progress: what is left ("23 min left"), on its Continue watching tile. */
   left?: string;
+  /** Landscape art with no title painted in (catalog-kit titleArt `plain`). */
+  plain?: string;
+  /** `still` has the title's logo painted in (a Fanart.tv thumb). */
+  stillHasLogo?: boolean;
 }
+
 
 /** A row under the first one in an opened media card (My List, a genre): `run(i)` opens its item `i`. */
 export interface MoreRow {
@@ -406,6 +412,7 @@ function MediaSmall({ col, out }: { col: MediaColumn; out: boolean }) {
         .map((it, i) => {
           const b = s.boxes[i];
           const still = b.art === "still";
+          const a = stillArt(it, b.w, b.h);
           return (
             <MediaTile
               key={keys[i]}
@@ -413,9 +420,9 @@ function MediaSmall({ col, out }: { col: MediaColumn; out: boolean }) {
               y={b.y}
               w={b.w}
               h={b.h}
-              src={still ? (it.still ?? it.poster) : it.poster}
-              title={still ? it.title : undefined}
-              logo={still ? it.logo : undefined}
+              src={still ? a.src : it.poster}
+              title={still && !a.painted ? it.title : undefined}
+              logo={still ? a.logo : undefined}
               sub={still ? (it.episode ?? it.sub) : undefined}
               badge={badgeOf(it, small)}
               progress={it.progress}
@@ -451,8 +458,7 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
                 y={0}
                 w={b.w - b.lead}
                 h={b.h}
-                src={b.art === "still" ? (it.still ?? it.poster) : it.poster}
-                {...(b.art === "still" ? stillCaption(it) : {})}
+                {...(b.art === "still" ? stillCaption(it, b.w - b.lead, b.h) : { src: it.poster })}
                 badge={badgeOf(it, false)}
                 progress={it.progress}
                 focused={at === i}
@@ -467,10 +473,16 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
 
 /** What a landscape tile draws on its art: the logo, and for a title in progress its name (under no logo) and where
  *  it is ("S1 · E5 · 23 min left"), on every tile and not only under the focused one. */
-const stillCaption = (it: MediaItem): { logo?: string; title?: string; sub?: string } =>
-  it.resume
-    ? { logo: it.logo, title: it.title, sub: [it.episode, it.left].filter(Boolean).join(" · ") || undefined }
-    : { logo: it.logo };
+function stillCaption(it: MediaItem, w: number, h: number): { src: string; logo?: string; title?: string; sub?: string } {
+  const a = stillArt(it, w, h);
+  if (!it.resume) return { src: a.src, logo: a.logo };
+  return { src: a.src, logo: a.logo, title: a.painted ? undefined : it.title, sub: [it.episode, it.left].filter(Boolean).join(" · ") || undefined };
+}
+
+const continueArt = (it: MediaItem, w: number, h: number) => {
+  const a = stillArt(it, w, h);
+  return { src: a.src, logo: a.logo, title: a.painted ? undefined : it.title };
+};
 
 /**
  * A Continue watching tile in an opened card: the landscape thumb with the title's logo (else its name) on it, then a
@@ -481,7 +493,7 @@ function ContinueTile({ x, box, it, focused }: { x: number; box: TileBox; it: Me
   const p = Math.max(0, Math.min(1, it.progress ?? 0));
   return (
     <>
-      <MediaTile x={x} y={0} w={box.w} h={h} src={it.still ?? it.poster} title={it.title} logo={it.logo} focused={focused} class="nest-cw-art" />
+      <MediaTile x={x} y={0} w={box.w} h={h} {...continueArt(it, box.w, h)} focused={focused} class="nest-cw-art" />
       <div class={`nest-cw-below${focused ? " is-focus" : ""}`} style={{ transform: `translate3d(${x}px,${h + 22}px,0)`, width: `${box.w}px` }}>
         <span class="nest-cw-bar">
           <i style={{ transform: `scaleX(${p})` }} />

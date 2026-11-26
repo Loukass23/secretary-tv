@@ -36,6 +36,8 @@ export interface TitleArt {
    * size asked for), else Fanart.tv's background. Fanart.tv thumbs carry the logo, so a logo over one shows twice.
    */
   plain: string;
+  /** `thumb` is Fanart.tv's, which always has the logo painted in: draw no logo over it. */
+  thumbHasLogo: boolean;
   /** Full-page backdrop. */
   background: string;
   /** Portrait poster, as the catalog gives it (Fanart.tv posters are no better and much larger). */
@@ -191,6 +193,7 @@ function sized(t: ArtTitle, found: Found, size: ArtSize): TitleArt {
     background: (size === "hero" ? found.background : undefined) ?? found.thumb ?? backdrop,
     // An IMDb title always has a catalog backdrop (metahub serves one by id); a Kitsu one only when its meta gave one.
     plain: t.background || t.id.startsWith("tt") ? backdrop : (found.background ?? backdrop),
+    thumbHasLogo: !!found.thumb,
     poster: posterUrl(t),
   };
 }
