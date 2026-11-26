@@ -96,6 +96,9 @@ export interface FindListeners {
   onUpdate?: (snapshot: Snapshot) => void;
   /** The app asking: only scrapers whose manifest categories include it run (manifest.ts inScope). */
   scope?: AppScope;
+  /** Aborted when nobody waits for the answer any more (the page or episode was left): running providers are stopped,
+   *  the rest never start, and the search ends with what it has. */
+  signal?: AbortSignal;
 }
 
 /** How long a provider's torrents wait for others' to share one debrid check. */
@@ -251,7 +254,7 @@ export function createPluginHost({
     id: string,
     type: "movie" | "series",
     hint?: EpisodeNumbers,
-    { onStatus, onUpdate, scope }: FindListeners = {},
+    { onStatus, onUpdate, scope, signal }: FindListeners = {},
   ): Promise<{ streams: Stream[]; status: ProviderStatus[] }> {
     const state = store.get();
     // Providers are asked with the TMDB target; extra sources with the title's own id, even when there is no target.
@@ -275,7 +278,7 @@ export function createPluginHost({
             // The deadline is read once the script is in, as the time left in the round.
             run: async (ms) => {
               const code = await store.code(scraper.codeUrl);
-              return (await runner({ code, scraperId: scraper.id, tmdbKey, ...t!, context: ctx }, ms())) as unknown[];
+              return (await runner({ code, scraperId: scraper.id, tmdbKey, ...t!, context: ctx }, ms(), signal)) as unknown[];
             },
           });
         }
@@ -344,7 +347,7 @@ export function createPluginHost({
       answered(i);
     };
     const work = async () => {
-      while (next < pooled.length) await one(pooled[next++]);
+      while (next < pooled.length && !signal?.aborted) await one(pooled[next++]);
     };
     // Whatever has answered when the round ends is used; the rest are already killed by their own deadline.
     let roundTimer: ReturnType<typeof setTimeout> | undefined;
@@ -354,6 +357,7 @@ export function createPluginHost({
         ...jobs.flatMap((j, i) => (j.pooled ? [] : [one(i)])),
       ]),
       new Promise((r) => (roundTimer = setTimeout(r, roundMs))),
+      new Promise((r) => (signal?.aborted ? r(0) : signal?.addEventListener("abort", r))),
     ]);
     clearTimeout(roundTimer);
     if (checkTimer) {

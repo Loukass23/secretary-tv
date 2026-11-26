@@ -164,9 +164,11 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
     void pluginStore.refresh();
     void addonStore.refresh();
     return createPluginStreamClient(
-      (id, t, hint, onPartial) =>
+      (id, t, hint, onPartial, signal) =>
         pluginHost.find(id, t, hint, {
-          onStatus: publishStatus,
+          signal,
+          // A stopped search says nothing more: the page that showed its progress was left.
+          onStatus: (s) => signal?.aborted || publishStatus(s),
           onUpdate: (s) => s.done || onPartial(s.streams),
           // Anime runs the scrapers made for anime, the others the general ones (manifest categories). The opened
           // title decides (a search hit can be either kind); the app only when the title does not say.

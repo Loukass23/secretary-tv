@@ -69,3 +69,32 @@ test("a fallback that never answers ends the search empty after its time, so Pla
   assert.deepEqual(await client.get("tt9"), []);
   assert.ok(Date.now() - t0 >= 25);
 });
+
+test("a search nobody watches any more is stopped; one asked with get runs to the end", async () => {
+  const signals: AbortSignal[] = [];
+  let finish: (() => void) | undefined;
+  const find: FindStreams = (_id, _t, _h, _p, signal) => {
+    signals.push(signal!);
+    return new Promise((resolve) => {
+      finish = () => resolve({ streams: [{ name: "a", url: "https://x.example/a" }] as never });
+      signal?.addEventListener("abort", () => resolve({ streams: [] }));
+    });
+  };
+  const client = createPluginStreamClient(find, () => true, noServer, async (u) => u, "series");
+  // A title page watches an episode, then the viewer leaves it before the search is done.
+  const leave = client.watch("tt5:1:1", { season: 1, episode: 1 }, undefined, () => {});
+  const stay = client.watch("tt5:1:1", { season: 1, episode: 1 }, undefined, () => {});
+  leave();
+  assert.equal(signals[0].aborted, false, "another watcher still waits");
+  stay();
+  assert.equal(signals[0].aborted, true, "the last one left: the providers stop");
+  // Asked again, it starts afresh (the stopped search was not kept as the answer).
+  client.watch("tt5:1:1", { season: 1, episode: 1 }, undefined, () => {})();
+  assert.equal(signals.length, 2);
+  // The player's get keeps its search whatever the page does.
+  const got = client.get("tt5:1:2", { season: 1, episode: 2 });
+  client.watch("tt5:1:2", { season: 1, episode: 2 }, undefined, () => {})();
+  assert.equal(signals[2].aborted, false);
+  finish!();
+  assert.equal((await got).length, 1);
+});

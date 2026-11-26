@@ -553,3 +553,21 @@ test("host: the app's scope picks scrapers by category, the context reaches them
   assert.equal(all.streams[0].url, "https://x.example/animeprov/av1");
   assert.equal(all.streams[0].title, "Film.1080p.AV1 - ja;subs=en");
 });
+
+test("an aborted search terminates its Worker at once and starts no more", async () => {
+  const { workerRunner } = await import("../src/runner.ts");
+  let made = 0;
+  let terminated = 0;
+  const run = workerRunner(() => {
+    made++;
+    // A provider that never answers.
+    return { onmessage: null, onerror: null, postMessage() {}, terminate: () => void terminated++ };
+  });
+  const stop = new AbortController();
+  const job = run({ code: "", scraperId: "x", tmdbKey: "", tmdbId: "1", mediaType: "movie" } as never, 60_000, stop.signal);
+  stop.abort();
+  await assert.rejects(job, /cancelled/);
+  assert.equal(terminated, 1);
+  await assert.rejects(run({} as never, 60_000, stop.signal), /cancelled/);
+  assert.equal(made, 1, "an aborted signal makes no new Worker");
+});

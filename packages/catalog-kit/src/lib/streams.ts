@@ -191,6 +191,8 @@ export type FindStreams = (
   type: "movie" | "series",
   hint: FileHint | undefined,
   onPartial: (streams: Stream[]) => void,
+  /** Aborted when nobody waits for the answer any more: the providers still running are stopped. */
+  signal?: AbortSignal,
 ) => Promise<{ streams: Stream[] }>;
 
 /**
@@ -217,8 +219,18 @@ export function createPluginStreamClient(
         () => (clearTimeout(timer), resolve([])),
       );
     });
-  // One search per title and episode, shared by every caller; `partial` is the latest snapshot while it runs.
-  type Entry = { at: number; p: Promise<Stream[]>; partial: Stream[]; done: boolean; watchers: Set<StreamWatcher> };
+  // One search per title and episode, shared by every caller; `partial` is the latest snapshot while it runs. A search
+  // only watched (a title page) is stopped once its last watcher leaves before it is done; one asked with `get` (the
+  // player's failover, a prefetch) is kept to the end (`held`).
+  type Entry = {
+    at: number;
+    p: Promise<Stream[]>;
+    partial: Stream[];
+    done: boolean;
+    watchers: Set<StreamWatcher>;
+    held: boolean;
+    stop: AbortController;
+  };
   const cache = new Map<string, Entry>();
   const keyOf = (type: string, id: string, hint?: FileHint) =>
     `${type}:${id}|${hint?.season ?? ""}|${hint?.episode ?? ""}|${hint?.absolute ?? ""}|${hint?.year ?? ""}|${hint?.anime ?? ""}`;
@@ -237,12 +249,20 @@ export function createPluginStreamClient(
     const key = keyOf(type, id, hint);
     const hit = cache.get(key);
     if (hit && now() - hit.at < TTL_MS) return hit;
-    const entry: Entry = { at: now(), p: Promise.resolve([]), partial: [], done: false, watchers: new Set() };
-    entry.p = find(id, type, hint, (streams) => {
-      entry.partial = withHints(streams, hint, id);
-      for (const w of entry.watchers) w(entry.partial, false);
-    }).then(({ streams }) =>
-      streams.length
+    const entry: Entry = { at: now(), p: Promise.resolve([]), partial: [], done: false, watchers: new Set(), held: false, stop: new AbortController() };
+    entry.p = find(
+      id,
+      type,
+      hint,
+      (streams) => {
+        entry.partial = withHints(streams, hint, id);
+        for (const w of entry.watchers) w(entry.partial, false);
+      },
+      entry.stop.signal,
+    ).then(({ streams }) =>
+      entry.stop.signal.aborted
+        ? []
+        : streams.length
         ? withHints(streams, hint, id)
         : // Nothing from the plugins: a server with an addon, when the build has one, may still know the title.
           fallbackWithin(id, hint, overrideType),
@@ -258,7 +278,9 @@ export function createPluginStreamClient(
 
   function get(id: string, hint?: FileHint, overrideType?: "movie" | "series"): Promise<Stream[]> {
     if (!active()) return fallback.get(id, hint, overrideType);
-    return search(id, hint, overrideType).p;
+    const entry = search(id, hint, overrideType);
+    entry.held = true;
+    return entry.p;
   }
 
   function watch(
@@ -282,6 +304,11 @@ export function createPluginStreamClient(
     return () => {
       live = false;
       entry.watchers.delete(w);
+      // Nobody waits for it any more: stop the providers and forget the unfinished search.
+      if (!entry.done && !entry.held && !entry.watchers.size) {
+        entry.stop.abort();
+        if (cache.get(keyOf(overrideType ?? defaultType, id, hint)) === entry) cache.delete(keyOf(overrideType ?? defaultType, id, hint));
+      }
     };
   }
 

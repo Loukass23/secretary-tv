@@ -64,8 +64,12 @@ import "./detail.css";
 import "./party.css";
 
 const PRELOAD_DWELL_MS = 1000;
-/** Browsing episodes should not look up streams for every card passed over. */
-const EPISODE_DWELL_MS = 400;
+/**
+ * Sources are searched on intent only (docs/performance.md, "Sources on intent"): Play, Sources or OK on an episode
+ * asks for that title or episode, and the one Play would start (resume or up next) is searched once the page has
+ * rested this long, so Play stays instant. Browsing episodes searches nothing.
+ */
+const REST_MS = 2000;
 /** The longest the page stays veiled waiting for its art and frost; after it, what is ready shows and the rest fades in. */
 const REVEAL_CAP_MS = 900;
 /** The veil's fade (detail.css .det-veil) and the loading screen's (.det-loading.is-out). */
@@ -145,7 +149,10 @@ interface Props {
   onBack(): void;
 }
 
-type Found = { id: string; value: Stream[] | "none" | "error" };
+/** A finished search: the sources, or none. */
+type Found = Stream[] | "none" | "error";
+/** A search to run: a title (a film) or one of its episodes. */
+type Ask = { id: string; video?: Video };
 
 /**
  * Everything about one source, over the sheet's list: provider, full title, file, size, audio languages, and the
@@ -320,9 +327,14 @@ export function Detail({
   }, []);
   // Opened to play (Continue watching): the page never shows, only the loading screen until the player takes over.
   const [autoFailed, setAutoFailed] = useState(false);
-  const [found, setFound] = useState<Found | null>(null);
-  // Sources found so far while plugins are still answering; `found` is the final list.
-  const [partial, setPartial] = useState<{ id: string; value: Stream[] } | null>(null);
+  // Finished searches by title or episode id, kept for the visit; and the sources found so far while one runs.
+  const [found, setFound] = useState<Record<string, Found>>({});
+  const foundNow = useRef(found);
+  foundNow.current = found;
+  const [partial, setPartial] = useState<Record<string, Stream[]>>({});
+  // The search the viewer asked for (Play, Sources, an episode), and the one for what Play would start, once rested.
+  const [asked, setAsked] = useState<Ask | null>(null);
+  const [rested, setRested] = useState<Ask | null>(null);
   // Where each plugin stands (lib/plugins.ts): the status line while sources load, and the sheet's provider tabs.
   const [pluginStatus, setPluginStatus] = useState<ProviderStatus[]>([]);
   useEffect(() => onPluginStatus(setPluginStatus), []);
@@ -348,7 +360,8 @@ export function Detail({
   const waiting = (metaState === "loading" && !gaveUp) || (Boolean(autoPlay) && !autoFailed && !(gaveUp && !pending));
   // The Watch together card: start a party or type a code (focus 0 or 1), null when closed.
   const [partyCard, setPartyCard] = useState<number | null>(null);
-  const searchStarted = useRef(0);
+  /** When each search started, for autoplay's wait. */
+  const searchStarted = useRef<Record<string, number>>({});
   const [tick, setTick] = useState(0);
   const lastWait = useRef("");
   // Why the sheet opened by itself, shown in its heading until it closes.
@@ -415,8 +428,6 @@ export function Detail({
     if (at >= 0) return at;
     return Math.max(0, eps.findIndex((v) => hasAired(v) && !epWatched.has(episodeKey(v))));
   };
-  // Focus resting on the up-next episode (where the page opens) searches at once; another episode waits for the dwell.
-  const dwell = !!focused && focused.id !== start?.id;
   const target: Video | undefined = series ? (focused ?? start ?? undefined) : undefined;
   const targetId = series ? target?.id : title.id;
   const resumeHere = !!resume && (series ? resume.episode?.id === target?.id : true);
@@ -485,44 +496,66 @@ export function Detail({
     };
   }, [type, title.id]);
 
-  useEffect(() => {
-    if (!targetId) return;
-    let live = true;
-    let stop = () => {};
-    const t = setTimeout(
-      () => {
-        searchStarted.current = Date.now();
-        const yearNum = Number(/\d{4}/.exec(title.year)?.[0]);
-        const hint = {
-          ...(target ? fileHintFor(target) : undefined),
-          ...(yearNum ? { year: yearNum } : {}),
-          anime: kindFor(title.catalogType ?? type, title) === "anime",
-        };
-        stop = streams.watch(targetId, hint, streamType(type), (s, done) => {
-          if (!live) return;
-          if (done) {
-            setFound({ id: targetId, value: s.length ? s : "none" });
-            // Providers that failed this search, one line on the island each (updated in place on the next search).
-            for (const p of pluginStatusNow.current.filter((x) => x.state === "error")) {
-              island.push({ key: `provider:${p.id}`, text: `${shortName(p)} failed`, level: "error" });
-            }
+  /** The search for a title (a film) or an episode (a show): Play, Sources and the rest search ask for one. */
+  const askFor = (video: Video | undefined): Ask | null => (series ? (video ? { id: video.id, video } : null) : { id: title.id });
+  // One search runs while someone waits for it: leaving the page, or the episode it was asked for, stops it
+  // (lib/streams.ts stops providers nobody watches). A finished one stays in `found` for the visit.
+  const useSearch = (ask: Ask | null) =>
+    useEffect(() => {
+      if (!ask || foundNow.current[ask.id] !== undefined) return;
+      let live = true;
+      searchStarted.current[ask.id] ??= Date.now();
+      const yearNum = Number(/\d{4}/.exec(title.year)?.[0]);
+      const hint = {
+        ...(ask.video ? fileHintFor(ask.video) : undefined),
+        ...(yearNum ? { year: yearNum } : {}),
+        anime: kindFor(title.catalogType ?? type, title) === "anime",
+      };
+      const stop = streams.watch(ask.id, hint, streamType(type), (s, done) => {
+        if (!live) return;
+        if (done) {
+          setFound((f) => ({ ...f, [ask.id]: s.length ? s : "none" }));
+          // Providers that failed this search, one line on the island each (updated in place on the next search).
+          for (const p of pluginStatusNow.current.filter((x) => x.state === "error")) {
+            island.push({ key: `provider:${p.id}`, text: `${shortName(p)} failed`, level: "error" });
           }
-          else setPartial({ id: targetId, value: s });
-        });
-      },
-      dwell ? EPISODE_DWELL_MS : 0,
-    );
-    return () => {
-      live = false;
-      clearTimeout(t);
-      stop();
-    };
-  }, [type, targetId, dwell]);
+        } else setPartial((was) => ({ ...was, [ask.id]: s }));
+      });
+      return () => {
+        live = false;
+        stop();
+      };
+    }, [type, ask?.id]);
+  useSearch(asked);
+  useSearch(rested);
+  // What Play would start is searched once the page has rested (no key for REST_MS), so Play stays instant. Prepare
+  // ahead (player/session.ts) is the one switch for work done before the viewer asks: off, nothing is searched until
+  // Play or Sources, and no decoder is prepared.
+  const playAsk = askFor(series ? (start ?? undefined) : undefined);
+  useEffect(() => {
+    if (!active || !playAsk || rested?.id === playAsk.id || !prepareAheadEnabled()) return;
+    const t = setTimeout(() => setRested(playAsk), REST_MS);
+    return () => clearTimeout(t);
+  }, [active, playAsk?.id, focus.row, focus.col, sourcesOpen]);
 
-  const ready = found && found.id === targetId && Array.isArray(found.value) ? found.value : null;
+  const done = targetId ? found[targetId] : undefined;
+  const ready = Array.isArray(done) ? done : null;
   // What the sheet lists: the final sources, or those found so far.
-  const listed = ready ?? (partial && partial.id === targetId && partial.value.length ? partial.value : null);
-  const searching = !ready && found?.id !== targetId;
+  const listed = ready ?? (targetId && partial[targetId]?.length ? partial[targetId] : null);
+  const searching = !ready && done === undefined;
+  /** A search for what Play or the sheet would use is running now. */
+  const running = searching && !!targetId && (asked?.id === targetId || rested?.id === targetId);
+  // Play, Restart and Watch together ask for their episode; the sheet for what it lists. An asked search is let go
+  // when the viewer leaves its episode without playing or opening the sheet.
+  useEffect(() => {
+    if (pending) setAsked(askFor(pending.episode));
+  }, [pending?.episode?.id, !!pending]);
+  useEffect(() => {
+    if (sourcesOpen) setAsked(askFor(series ? target : undefined));
+  }, [sourcesOpen, targetId]);
+  useEffect(() => {
+    if (asked && asked.id !== targetId && !pending && !sourcesOpen) setAsked(null);
+  }, [targetId, !!pending, sourcesOpen]);
   // Provider tabs (All, then each plugin) when the sources came from plugins.
   const tabs = useMemo(
     () => (listed?.some((s) => s.provider) ? pluginStatus.slice(0, 8) : []),
@@ -611,8 +644,8 @@ export function Detail({
     const d = decide({
       candidates: pool,
       status: pluginStatus,
-      done: found?.id === targetId,
-      elapsedMs: Date.now() - searchStarted.current,
+      done: done !== undefined,
+      elapsedMs: Date.now() - (targetId ? (searchStarted.current[targetId] ?? Date.now()) : Date.now()),
       waitMs: waitMs(startAfter),
       rules,
       // Played as soon as it is found; while its provider still searches, waited for within the wait.
@@ -996,13 +1029,15 @@ export function Detail({
       ? ""
       : pending
         ? `Starting when a good source is found${pluginProgress ? ` · ${pluginProgress}` : ""}`
-        : found?.id !== targetId
-          ? pluginsActive() && pluginProgress
-            ? pluginProgress
-            : "Hunting cached prey on your debrid…"
-          : found.value === "none"
+        : done === undefined
+          ? !running
+            ? "Found when you press Play or Sources"
+            : pluginsActive() && pluginProgress
+              ? pluginProgress
+              : "Hunting cached prey on your debrid…"
+          : done === "none"
             ? "No cached prey in the tall grass"
-            : found.value === "error"
+            : done === "error"
               ? pluginsActive()
                 ? "The plugins could not be reached"
                 : "Server nest unreachable"
