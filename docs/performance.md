@@ -680,6 +680,39 @@ the search.
 
 The show page is the same within the spread (spoilers were on Blur on this TV, so its unwatched episodes showed the
 blurred still, not the readable copy). `main` was not walked on a film page tonight.
+
+
+### Sources on intent (C)
+
+A title page searched for sources as soon as it opened, and again for each episode focus rested on for 0.4 s: each
+search starts a Worker per provider, with its fetches and parsing, and a search kept running in its Workers after the
+page or episode was left (the page only stopped listening). Now (`ui/Detail.tsx`, `lib/streams.ts`, plugins
+`runner.ts`):
+
+- No search while browsing. Play, Restart, Watch together, Sources and OK on an episode ask for that title or episode.
+- What Play would start (resume or up next) is searched once the page has rested 2 s, so Play stays instant. This
+  follows prepare-ahead (`sectv.prepareAhead`), the one switch for work done before the viewer asks: off, nothing is
+  searched until Play or Sources and no decoder is prepared.
+- Finished searches are kept per episode for the visit (and in the stream client's cache).
+- A search nobody waits for any more is stopped: its Workers are terminated and the providers not yet started never
+  start. A search the player asked for (failover) runs to the end.
+
+Measured inside Secretary on the TV with prepare-ahead off (as this TV is set), the build before this change (B) and
+after, deployed one right after the other. A show page opened from Shows › Tonight's picks; Workers counted by wrapping
+`window.Worker` over the inspector (one per provider call).
+
+| | Build | Workers started | median | p95 | frames over 50 ms | heap |
+| --- | --- | --- | --- | --- | --- | --- |
+| Opening the page, then 10 s | before | 3 | | | | |
+| | after | 0 | | | | |
+| Episodes at 800 ms per key (`Right`x5, `Left`x5) | before | 15 | 17 ms | 67 ms | 30 | 11 MB |
+| | after | 0 | 17 ms | 33 ms | 2 | 6 MB |
+| Page walk at 250 ms (the show page walk above), 3 runs | before | 0 | 17 ms | 33 ms | 5, 5, 6 | 9-11 MB |
+| | after | 0 | 17 ms | 33 ms | 1, 0, 1 | 6-8 MB |
+| Sources pressed | after | 3 | | | | |
+
+The slow episode walk is where the old way cost most: five searches, 30 long frames. The 2 s rest search was not
+measured on the TV, since it needs prepare-ahead on, which also prepares the decoder with a real link.
 ### Mood and Settings › SmartThings (D)
 
 The Lights panel's right side (routine and light cards over one fixed surface) is gone. Mood is one `PreviewList`
