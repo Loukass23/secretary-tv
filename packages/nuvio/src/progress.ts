@@ -40,6 +40,10 @@ export interface SlimTitle {
   background?: string;
   /** A few lines about it (Cinemeta or Kitsu), for Nest's caption. */
   description?: string;
+  /** Its first genres, and whether the metadata gives Japan as its country: the anime rule weighs both
+   *  (catalog-kit lib/animeguard.ts), so an anime synced as a series still lands on the Anime card. */
+  genre?: string[];
+  japanese?: boolean;
 }
 
 /** One title in progress, as the apps and Nest show it. */
@@ -145,8 +149,8 @@ export function watchedEpisodeKeys(rows: readonly WatchedRow[]): Record<string, 
 
 const CINEMETA = "https://v3-cinemeta.strem.io";
 const KITSU = "https://anime-kitsu.strem.fun";
-// .2: titles now keep their description, so the cache from before is fetched again.
-const META_CACHE = "sectv.nuvio.meta.2";
+// .3: titles now keep their genres and country (the anime rule), so the cache from before is fetched again.
+const META_CACHE = "sectv.nuvio.meta.3";
 const META_MAX = 120;
 
 /**
@@ -178,6 +182,8 @@ export async function withMeta(items: readonly ResumeItem[], kv: KV, f: typeof f
               ...(typeof meta.description === "string" && meta.description.trim()
                 ? { description: clipAt(meta.description, 320) }
                 : {}),
+              ...genresOf(meta),
+              ...(typeof meta.country === "string" && /\bjapan\b/i.test(meta.country) ? { japanese: true } : {}),
             };
             cache[id] = title;
             changed = true;
@@ -197,6 +203,13 @@ export async function withMeta(items: readonly ResumeItem[], kv: KV, f: typeof f
     kv.set(META_CACHE, cache);
   }
   return out;
+}
+
+/** The first three genres the meta lists (`genres`, or `genre` on older metas). */
+function genresOf(meta: Record<string, unknown>): { genre?: string[] } {
+  const raw = Array.isArray(meta.genres) ? meta.genres : Array.isArray(meta.genre) ? meta.genre : [];
+  const genre = raw.filter((g): g is string => typeof g === "string" && !!g.trim()).slice(0, 3);
+  return genre.length ? { genre } : {};
 }
 
 function clipAt(text: string, max: number): string {
