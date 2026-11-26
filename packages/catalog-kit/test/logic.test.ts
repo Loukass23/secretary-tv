@@ -100,14 +100,14 @@ test("resume: mergeResume combines local and remote keeping the newest updated t
 });
 
 test("resume: badgeForResume and toContinueTitle format cross-category items", () => {
-  assert.equal(badgeForResume({ type: "movie", title: { year: "2024" } }), "Movie · 2024");
+  assert.equal(badgeForResume({ type: "movie", title: { year: "2024" } }), "Film · 2024");
   assert.equal(
     badgeForResume({
       type: "series",
       episode: { id: "tt1:1:2", season: 1, episode: 2, name: "Ep 2" },
       posSec: 120,
     }),
-    "Series · S01E02",
+    "Show · S01E02",
   );
   assert.equal(
     badgeForResume({
@@ -127,7 +127,7 @@ test("resume: badgeForResume and toContinueTitle format cross-category items", (
     updated: 100,
   });
   assert.equal(card.catalogType, "series");
-  assert.equal(card.badge, "Series · S01E02");
+  assert.equal(card.badge, "Show · S01E02");
   assert.equal(card.progressPct, 30);
 });
 

@@ -121,3 +121,61 @@ export function blurredText(text: string, box: TextBox): Promise<string> {
   }
   return p;
 }
+
+// --- readable stills: an episode's title on its still (Detail.tsx EpisodeTile) ---
+
+const READ_W = 480;
+const READ_H = 270;
+const readable = new Map<string, Promise<string>>();
+
+/** Darkens the lower half of a still, where a tile writes its title, as the title pages' readable copy does. Painted
+ *  once into a canvas, never by a CSS gradient. */
+function makeReadable(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onerror = () => reject(new Error("readable: the still did not load"));
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = READ_W;
+        c.height = READ_H;
+        const g = c.getContext("2d");
+        if (!g) return reject(new Error("readable: no 2d context"));
+        const scale = Math.max(READ_W / img.naturalWidth, READ_H / img.naturalHeight);
+        const dw = img.naturalWidth * scale;
+        const dh = img.naturalHeight * scale;
+        g.drawImage(img, (READ_W - dw) / 2, (READ_H - dh) / 2, dw, dh);
+        const shade = g.createLinearGradient(0, READ_H * 0.38, 0, READ_H);
+        shade.addColorStop(0, "rgba(7,8,11,0)");
+        shade.addColorStop(0.55, "rgba(7,8,11,0.62)");
+        shade.addColorStop(1, "rgba(7,8,11,0.86)");
+        g.fillStyle = shade;
+        g.fillRect(0, 0, READ_W, READ_H);
+        c.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error("readable: toBlob failed"))), "image/jpeg", 0.86);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.src = src;
+  });
+}
+
+/** The readable copy of an episode's still, made once and kept for the most recent stills; rejects where the still
+ *  cannot be read back (a desktop browser on remote art), and the tile shows the still as it is. */
+export function readableStill(src: string): Promise<string> {
+  const hit = readable.get(src);
+  if (hit) {
+    readable.delete(src);
+    readable.set(src, hit);
+    return hit;
+  }
+  const p = makeReadable(src);
+  readable.set(src, p);
+  if (readable.size > MAX) {
+    const [oldest, gone] = readable.entries().next().value as [string, Promise<string>];
+    readable.delete(oldest);
+    void gone.then(URL.revokeObjectURL, () => {});
+  }
+  return p;
+}

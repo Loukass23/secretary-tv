@@ -188,7 +188,7 @@ export function SearchScreen({ time, person, buttons, find, initialQuery = "", o
 
   const q = text.trim();
   const focused = focus.area === "results" ? results[focus.i] : undefined;
-  const caption = captionFor(q, found, results.length, showRecent, focused);
+  const caption = captionFor(q, found, results.length, showRecent, focused, Boolean(desk));
 
   // The grid scrolls a row at a time, keeping the focused row in view, and draws only the rows around it.
   const atRow = Math.floor((focus.area === "results" ? focus.i : lastResult.current) / RESULT_COLS);
@@ -287,11 +287,12 @@ function captionFor(
   count: number,
   showRecent: boolean,
   focused: SearchResult | undefined,
+  phone = false,
 ): { kicker: string; title: string; meta?: string[] } {
   if (!q) {
     return showRecent
       ? { kicker: "Recent searches", title: "Search films, shows and anime" }
-      : { kicker: "Search", title: "Search films, shows and anime", meta: ["Type on the keyboard, or on your phone"] };
+      : { kicker: "Search", title: "Search films, shows and anime", meta: [phone ? "Type on the keyboard, or on your phone" : "Type on the keyboard"] };
   }
   if (q.length < 2) return { kicker: "Search", title: "Keep typing…" };
   if (count > 0) {

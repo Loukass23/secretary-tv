@@ -93,3 +93,34 @@ export function creditLines(t: Pick<Title, "cast" | "director">, maxCast = 5): {
   if (t.cast?.length) out.push({ label: "Starring", names: t.cast.slice(0, maxCast).join(", ") });
   return out;
 }
+
+/** "20 Nov 2026" from an ISO date; empty when there is none or it does not parse. */
+export function releasedLabel(iso: string | undefined): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;
+  if (!m) return "";
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m[2]) - 1];
+  return month ? `${Number(m[3])} ${month} ${m[1]}` : "";
+}
+
+/** A film page's line under its credits: when it came out and where it was made, its saga, its awards. */
+export function factLine(t: Pick<Title, "released" | "country" | "awards">, saga?: string): string {
+  const out = [releasedLabel(t.released) && `Released ${releasedLabel(t.released)}`, t.country?.split(",").slice(0, 2).join(",").trim(), saga && `Part of ${saga}`, t.awards];
+  return out.filter(Boolean).join(" · ");
+}
+
+/** Everything a film page knows about the title, for its About panel: label and value, only what there is. */
+export function aboutFacts(t: Pick<Title, "released" | "runtime" | "rating" | "genre" | "director" | "writer" | "cast" | "country" | "awards">, saga?: string): { label: string; value: string }[] {
+  const rows: [string, string | undefined][] = [
+    ["Released", releasedLabel(t.released) || undefined],
+    ["Runtime", t.runtime],
+    ["Rating", t.rating ? `★ ${t.rating}` : undefined],
+    ["Genres", t.genre?.join(", ")],
+    [t.director && t.director.length > 1 ? "Directors" : "Director", t.director?.join(", ")],
+    [t.writer && t.writer.length > 1 ? "Writers" : "Writer", t.writer?.slice(0, 4).join(", ")],
+    ["Starring", t.cast?.slice(0, 10).join(", ")],
+    ["Country", t.country],
+    ["Collection", saga],
+    ["Awards", t.awards],
+  ];
+  return rows.flatMap(([label, value]) => (value ? [{ label, value }] : []));
+}

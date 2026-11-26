@@ -67,11 +67,9 @@ export function WatchTogether({
     if (!ok) setStep({ kind: "idle", note: "The TV keyboard isn't available here." });
   };
 
-  // Straight to the keyboard: typing the code is the whole point of the screen.
-  useEffect(() => {
-    if (ready) type();
-    return () => getTvInputBridge().close();
-  }, []);
+  // The panel opens on its first button: the TV's own keyboard covers the lower half of the screen, so it opens only
+  // when the viewer chooses "Type a code" (the review's screen 26). Leaving closes it.
+  useEffect(() => () => getTvInputBridge().close(), []);
 
   const join = (room: RoomSummary) => {
     const { type: kind, titleId } = contentApp(room.contentId);

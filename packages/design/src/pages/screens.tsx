@@ -386,7 +386,7 @@ function DetailScreen({ variant, art }: { variant: string; art: Art }) {
     window.fetch = (async () =>
       offline
         ? Promise.reject(new Error("offline"))
-        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: series ? "52 min" : "170 min", year: "1995", imdbRating: "8.3", ...(videos ? { videos } : { cast: ["Example Actor One", "Example Actor Two", "Example Actor Three", "Example Actor Four", "Example Actor Five", "Example Actor Six"], director: ["Example Director"] }) } }) }) as typeof fetch;
+        : { ok: true, json: async () => ({ meta: { id: title.id, imdb_id: title.id, name: title.name, description: LONG, genre: ["Crime", "Drama"], runtime: series ? "52 min" : "170 min", year: "1995", imdbRating: "8.3", ...(videos ? { videos } : { cast: ["Example Actor One", "Example Actor Two", "Example Actor Three", "Example Actor Four", "Example Actor Five", "Example Actor Six"], director: ["Example Director"], writer: ["Example Writer", "Second Writer"], released: "1995-12-15T00:00:00.000Z", country: "United States", awards: "Nominated for 2 awards" }) } }) }) as typeof fetch;
     setReady(true);
     return () => {
       window.fetch = real;
