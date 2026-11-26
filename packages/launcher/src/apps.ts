@@ -54,7 +54,7 @@ export const badgeFor = (entry: {
   title?: SlimTitle;
   posSec?: number;
 }) => {
-  const kind = entry.type === "movie" ? "Movie" : entry.type === "series" ? "Series" : "Anime";
+  const kind = entry.type === "movie" ? "Film" : entry.type === "series" ? "Show" : "Anime";
   if (entry.episode) {
     const s = String(entry.episode.season).padStart(2, "0");
     const e = String(entry.episode.episode).padStart(2, "0");

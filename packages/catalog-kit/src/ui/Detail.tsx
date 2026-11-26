@@ -42,8 +42,8 @@ import {
 } from "../lib/resume.ts";
 import { audioLangsOf, type ClockFormat, type SpoilerMode, subLangsOf } from "../lib/settings.ts";
 import type { HostHeader } from "../host.ts";
-import { creditLines, type EpisodeLook, episodeLook, episodePanel, episodeTag, seasonsLabel, type SpoilerState } from "../lib/titlepage.ts";
-import { BLANK, blurredStill, blurredText } from "./stillblur.ts";
+import { aboutFacts, creditLines, type EpisodeLook, episodeLook, episodePanel, episodeTag, factLine, seasonsLabel, type SpoilerState } from "../lib/titlepage.ts";
+import { BLANK, blurredStill, blurredText, readableStill } from "./stillblur.ts";
 import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
 import { releaseOf } from "../lib/party.ts";
@@ -80,8 +80,9 @@ const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
  * seasons), and every line in it keeps its height, so nothing moves as focus does. The mark is the title's logo, else
  * its name in the display face.
  */
-const CAPTION_MOVIE = { x: PAD, foot: 772, w: 1060, mark: { w: 720, h: 160 } };
-const CAPTION_SERIES = { x: PAD, foot: 612, w: 1060, mark: { w: 600, h: 110 } };
+const CAPTION_MOVIE = { x: PAD, foot: 772, w: 1060, mark: { w: 720, h: 160 }, name: { w: 1060, h: 200 } };
+// A logo keeps its box; a show's name without one wraps to two lines across the caption rather than being cut.
+const CAPTION_SERIES = { x: PAD, foot: 612, w: 1060, mark: { w: 600, h: 110 }, name: { w: 1060, h: 180 } };
 /** The synopsis' lines, as `.det-about` sets them (detail.css): the blurred copy (Blur) is laid out the same. */
 const ABOUT_SERIES = { lines: 2, lineH: 39 };
 const ABOUT_MOVIE = { lines: 3, lineH: 39 };
@@ -228,8 +229,15 @@ function EpisodeTile({
   const [shown, setShown] = useState(() => (look === "hide" || blur ? BLANK : src));
   useEffect(() => {
     if (look === "hide") return void setShown(BLANK);
-    if (!blur) return void setShown(src);
     let live = true;
+    if (!blur) {
+      // The title sits on the still: its readable copy (darkened under the title, made once), the still until then.
+      setShown(src);
+      if (v.thumbnail) readableStill(src).then((u) => live && setShown(u), () => {});
+      return () => {
+        live = false;
+      };
+    }
     setShown(BLANK);
     blurredStill(src).then(
       (u) => live && setShown(u),
@@ -353,6 +361,8 @@ export function Detail({
   }, [active]);
   const [autoPlayed, setAutoPlayed] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  // A film's About panel (its action, or Info): the whole synopsis and everything the metadata says about it.
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [sourceIdx, setSourceIdx] = useState(0);
   const [watched, setWatched] = useState<boolean>(() => isTitleWatched(title.id));
   // Episodes watched to the end (`season:episode`): their tiles carry a tick, and "up next" skips them.
@@ -657,7 +667,7 @@ export function Detail({
   // Leaving the page for anything but the player releases a prepared decoder.
   useEffect(() => () => void (document.documentElement.classList.contains("avplay") || cancelPreload()), []);
 
-  type ActionSpec = { id: "play" | "restart" | "sources" | "together" | "timeline" | "watched" | "mylist"; label: string };
+  type ActionSpec = { id: "play" | "restart" | "sources" | "together" | "timeline" | "watched" | "mylist" | "about"; label: string };
   const actionSpecs: ActionSpec[] = [];
 
   // Resume carries its progress on the line above the buttons (resumeLabel); Start over sits beside it.
@@ -679,6 +689,9 @@ export function Detail({
   actionSpecs.push({ id: "watched", label: watched ? "✓ Watched" : "Mark watched" });
 
   actionSpecs.push({ id: "mylist", label: saved ? "✓ My List" : "My List" });
+
+  // A film's page says more than its caption has room for: the whole synopsis, the writers, the full cast.
+  if (!series) actionSpecs.push({ id: "about", label: "About" });
 
   // Last, since the saga lookup can answer after the page is up: arriving, it never pushes the other pills along.
   if (sagaCol) {
@@ -820,6 +833,11 @@ export function Detail({
       else if (key === "Enter" || key === "Back" || key === "Info") setDetailsOf(null);
       return;
     }
+    // The About panel only reads: any of these closes it.
+    if (aboutOpen) {
+      if (key === "Back" || key === "Enter" || key === "Info") setAboutOpen(false);
+      return;
+    }
     if (sourcesOpen) {
       // The chips row: Left and Right move along it, OK turns a chip on or off, Down goes back to the list.
       if (chipAt != null) {
@@ -907,6 +925,7 @@ export function Detail({
       if (pending) return void setPending(null);
       return void onBack();
     }
+    if (key === "Info" && !series) return void setAboutOpen(true);
     if (key === "Up" && focus.row === 0) {
       const at = header ? headerStart(Boolean(header.person), header.buttons.length) : null;
       if (at != null) setHead(at);
@@ -938,6 +957,7 @@ export function Detail({
           const act = actionSpecs[focus.col];
           if (!act) return;
           if (act.id === "together") return void setPartyCard(0);
+          if (act.id === "about") return void setAboutOpen(true);
           return runAction(act.id);
         }
         if (series && focus.row === 2) {
@@ -1004,6 +1024,7 @@ export function Detail({
   const panel = series && target ? episodePanel(meta, target, spoilers) : null;
   const look: EpisodeLook = series && target ? episodeLook(target, spoilers) : "clear";
   const credits = series ? [] : creditLines(meta);
+  const facts = series ? "" : factLine(meta, sagaCol?.title);
   const kind = typeLabel(type, meta);
   const seasonsText = seasonsLabel(videos);
   const kicker = series
@@ -1049,7 +1070,7 @@ export function Detail({
         {/* The caption, on the art's readable copy (art.tsx), anchored by its foot; every line keeps its height. */}
         <div class="det-caption" style={{ left: `${cap.x}px`, bottom: `${1080 - cap.foot}px`, width: `${cap.w}px` }}>
           <Kicker>{kicker}</Kicker>
-          <TitleMark name={meta.name} logo={logo.src} w={cap.mark.w} h={cap.mark.h} shrink class={`det-mark${series ? " is-small" : ""}`} />
+          <TitleMark name={meta.name} logo={logo.src} {...(logo.src ? cap.mark : cap.name)} shrink class={`det-mark${series ? " is-small" : ""}`} />
           {series && (
             <b class="det-ep-name">
               {target && <span class="det-ep-tag">{episodeTag(target)}</span>}
@@ -1076,6 +1097,7 @@ export function Detail({
               ))}
             </small>
           )}
+          {!series && facts && <small class="det-credit det-fact">{facts}</small>}
           {progress && !series && (
             <div class="det-progress">
               <span class="det-progress-bar">
@@ -1183,6 +1205,20 @@ export function Detail({
                   {l.label}
                 </div>
               ))}
+            </Glass>
+          </>
+        )}
+
+        {aboutOpen && (
+          <>
+            <div class="det-scrim" />
+            <Glass {...SHEET} class="det-sheet det-about-sheet">
+              <span class="cat-kicker">About</span>
+              <h2>{meta.name}</h2>
+              {meta.description && <p class="det-about-full">{meta.description}</p>}
+              <dl class="det-facts">
+                {aboutFacts(meta, sagaCol?.title).flatMap((f) => [<dt key={`${f.label}t`}>{f.label}</dt>, <dd key={`${f.label}d`}>{f.value}</dd>])}
+              </dl>
             </Glass>
           </>
         )}

@@ -1900,7 +1900,9 @@ export function App() {
           find={findTitles}
           initialQuery={query}
           onQuery={(q) => (lastSearch = q)}
-          desk={SERVER_URL}
+          // The phone keyboard goes through the home server (being retired, docs/server-retirement.md): offered only
+          // when one is set and answering.
+          desk={SERVER_URL && serverOnline ? SERVER_URL : ""}
           // The page opens inside Secretary, leaving the search for the catalog view.
           onOpen={(hit) => {
             setSearchFrom(null);

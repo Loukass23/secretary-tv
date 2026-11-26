@@ -334,15 +334,19 @@ export function Home({
   const endLift = endIdx !== null ? Math.max(0, rowsEnd + END_H + 40 - focusTop - (1080 - ROWS_Y)) : 0;
   const rowScroll = focusTop + endLift;
 
-  // Entries saved without a synopsis (older Continue rows, My List) get one once focus rests on them.
-  const [extra, setExtra] = useState<Record<string, string>>({});
-  const needsText = current && !current.folder && !current.description ? current : null;
+  // Entries saved without a synopsis or a year (older Continue rows, My List) get them once focus rests on them, so
+  // the line under the logo is never left empty (the review's tall gap on the catalog home).
+  type Extra = Pick<Title, "description" | "year" | "rating" | "runtime" | "genre">;
+  const [extra, setExtra] = useState<Record<string, Extra>>({});
+  const needsText = current && !current.folder && (!current.description || !current.year) ? current : null;
   useEffect(() => {
     if (!needsText || extra[needsText.id] !== undefined) return;
     let live = true;
     const t = setTimeout(() => {
       fetchMeta(needsText.catalogType ?? type, needsText.id).then(
-        (m) => live && setExtra((e) => ({ ...e, [needsText.id]: m?.description ?? "" })),
+        (m) =>
+          live &&
+          setExtra((e) => ({ ...e, [needsText.id]: { description: m?.description, year: m?.year ?? "", rating: m?.rating ?? "", runtime: m?.runtime, genre: m?.genre } })),
         () => {},
       );
     }, DWELL_MS);
@@ -351,7 +355,9 @@ export function Home({
       clearTimeout(t);
     };
   }, [needsText?.id]);
-  const extraText = needsText ? extra[needsText.id] : "";
+  const more = needsText ? extra[needsText.id] : undefined;
+  const extraText = more?.description ?? "";
+  const year = current?.year || more?.year || "";
 
   // The kind (Cinema, Shows, Anime) over the title: the row's name is already over its tiles.
   const kicker = current?.folder ? `${heading} · Collection` : heading;
@@ -359,10 +365,10 @@ export function Home({
     ? [
         isContinue && current.progressPct ? `${current.progressPct}% watched` : "",
         current.badge ?? "",
-        current.badge?.includes(current.year) ? "" : current.year,
-        ratingLabel(current.rating),
-        current.runtime ?? "",
-        current.genre?.slice(0, 2).join(", ") ?? "",
+        year && current.badge?.includes(year) ? "" : year,
+        ratingLabel(current.rating || more?.rating),
+        current.runtime ?? more?.runtime ?? "",
+        (current.genre ?? more?.genre)?.slice(0, 2).join(", ") ?? "",
       ].filter(Boolean)
     : [];
 
