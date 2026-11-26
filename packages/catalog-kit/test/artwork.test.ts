@@ -56,6 +56,7 @@ test("artwork: Fanart.tv first, each image at the size it is shown", async () =>
   assert.equal(card.logo, "https://assets.fanart.tv/preview/movies/101/hdmovielogo/en.png", "a card's logo is the preview");
   assert.equal(card.background, `${FA}/movies/101/moviethumb/t.jpg`, "a card never gets the 1920 px background");
   assert.equal(card.poster, "https://images.metahub.space/poster/small/tt0000101/img");
+  assert.equal(card.plain, "https://images.metahub.space/background/medium/tt0000101/img", "a thumb has the logo painted in: the tile under a logo gets the textless backdrop");
   assert.equal(calls.length, 1, "one lookup per title: the second size came from the cache");
 });
 
@@ -71,6 +72,7 @@ test("artwork: shows go by TVDB id, from Cinemeta for IMDb ids and from Kitsu fo
   const anime = await titleArt("anime", { id: "kitsu:303", poster: "https://media.kitsu.app/anime/poster_images/303/medium.jpg" }, "card", fakeFetch(calls));
   assert.equal(anime.logo, undefined, "no logo anywhere: the screen shows the name");
   assert.equal(anime.thumb, `${FA}/tv/9303/tvthumb/t.jpg`);
+  assert.equal(anime.plain, `${FA}/tv/9303/showbackground/b.jpg`, "a Kitsu title without a backdrop: Fanart.tv's textless background");
   assert.equal(anime.poster, "https://media.kitsu.app/anime/poster_images/303/small.jpg");
 });
 

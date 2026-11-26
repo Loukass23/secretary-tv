@@ -244,3 +244,24 @@ test("embedded: the lists are dropped once when the signed-in profile changed, a
   checkOwner(() => resets++);
   assert.equal(resets, 2, "another profile drops them");
 });
+
+test("a show synced from another device keeps its genres and country, so the anime rule can place it", async () => {
+  const { isAnime } = await import("../src/lib/animeguard.ts");
+  const metas: Record<string, Record<string, unknown>> = {
+    // An anime Cinemeta files as a series, listed by no anime catalog row (the review's Monster).
+    tt9001: { name: "An anime series", country: "Japan", genres: ["Animation", "Crime", "Drama", "Mystery"] },
+    // Japanese live action stays in Shows.
+    tt9002: { name: "A live-action drama", country: "Japan", genres: ["Drama", "Thriller"] },
+    // A western cartoon stays in Shows.
+    tt9003: { name: "A cartoon", country: "United States", genre: ["Animation", "Comedy"] },
+  };
+  const f = (async (url: string) => {
+    const id = String(url).match(/(tt\d+)\.json/)?.[1] ?? "";
+    return new Response(JSON.stringify({ meta: metas[id] }), { status: 200 });
+  }) as typeof fetch;
+  const rows = Object.keys(metas).map((id, k) => ({ content_id: id, content_type: "series" as const, video_id: `${id}:1:1`, season: 1, episode: 1, position: 1, duration: 2, last_watched: 9 - k }));
+  const kv = { get: () => undefined, set: () => {} } as never;
+  const got = await withMeta(toItems(rows), kv, f);
+  assert.deepEqual(got[0].title.genre, ["Animation", "Crime", "Drama"]);
+  assert.deepEqual(got.map((i) => isAnime(i.title, new Set())), [true, false, false]);
+});
