@@ -643,3 +643,20 @@ the other, 250 ms per key, 3 runs each.
 | | this change | 17-33 ms | 83-150 ms | 23, 54, 46 | 5-7 MB |
 
 The same within the run-to-run spread. One 350 ms frame in the second Cinema run, not seen in the others.
+
+### Title pages (B)
+
+No frosted panel was added: the About panel is one smoked surface like the sources sheet, shown only while open. The
+episode stills get a darkened copy under their titles (`stillblur.ts` `readableStill`, 480 x 270 JPEG, made once per
+still and cached like the spoiler blur); the tile shows the plain still until it is made. The catalog home now shows
+its first backdrop at once (from the decoded art when it was shown before), which also brings it back at once after
+the search.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Show page (Shows card, OK on a pick; `Right,Right,Right,Right,Left,Left,Up,Right,Left,Down,Right,Right,Up,Up,Down,Down`) | `main` | 17 ms | 33-50 ms | 6, 10, 5 | 7-8 MB |
+| | this change | 17 ms | 33-67 ms | 8, 15, 6 | 8-9 MB |
+| Film page (Cinema card, OK on a pick; `Right,Right,Right,Left,Left,Left,Down,Right,Right,Right,Up`) | this change | 17 ms | 17-33 ms | 1, 1, 0 | 7-10 MB |
+
+The show page is the same within the spread (spoilers were on Blur on this TV, so its unwatched episodes showed the
+blurred still, not the readable copy). `main` was not walked on a film page tonight.

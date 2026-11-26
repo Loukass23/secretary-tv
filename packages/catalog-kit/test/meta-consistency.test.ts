@@ -102,6 +102,7 @@ test("a film's facts: released, country, saga and awards, only what the meta has
   const f = factsOf({ released: "2026-11-20T00:00:00.000Z", country: "United States, United Kingdom, Canada", awards: "N/A", writer: "A Writer, B Writer" });
   assert.deepEqual(f, { writer: ["A Writer", "B Writer"], released: "2026-11-20", country: "United States, United Kingdom, Canada" });
   assert.equal(releasedLabel("2026-11-20"), "20 Nov 2026");
+  assert.equal(factsOf({ country: "usa, uk" }).country, "USA, UK");
   assert.equal(releasedLabel("soon"), "");
   assert.equal(factLine(f, "The Example Saga"), "Released 20 Nov 2026 · United States, United Kingdom · Part of The Example Saga");
   assert.deepEqual(aboutFacts({ ...f, runtime: "120 min", rating: "7.4", director: ["One"] }).map((r) => r.label), ["Released", "Runtime", "Rating", "Director", "Writers", "Country"]);

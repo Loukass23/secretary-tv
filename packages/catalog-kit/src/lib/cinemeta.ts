@@ -125,7 +125,11 @@ export function peopleOf(m: Pick<RawMeta, "cast" | "director" | "links">): { cas
 export function factsOf(m: Pick<RawMeta, "writer" | "released" | "country" | "awards">): Pick<Title, "writer" | "released" | "country" | "awards"> {
   const writer = names(m.writer);
   const released = typeof m.released === "string" && /^\d{4}-\d{2}-\d{2}/.test(m.released) ? m.released.slice(0, 10) : undefined;
-  const country = typeof m.country === "string" && m.country.trim() ? m.country.trim() : undefined;
+  // Some metas write a code ("usa", "uk"): in capitals, as a code reads.
+  const country =
+    typeof m.country === "string" && m.country.trim()
+      ? m.country.split(",").map((c) => (/^\s*[a-z]{2,3}\s*$/i.test(c) ? c.trim().toUpperCase() : c.trim())).filter(Boolean).join(", ")
+      : undefined;
   const awards = typeof m.awards === "string" && m.awards.trim() && !/^n\/?a$/i.test(m.awards.trim()) ? m.awards.trim() : undefined;
   return { ...(writer ? { writer } : {}), ...(released ? { released } : {}), ...(country ? { country } : {}), ...(awards ? { awards } : {}) };
 }
