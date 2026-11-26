@@ -643,3 +643,17 @@ the other, 250 ms per key, 3 runs each.
 | | this change | 17-33 ms | 83-150 ms | 23, 54, 46 | 5-7 MB |
 
 The same within the run-to-run spread. One 350 ms frame in the second Cinema run, not seen in the others.
+
+### Mood and Settings › SmartThings (D)
+
+The Lights panel's right side (routine and light cards over one fixed surface) is gone. Mood is one `PreviewList`
+(two fixed surfaces, no frost swaps) whose preview is the effects' little room (opacity and transform only, still
+under Reduce motion). Settings › SmartThings is Settings' own windowed list, its preview drawn by Secretary.
+
+| Walk | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- |
+| Mood (`Down`x4, `Up`x4, `Down,Down,Up,Up`), 3 runs | 17 ms | 17-33 ms | 1, 0, 0 | 4 MB |
+| Settings › SmartThings (`Down`x10, `Up`x10), 3 runs | 17 ms | 33 ms | 3, 1, 0 | 5-6 MB |
+
+No mood or light was switched on the TV while measuring (they act on the room). JS 169.0 KB gzip (the old panel and
+its navigation are gone).
