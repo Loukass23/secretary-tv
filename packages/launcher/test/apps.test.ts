@@ -30,7 +30,7 @@ test("the launcher never lists itself", () => {
 });
 
 test("badgeFor formats movie years, in-progress episode codes, and Up Next episodes", () => {
-  assert.equal(badgeFor({ type: "movie", title: { id: "tt1", name: "M", year: "2026", rating: "" } }), "Movie · 2026");
+  assert.equal(badgeFor({ type: "movie", title: { id: "tt1", name: "M", year: "2026", rating: "" } }), "Film · 2026");
   assert.equal(
     badgeFor({ type: "anime", posSec: 420, episode: { id: "k:1", season: 1, episode: 5, name: "Ep 5" } }),
     "Anime · S01E05",

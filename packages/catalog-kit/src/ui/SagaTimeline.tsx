@@ -275,7 +275,7 @@ export function SagaTimeline({
                   />
                   <b>{step.name}</b>
                   <small>
-                    {step.year} · {step.runtimeMin >= 180 && step.catalogType !== "movie" ? "Series" : `${step.runtimeMin}m`}
+                    {step.year} · {step.runtimeMin >= 180 && step.catalogType !== "movie" ? "Show" : `${step.runtimeMin}m`}
                   </small>
                 </div>
               );

@@ -98,6 +98,10 @@ export interface RawMeta {
   videos?: RawVideo[];
   cast?: string[];
   director?: string[] | string;
+  writer?: string[] | string;
+  /** An ISO date ("2026-11-20T00:00:00.000Z"). */
+  released?: string;
+  awards?: string;
   /** Newer metas carry the people as links, `category` "Cast" or "Directors". */
   links?: { name?: string; category?: string }[];
 }
@@ -115,6 +119,19 @@ export function peopleOf(m: Pick<RawMeta, "cast" | "director" | "links">): { cas
   const director = names(m.director) ?? linked("directors");
   // Only the fields there are, so a title without people stays as it was.
   return { ...(cast ? { cast } : {}), ...(director ? { director } : {}) };
+}
+
+/** What a film page lists about a title beyond its people (Detail.tsx About): only the fields the meta has. */
+export function factsOf(m: Pick<RawMeta, "writer" | "released" | "country" | "awards">): Pick<Title, "writer" | "released" | "country" | "awards"> {
+  const writer = names(m.writer);
+  const released = typeof m.released === "string" && /^\d{4}-\d{2}-\d{2}/.test(m.released) ? m.released.slice(0, 10) : undefined;
+  // Some metas write a code ("usa", "uk"): in capitals, as a code reads.
+  const country =
+    typeof m.country === "string" && m.country.trim()
+      ? m.country.split(",").map((c) => (/^\s*[a-z]{2,3}\s*$/i.test(c) ? c.trim().toUpperCase() : c.trim())).filter(Boolean).join(", ")
+      : undefined;
+  const awards = typeof m.awards === "string" && m.awards.trim() && !/^n\/?a$/i.test(m.awards.trim()) ? m.awards.trim() : undefined;
+  return { ...(writer ? { writer } : {}), ...(released ? { released } : {}), ...(country ? { country } : {}), ...(awards ? { awards } : {}) };
 }
 
 export function toVideo(v: RawVideo): Video | null {
@@ -149,9 +166,20 @@ export const ratingLabel = (v: unknown): string => {
   return r && `★ ${r}`;
 };
 
-/** A synopsis without the box-office line some catalogs lead with ("Currently in theaters." and the like). */
-export const cleanSynopsis = (text: string | undefined): string | undefined =>
-  text?.replace(/^\s*(?:currently|now)\s+(?:playing\s+)?(?:in|at)\s+(?:the\s+)?(?:theat(?:er|re)s?|cinemas?)\s*[.!:\-–—]*\s*/i, "").trim() || undefined;
+/**
+ * The box-office line some catalogs lead a synopsis with, one piece at a time: an emoji, "Currently in theaters" (or
+ * "Now playing in cinemas", "In theaters now"), "Released 6 days ago" (or today, yesterday), and what separates them.
+ * "Released" only goes with a time, so a synopsis that starts "Released from prison, …" keeps its first word.
+ */
+const BOX_OFFICE =
+  /^[\s\p{Extended_Pictographic}\uFE0F\u200D]*(?:(?:currently|now)\s+(?:playing\s+)?(?:in|at)\s+(?:the\s+)?(?:theat(?:er|re)s?|cinemas?)|in\s+(?:theat(?:er|re)s?|cinemas?)\s+now|released\s+(?:\d+\s+(?:days?|weeks?|months?)\s+ago|today|yesterday))[\s.!:|·•\-–—]*/iu;
+
+/** A synopsis without the box-office line some catalogs lead with ("🎬 Currently in theaters - Released 6 days ago"). */
+export function cleanSynopsis(text: string | undefined): string | undefined {
+  let t = text ?? "";
+  for (let i = 0; i < 4 && BOX_OFFICE.test(t); i++) t = t.replace(BOX_OFFICE, "");
+  return t.trim() || undefined;
+}
 
 /** The metadata gives Japan as the country (lib/animeguard.ts decides what that means). */
 const fromJapan = (country?: string) => (country && /\bjapan\b/i.test(country) ? { japanese: true } : {});
@@ -221,6 +249,7 @@ export function toTitle(m: RawMeta): Title | null {
     ...fromJapan(m.country),
     videos: videos?.length ? videos : undefined,
     ...peopleOf(m),
+    ...factsOf(m),
   };
 }
 
@@ -496,6 +525,8 @@ export async function fetchTmdbMeta(
       background: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : undefined,
       cast: names(m.credits?.cast?.slice(0, 12).map((c) => c.name)),
       director: names(m.credits?.crew?.filter((c) => c.job === "Director").map((c) => c.name)),
+      writer: names(m.credits?.crew?.filter((c) => c.job === "Screenplay" || c.job === "Writer").map((c) => c.name)),
+      ...(/^\d{4}-\d{2}-\d{2}$/.test(m.release_date ?? "") ? { released: m.release_date } : {}),
       ...(m.original_language === "ja" ? { japanese: true } : {}),
       tmdbCollection:
         m.belongs_to_collection?.id && m.belongs_to_collection?.name
