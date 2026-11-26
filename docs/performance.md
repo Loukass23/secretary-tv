@@ -750,14 +750,27 @@ under Reduce motion). Settings › SmartThings is Settings' own windowed list, i
 
 No mood or light was switched on the TV while measuring (they act on the room). JS 169.0 KB gzip (the old panel and
 its navigation are gone).
-### The pause menu (review 26 Nov, E; not yet measured on the TV)
+### The pause menu (review 26 Nov, E)
 
 Paused, the player shows one flat smoked surface along the bottom (`ui/PauseMenu.tsx`, `GlassRoot mode="flat"`, no
 frost, as the controls it replaces) with a row of tv-kit buttons that show focus by opacity and transform. It draws
-only while paused, so playback frames are unchanged. Not measured: the paused player needs a real stream, which was
-not started for this change. To check on the TV: pause a title, `cdp.mjs <port> layers` (only the pause surface and
-the page-drawn caption over the video plane), then `cdp.mjs walk 250 Right,Right,Right,Right,Right,Left,Left,Left,Left,Left`
-with the menu up.
+only while paused, so playback frames are unchanged.
+
+Measured on the Samsung TV with `main` at `d352c07` (all five groups of the review), a 21 min 1080p HEVC episode
+resumed at 11:40 and paused with OK:
+
+- **Layers** (`cdp.mjs layers`, AVPlay `PAUSED`): at every sampled point only `.ply-pause-root` (transparent) and, along
+  the bottom, `.ply-pm` lie over the video plane; the page, `body` and `html.avplay` are transparent.
+- **Walk** along the buttons with the menu up (`cdp.mjs walk 250 Right,Right,Right,Right,Right,Left,Left,Left,Left,Left`),
+  3 runs: median 17 ms, p95 17 ms, max 17 ms, **0 frames over 50 ms**, heap 8 MB.
+- The menu read `11:47 / 21:29 · 10 min left` with the release's badges; Next episode showed (a show with one after).
+- **Subtitles** opened the options menu on its page and Back came back to the pause menu. **Audio** listed the file's
+  one track. **Picture** stepped Fit, Fill, Stretch and back to Fit while paused. **Play** resumed (AVPlay `PLAYING`,
+  the menu gone) and Back left the player cleanly (AVPlay `NONE`, back on the title page).
+- The Subtitles page said "No installed addon has subtitles for this title", correctly: the one addon installed on this
+  TV that lists the subtitles resource answers every request with an empty list (checked for this episode and for two
+  well-known films and a show). Captions need an addon that actually serves subtitle files; the menu and the page-drawn
+  captions then work as before.
 
 Budget: the restored options menu and the pause menu bring the deploy build to 174.1 KB gzip; `budget.json` was raised
 from 172 KB to 178 KB for it.
