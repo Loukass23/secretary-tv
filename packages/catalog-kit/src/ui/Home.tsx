@@ -182,7 +182,11 @@ export function Home({
   const heroSrc = current ? heroArt(type, current) : undefined;
   const { backdrop, shade, sheen, mood } = useBase(type, heroSrc);
   // The focused card's art becomes the backdrop once focus rests on it, with its readable copy under the caption.
-  const hero = useHeroArt(current?.id, heroSrc, active, false, undefined, true);
+  // The first title after the home opens (or comes back from the search, which rebuilds it) shows its backdrop at once,
+  // from the decoded art when it was shown before; only browsing waits for focus to rest.
+  const firstId = useRef<string | undefined>(undefined);
+  if (current && firstId.current === undefined) firstId.current = current.id;
+  const hero = useHeroArt(current?.id, heroSrc, active, current?.id === firstId.current, undefined, true);
   // Its logo, looked up once focus has rested as long (a folder has none).
   const logo = useLogo(current?.catalogType ?? type, current && !current.folder ? current : undefined, DWELL_MS);
 
