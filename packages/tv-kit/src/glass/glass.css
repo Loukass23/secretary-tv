@@ -328,7 +328,8 @@
 .sg-tile.is-focus::before { opacity: 1; }
 /* Captions sit on artwork, so they keep a light ink in both themes (sg-ink is dark by day). */
 .sg-tile-cap { position: absolute; left: 20px; bottom: 16px; right: 64px; font-size: var(--sg-t-s); color: #f4f4f6; }
-.sg-tile-cap small { font-size: var(--sg-t-xs); color: rgba(255, 255, 255, 0.75); }
+/* The line under a tile's name or logo (an episode, a year) sits on a flat dark pill, so bright art never swallows it. */
+.sg-tile-cap small { display: inline-block; margin-top: 4px; padding: 2px 10px; border-radius: 8px; font-size: var(--sg-t-xs); color: #f4f4f6; background: rgba(10, 10, 14, 0.66); }
 /* A title's logo (MediaTile logo): in place of its name, kept inside the caption's box whatever its shape. */
 .sg-tile-logo { display: block; max-width: 62%; max-height: 84px; margin-bottom: 6px; object-fit: contain; object-position: left bottom; }
 .sg-tile-cap b[hidden] { display: none; }

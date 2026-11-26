@@ -54,7 +54,8 @@ import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY, YOUTUBE_APP_ID } from "./config.ts";
 import { alertsShown, mayListen, remindersShown, speaksReply } from "./features.ts";
 import { applyOrder, keepOrder, loadOrder, moveKey, saveOrder } from "./card-order.ts";
-import { type CardStyle, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
+import { type CardStyle, collapsedShape, loadCardStyles, openStyleMenu, saveCardStyles, type StyleMenu, stepStyleMenu, styleFor } from "./card-style.ts";
+import { COVER_EVERY_MS, COVER_TURN_KEY, coverPicks, oneEach } from "./card-covers.ts";
 import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
 // Types only: the catalog itself loads as its own chunk (catalog-host.tsx).
 import type { EmbeddedHost } from "@secretary/catalog-kit";
@@ -331,6 +332,21 @@ export function App() {
   /** The latest focus, for callbacks that outlive a render. */
   const focusRef = useRef(focus);
   focusRef.current = focus;
+  // Which titles the folded media cards show (card-covers.ts): one turn on from the last launch, then on every return
+  // from the catalog and every few minutes while no media card is focused or open.
+  const [coverTurn, setCoverTurn] = useState(() => {
+    const next = (Number(readJson<number>(COVER_TURN_KEY)) || 0) + 1;
+    writeJson(COVER_TURN_KEY, next);
+    return next;
+  });
+  /** Whether a media card has focus now (set while the row renders): its covers wait. */
+  const mediaFocused = useRef(false);
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!mediaFocused.current) setCoverTurn((n) => n + 1);
+    }, COVER_EVERY_MS);
+    return () => clearInterval(t);
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   // Each media card's look (a long OK on it), and the menu while it is open: the card previews the menu's choice.
   const [cardStyles, setCardStyles] = useState<Record<string, CardStyle>>(() => loadCardStyles(storage));
@@ -1152,7 +1168,10 @@ export function App() {
   const artOf = (kind: CatalogKind, t: SlimTitle): TitleArt => arts[`${kind}:${t.id}`] ?? cachedTitleArt(kind, t, "card");
   /** The titles whose artwork is looked up: those the folded cards and Continue watching show. */
   const artWanted: { kind: CatalogKind; title: SlimTitle }[] = [];
-  const byKind = (k: CatalogKind) => onlyKind(k, continueItems, animeIds);
+  // One entry per title: a show synced from a phone under one id and played here under another is one tile.
+  const byKind = (k: CatalogKind) => oneEach(onlyKind(k, continueItems, animeIds), (e) => e.title);
+  /** The titles the folded cards already show, so the next card shows others. */
+  const onCovers = new Set<string>();
   const columns: RowColumn[] = [];
   /** The artwork behind each column's items, for the glow. */
   const art: ({ src: string; type: CatalogKind } | undefined)[][] = [];
@@ -1218,7 +1237,9 @@ export function App() {
     // On the folded card and Continue watching: the lookup's landscape thumb and logo (Fanart.tv, else the catalog's).
     const styled = (it: MediaItem, kind: CatalogKind, t: SlimTitle): MediaItem => {
       const a = artOf(kind, t);
-      return { ...it, still: a.thumb, logo: a.logo };
+      // A Fanart.tv thumb has the title's logo painted in: the tile shows it whole, or the textless art under the
+      // logo when its shape would crop it (cards.tsx stillArt).
+      return { ...it, still: a.thumb, plain: a.plain, stillHasLogo: a.thumbHasLogo, logo: a.logo };
     };
     const goingItems: MediaItem[] = going.map((e) =>
       styled(
@@ -1273,6 +1294,10 @@ export function App() {
       })),
     ];
     const items = going.length ? goingItems : pickItems;
+    const style = shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key));
+    // Folded, the card shows a few of what is in progress and the picks, moving on each turn (card-covers.ts).
+    const coverPool = [...going.map((e, k) => ({ it: goingItems[k], t: e.title })), ...picks.slice(0, ART_PER_CARD).map((r, k) => ({ it: pickItems[k], t: r.title }))];
+    const covers = coverPicks(coverPool, collapsedShape(style).count, coverTurn, onCovers, (c) => c.t).map((c) => c.it);
     for (const t of [...going, ...picks].slice(0, ART_PER_CARD + going.length)) artWanted.push({ kind: t.type, title: t.title });
     // Everything the card already shows, so the assistant's picks bring something new.
     const shownIds = new Set([...going.map((e) => e.title.id), ...picks.map((r) => r.title.id), ...rowsHere.flatMap((r) => r.hits.map((h) => h.title.id))]);
@@ -1284,9 +1309,8 @@ export function App() {
         unit: m.unit,
         label: m.name,
         items,
-        // Folded, the card shows what is in progress first, then the picks.
-        small: going.length ? [...goingItems, ...pickItems] : undefined,
-        style: shownStyle(styleMenu, m.key, styleFor(cardStyles, m.key)),
+        small: covers,
+        style,
         heading: mine ? "For you" : going.length ? "Continue watching" : "Tonight's picks",
         // Continue watching draws landscape stills unless the viewer picked another look for it.
         shape: rowLooks[going.length ? `${m.key}/continue` : `${m.key}/picks`],
@@ -1310,6 +1334,13 @@ export function App() {
       [...items, ...more.flatMap((r) => r.items)].map((it) => ({ src: it.poster, type: m.kind })),
     );
   }
+  // Back from the catalog is a new visit to the home: the covers move on.
+  const inCatalog = catalog !== null;
+  const wasInCatalog = useRef(inCatalog);
+  useEffect(() => {
+    if (wasInCatalog.current && !inCatalog) setCoverTurn((n) => n + 1);
+    wasInCatalog.current = inCatalog;
+  }, [inCatalog]);
   // The artwork lookups for the titles on the cards (catalog-kit titleArt: at most 3 at once, cached), applied in one go.
   const artKey = artWanted.map((t) => `${t.kind}:${t.title.id}`).join();
   useEffect(() => {
@@ -1417,6 +1448,7 @@ export function App() {
     });
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
+  mediaFocused.current = columns[colAt]?.kind === "media";
   // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
   const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
