@@ -29,6 +29,11 @@ export type Avplay = {
   setListener(l: AvplayListener): void;
   setBufferingParam?(option: string, unit: string, amount: number): void;
   getTotalTrackInfo?(): AvplayTrack[];
+  /** Only ever called with "AUDIO": selecting a TEXT track can crash the decoder (docs/lessons.md). */
+  setSelectTrack?(type: "AUDIO", index: number): void;
+  getCurrentStreamInfo?(): AvplayTrack[];
+  /** Keeps the firmware from drawing its own default text track under the page's captions. */
+  setSilentSubtitle?(on: boolean): void;
   suspend?(): void;
   restore?(): void;
 };

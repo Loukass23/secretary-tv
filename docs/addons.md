@@ -97,10 +97,12 @@ asks for, and it matches Nuvio, but it loses the TMDB collection link on the det
 `addons.subtitles(type, id)` asks every enabled addon that serves subtitles for the id, in parallel. It merges their
 answers in install order, keeps each link once, skips addons that fail, and returns `{id, url, lang, addon}[]`.
 
-**Not connected to the player yet:** the player has no subtitle list today, and `docs/lessons.md` forbids
-`setSelectTrack("TEXT", …)`. Showing external subtitles means AVPlay's `setExternalSubtitlePath` plus
-`onsubtitlechange`, drawn by the page over the video. That has to be measured on the TV first: whether it is safe
-with prepare-ahead, whether it survives reopening to seek, and what it costs per frame. That is the next step.
+**In the player:** the options menu (Up) lists them by language, with a size and a delay. AVPlay cannot take an external
+subtitle (`setExternalSubtitlePath` is refused with every path form on the reference TV, `docs/lessons.md`), so the page
+fetches the file, reads SubRip or WebVTT into cues (`lib/subtitles.ts`) and draws the cue for the player's position four
+times a second over the video. Measured on the TV (2026-11-24, a 400-cue file): the caption matches the position, a seek
+(which reopens the source) lands on the right line, and the page logged no long task apart from the reopen itself. A
+language chosen by the viewer comes back on the next episode.
 
 ## Settings › Addons
 

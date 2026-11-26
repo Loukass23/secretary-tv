@@ -1,3 +1,4 @@
+import { type AspectMode, audioTracks } from "./tracks.ts";
 import type { PlayerEvents, TvPlayer } from "./types.ts";
 import type { AvplayTrack, Webapis } from "./webapis.ts";
 
@@ -100,6 +101,20 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
   let seekTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPos = 0;
   let lastDur = 0;
+  /** The viewer's audio pick and picture fit. Both outlive open(): a seek reopens the source and must keep them. */
+  let audioPick: number | null = null;
+  let aspectMode: AspectMode = "fit";
+  let trackList: AvplayTrack[] = [];
+  let silent = false;
+
+  const applyAudio = () => {
+    if (audioPick == null || !av.setSelectTrack) return;
+    try {
+      av.setSelectTrack("AUDIO", audioPick);
+    } catch (err) {
+      console.warn("[avplay] audio track not accepted", err);
+    }
+  };
 
   const state = () => {
     try {
@@ -202,6 +217,9 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
       if (firstFrame) {
         const f = firstFrame;
         firstFrame = null;
+        // The track is chosen once the picture runs: on the reference TV a choice made while prepared (READY) was
+        // dropped by play(), so after a seek's reopen the file's default track came back.
+        applyAudio();
         f();
       }
       trySeek();
@@ -324,6 +342,12 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
             if (tracks.length > 0 && !tracks.some((t) => t.type === "AUDIO")) {
               return reject(new Error("no playable audio track"));
             }
+            trackList = tracks;
+            if (silent) {
+              try {
+                av.setSilentSubtitle?.(true);
+              } catch {}
+            }
             const size = videoSize(tracks);
             rect = fitRect({ x: 0, y: 0, w: screen.width, h: screen.height }, size.w, size.h);
             lastDur = dur();
@@ -347,8 +371,10 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
   }
 
   function showOnPlane() {
-    const r = rect ?? { x: 0, y: 0, w: screen.width, h: screen.height };
-    av.setDisplayMethod?.("PLAYER_DISPLAY_MODE_FULL_SCREEN");
+    // Fit is the letterboxed rect; Fill and Stretch take the whole screen, cropped or pulled to it.
+    const whole = { x: 0, y: 0, w: screen.width, h: screen.height };
+    const r = aspectMode === "fit" ? (rect ?? whole) : whole;
+    av.setDisplayMethod?.(aspectMode === "fill" ? "PLAYER_DISPLAY_MODE_CROPPED_FULL" : "PLAYER_DISPLAY_MODE_FULL_SCREEN");
     av.setDisplayRect(r.x, r.y, r.w, r.h);
     shown = true;
   }
@@ -410,6 +436,32 @@ export function createAvplayPlayer({ api, events, screen, doc }: AvplayDeps): Tv
       if (settleTimer) clearTimeout(settleTimer);
       settleTimer = setTimeout(() => void reopen(), SEEK_SETTLE_MS);
       events.onTime(lastPos, d);
+    },
+    audioTracks: () => audioTracks(trackList),
+    audioIndex() {
+      if (audioPick != null) return audioPick;
+      try {
+        const cur = av.getCurrentStreamInfo?.().find((t) => t.type === "AUDIO");
+        if (cur) return cur.index;
+      } catch {}
+      return audioTracks(trackList)[0]?.index ?? -1;
+    },
+    selectAudio(index) {
+      audioPick = index;
+      if (prepared) applyAudio();
+    },
+    silentSubtitles(on) {
+      silent = on;
+      if (prepared) {
+        try {
+          av.setSilentSubtitle?.(on);
+        } catch {}
+      }
+    },
+    aspect: () => aspectMode,
+    setAspect(mode) {
+      aspectMode = mode;
+      if (shown && prepared) showOnPlane();
     },
     position: () => lastPos,
     duration: () => lastDur || dur(),

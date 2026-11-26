@@ -1,7 +1,7 @@
 /* Player in glass (PlayerView.tsx). While the stream prepares: the title's art with a frosted panel (art.tsx).
    Over the video: the video is a plane behind a transparent page (docs/lessons.md, AVPlay), so the controls are
    smoked glass with no frost, and the page behind them stays transparent. */
-.player { position: fixed; inset: 0; }
+.player { position: fixed; inset: 0; --ply-smoke: rgba(10, 11, 14, 0.8); }
 /* While a player is attached it owns the screen: every other screen still mounted (the home always is) would
    cover the video plane, so all of them hide, whatever they are. */
 html.avplay #root > :not(.player):not(.island-root):not(.cc-root):not(.av-plane),
@@ -33,7 +33,7 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 /* --- over the video --- */
 .sg-root.ply-osd { z-index: 2; background: transparent; }
 .ply-controls { padding: 24px 32px; display: flex; flex-direction: column; justify-content: space-between; }
-.ply-controls::after { background: rgba(10, 11, 14, 0.72); }
+.ply-controls::after { background: var(--ply-smoke); }
 .ply-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .ply-title { font-size: var(--sg-t-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ply-state { font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-accent); }
@@ -43,7 +43,7 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 /* The Up next card (PlayerView.tsx): over the video like the controls, with a countdown bar moved by transform. */
 .sg-root.ply-next-root { z-index: 3; background: transparent; }
 .ply-next { padding: 22px; display: flex; gap: 22px; align-items: stretch; }
-.ply-next::after { background: rgba(10, 11, 14, 0.78); }
+.ply-next::after { background: var(--ply-smoke); }
 .ply-next-art { width: 300px; height: 206px; object-fit: cover; border-radius: 14px; flex: none; position: relative; z-index: 2; }
 .ply-next-text { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-width: 0; position: relative; z-index: 2; }
 .ply-next .ply-title { white-space: normal; }
@@ -61,10 +61,41 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 /* The pause panel (PlayerView.tsx): over the paused video, smoked glass with no frost, in place of the controls. */
 .sg-root.ply-pause-root { z-index: 3; background: transparent; }
 .ply-pause { padding: 30px 36px; display: flex; flex-direction: column; gap: 12px; }
-.ply-pause::after { background: rgba(10, 11, 14, 0.8); }
+.ply-pause::after { background: var(--ply-smoke); }
 .ply-pause > * { position: relative; z-index: 2; }
 .ply-pause h1 { margin: 0; font-size: var(--sg-t-xxl); font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ply-pause-logo { max-width: 520px; max-height: 120px; object-fit: contain; object-position: left center; }
 .ply-pause-plot { margin: 0; font-size: var(--sg-t-s); line-height: 1.4; color: var(--sg-ink-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ply-pause .ply-bar { margin-top: auto; }
+/* The pause menu (PauseMenu.tsx): the same smoked glass along the bottom, the title, where it is and the buttons. */
+.ply-pm { padding: 30px 40px 34px; display: flex; flex-direction: column; gap: 14px; }
+.ply-pm::after { background: var(--ply-smoke); }
+.ply-pm > * { position: relative; z-index: 2; }
+.ply-pm-name { margin: 0; font-family: var(--sg-font-title); font-size: var(--sg-t-xxl); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-pm .ply-bar { margin-top: 6px; height: 8px; border-radius: 4px; }
+.ply-pm-time { display: flex; align-items: center; gap: 18px; font-family: var(--sg-font-num); font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
+.ply-pm-time b { color: var(--sg-ink); font-weight: 600; }
+.ply-pm .sg-btn-row { margin-top: auto; }
 
+
+/* The options menu (PlayerMenu.tsx): the control centre's smoked glass, a column on the right that grows by transform.
+   The rows are flat fills; the focused row takes the glass focus colours, as everywhere in Secretary. */
+.sg-root.pm-root { z-index: 4; background: transparent; pointer-events: none; }
+.pm { transform-origin: right center; transform: translateX(40px); opacity: 0; transition: transform 240ms var(--sg-ease), opacity 160ms ease-out; will-change: transform, opacity; }
+.pm.is-open { transform: translateX(0); opacity: 1; }
+.pm::after { background: var(--ply-smoke); }
+/* `.sg-glass > :not(.sg-frost)` (glass.css) makes every child relative, which would beat a lone class: the head, rows and
+   empty line need the parent in the selector to stay absolute, or the rows stack in flow and run off the panel. */
+.pm > .pm-head { position: absolute; left: 30px; right: 30px; top: 22px; display: flex; flex-direction: column; gap: 8px; }
+.pm-title { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.pm-sub { font-size: 18px; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm > .pm-row { position: absolute; left: 16px; right: 16px; height: 60px; padding: 0 18px; border-radius: var(--sg-r-chip); display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 22px; }
+.pm-row.is-focus { background: var(--sg-focus); color: var(--sg-focus-ink); }
+.pm-label { display: flex; align-items: center; gap: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-dot { flex: none; width: 10px; height: 10px; border-radius: 5px; background: var(--accent, #ff5a26); }
+.pm-val { opacity: 0.7; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; text-align: right; }
+.pm > .pm-empty { position: absolute; left: 30px; right: 30px; top: 118px; font-size: 20px; color: var(--sg-ink-dim); }
+.ply-hint { margin-right: 22px; font-size: 16px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
+
+/* Captions from addons (PlayerView.tsx): a flat plate over the video, above the controls. */
+.ply-cap { position: absolute; left: 50%; bottom: 240px; max-width: 1500px; padding: 8px 24px; transform: translateX(-50%); border-radius: var(--sg-r-chip); background: rgba(10, 11, 14, 0.62); color: #fff; font-weight: 600; line-height: 1.25; text-align: center; white-space: pre-line; z-index: 2; }

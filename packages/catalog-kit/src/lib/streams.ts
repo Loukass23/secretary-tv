@@ -1,3 +1,4 @@
+import { episodeHint } from "@secretary/core";
 import type { StreamMeta } from "@secretary/plugins";
 import type { FileHint } from "./episodes.ts";
 
@@ -234,8 +235,14 @@ export function createPluginStreamClient(
   const keyOf = (type: string, id: string, hint?: FileHint) =>
     `${type}:${id}|${hint?.season ?? ""}|${hint?.episode ?? ""}|${hint?.absolute ?? ""}|${hint?.year ?? ""}|${hint?.anime ?? ""}`;
   // Plugin torrents carry the episode numbers, for the file choice when they are resolved.
-  const withHints = (streams: Stream[], hint?: FileHint) =>
-    hint ? streams.map((s) => (s.url.startsWith("debrid:") ? { ...s, url: withHint(s.url, hint) } : s)) : streams;
+  // A plain IMDb episode id ("tt…:1:5") has no hint from the page, yet a season pack must still be told the episode:
+  // without it the file choice falls to the provider's index or the largest file, which is some other episode.
+  const withHints = (streams: Stream[], hint?: FileHint, id?: string) => {
+    const merged = { ...(id ? episodeHint(id) : null), ...hint };
+    return Object.keys(merged).length
+      ? streams.map((s) => (s.url.startsWith("debrid:") ? { ...s, url: withHint(s.url, merged) } : s))
+      : streams;
+  };
 
   function search(id: string, hint: FileHint | undefined, overrideType: "movie" | "series" | undefined): Entry {
     const type = overrideType ?? defaultType;
@@ -248,7 +255,7 @@ export function createPluginStreamClient(
       type,
       hint,
       (streams) => {
-        entry.partial = withHints(streams, hint);
+        entry.partial = withHints(streams, hint, id);
         for (const w of entry.watchers) w(entry.partial, false);
       },
       entry.stop.signal,
@@ -256,7 +263,7 @@ export function createPluginStreamClient(
       entry.stop.signal.aborted
         ? []
         : streams.length
-        ? withHints(streams, hint)
+        ? withHints(streams, hint, id)
         : // Nothing from the plugins: a server with an addon, when the build has one, may still know the title.
           fallbackWithin(id, hint, overrideType),
     );

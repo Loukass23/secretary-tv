@@ -83,6 +83,13 @@ Each item cost a debugging session. If one turns out wrong, fix it here in the s
 - A picture with no audio track in `getTotalTrackInfo()` means AVPlay cannot decode the audio (DTS and TrueHD are silent on most
   models). The player treats that as a failed source and tries the next one.
 - Never call `setSelectTrack("TEXT", …)`; it can crash the decoder.
+- `setExternalSubtitlePath` answers `PLAYER_ERROR_INVALID_PARAMETER` on the reference TV for every path form tried (an
+  http URL, one with a query, https, a file path), in IDLE after `open()` and while playing. Subtitles from addons are
+  therefore drawn by the page (`catalog-kit/src/lib/subtitles.ts`). `setSilentSubtitle(true)` is accepted and keeps the
+  firmware's own default text track (it selects one itself) from drawing under them.
+- A file's `getTotalTrackInfo()` lists its embedded subtitles as TEXT tracks with an empty `track_lang` (one file had 34),
+  so they cannot be named for a menu; audio tracks do carry `language`, `channels` and a mime-type `fourCC`.
+- `setSelectTrack("AUDIO", i)` is applied after prepare and again after every reopen (a seek reopens the source).
 - Never seek a prepared stream. Every form (`seekTo` with or without callbacks, `jumpForward`/`jumpBackward`, paused or
   playing) blocks the page until a remote file re-buffers: 3 to 34 s for a 4K stream. `seekTo` in IDLE (after `open()`,
   before `prepareAsync()`) returns at once and only sets where prepare starts, so the resume point and every seek reopen
