@@ -83,7 +83,13 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   // Move mode, as on the TV (long OK, then Left and Right): the order lives in this page only.
   const [order, setOrder] = useState<string[]>([]);
   const [moving, setMoving] = useState<{ key: string; orig: string[] } | null>(null);
-  const base = useMemo(() => nestColumns(art, shown), [art, JSON.stringify(shown)]);
+  // The folded cards' covers move on every 6 s here (every few minutes on the TV), to show how they change.
+  const [turn, setTurn] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTurn((n) => n + 1), 6000);
+    return () => clearInterval(t);
+  }, []);
+  const base = useMemo(() => nestColumns(art, shown, turn), [art, JSON.stringify(shown), turn]);
   const columns = useMemo(() => applyOrder(base, order), [base, order]);
   const [focus, setFocus] = useState<Focus>(start === "row" ? { area: "row", col: 0, i: 0 } : { area: start, i: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
