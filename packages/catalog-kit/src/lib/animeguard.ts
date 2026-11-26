@@ -9,7 +9,7 @@ import type { CatalogType, Title } from "./types.ts";
  *   My List).
  * - Continue watching, in the catalog home (`loadAllResume` in resume.ts) and in Secretary's opened cards: an anime
  *   entry saved or synced as a series moves to Anime (`asAnimeKind`).
- * - The type label on a title page ("Anime", not "Series").
+ * - The type label on a title page ("Anime", not "Show").
  *
  * Cinemeta's series and movie lists hold anime too (they are IMDb titles). A title is anime when it has a Kitsu id,
  * when its IMDb id is one the anime catalogs list, or when it is animation its metadata says is Japanese
@@ -83,7 +83,7 @@ export const onlyKind = <E extends { type: CatalogType; title: Kinded }>(
 
 /** The word a title page shows for its kind. */
 export const typeLabel = (type: CatalogType, t: Kinded, ids: ReadonlySet<string> = learnt): string =>
-  type === "movie" ? "Film" : kindFor(type, t, ids) === "anime" ? "Anime" : "Series";
+  type === "movie" ? "Film" : kindFor(type, t, ids) === "anime" ? "Anime" : "Show";
 
 /** `titles` without the anime, for the Shows and Cinema rows; the Anime rows pass through. */
 export async function withoutAnime(type: CatalogType, titles: Title[], f?: typeof fetch): Promise<Title[]> {

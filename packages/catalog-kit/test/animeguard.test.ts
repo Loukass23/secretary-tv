@@ -26,7 +26,7 @@ test("anime stays off Shows and Cinema rows and Continue watching, and lands on 
 
 test("title page label: Anime, not Series, for an anime opened as a series", () => {
   assert.equal(typeLabel("series", t("tt100"), ids), "Anime");
-  assert.equal(typeLabel("series", t("tt300"), ids), "Series");
+  assert.equal(typeLabel("series", t("tt300"), ids), "Show");
   assert.equal(typeLabel("anime", t("tt300"), ids), "Anime");
   assert.equal(typeLabel("movie", t("tt300"), ids), "Film");
 });

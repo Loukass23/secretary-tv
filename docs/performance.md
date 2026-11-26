@@ -664,3 +664,19 @@ with the logo on other shapes, so no tile loads more than one picture.
 A few more long frames on the first walks, inside the spread the earlier sections show for this walk (the same
 `main` gave 6-15 an hour before, and 21-31 on 25 Nov). The covers differ between the builds, so the pictures decoded
 differ too; no setting or effect was changed. One 1.1 s frame in the sixth run, not seen in the other five.
+### Title pages (B)
+
+No frosted panel was added: the About panel is one smoked surface like the sources sheet, shown only while open. The
+episode stills get a darkened copy under their titles (`stillblur.ts` `readableStill`, 480 x 270 JPEG, made once per
+still and cached like the spoiler blur); the tile shows the plain still until it is made. The catalog home now shows
+its first backdrop at once (from the decoded art when it was shown before), which also brings it back at once after
+the search.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Show page (Shows card, OK on a pick; `Right,Right,Right,Right,Left,Left,Up,Right,Left,Down,Right,Right,Up,Up,Down,Down`) | `main` | 17 ms | 33-50 ms | 6, 10, 5 | 7-8 MB |
+| | this change | 17 ms | 33-67 ms | 8, 15, 6 | 8-9 MB |
+| Film page (Cinema card, OK on a pick; `Right,Right,Right,Left,Left,Left,Down,Right,Right,Right,Up`) | this change | 17 ms | 17-33 ms | 1, 1, 0 | 7-10 MB |
+
+The show page is the same within the spread (spoilers were on Blur on this TV, so its unwatched episodes showed the
+blurred still, not the readable copy). `main` was not walked on a film page tonight.

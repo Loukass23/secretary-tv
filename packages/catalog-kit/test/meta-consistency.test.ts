@@ -33,6 +33,12 @@ test("a synopsis loses its box-office lead-in, and only that", () => {
   assert.equal(cleanSynopsis("CURRENTLY IN THEATERS - A thief."), "A thief.");
   assert.equal(cleanSynopsis("A thief is currently in theaters."), "A thief is currently in theaters.");
   assert.equal(cleanSynopsis("Currently in theaters."), undefined);
+  // The review's film page (screen 10): an emoji, a hyphen and how long ago it came out.
+  assert.equal(cleanSynopsis("🎬 Currently in theaters - Released 6 days ago\n\nA thief takes one last job."), "A thief takes one last job.");
+  assert.equal(cleanSynopsis("🎬 Currently in theaters – Released yesterday. A thief."), "A thief.");
+  assert.equal(cleanSynopsis("🍿 In theaters now | Released 2 weeks ago · A thief."), "A thief.");
+  assert.equal(cleanSynopsis("Released 1 day ago - A thief."), "A thief.");
+  assert.equal(cleanSynopsis("Released from prison, a thief takes one last job."), "Released from prison, a thief takes one last job.");
   assert.equal(toTitle({ imdb_id: "tt1", name: "A", description: "Currently in theaters. B." })?.description, "B.");
 });
 
@@ -88,4 +94,16 @@ test("Continue watching: one entry per title, by id or by name with the season d
     ["movie:tt6", "movie:tt7", "anime:kitsu:7", "series:tt5"],
     "the anime saved as a series folds into the newer anime entry; films keep their numbers",
   );
+});
+
+test("a film's facts: released, country, saga and awards, only what the meta has", async () => {
+  const { factLine, aboutFacts, releasedLabel } = await import("../src/lib/titlepage.ts");
+  const { factsOf } = await import("../src/lib/cinemeta.ts");
+  const f = factsOf({ released: "2026-11-20T00:00:00.000Z", country: "United States, United Kingdom, Canada", awards: "N/A", writer: "A Writer, B Writer" });
+  assert.deepEqual(f, { writer: ["A Writer", "B Writer"], released: "2026-11-20", country: "United States, United Kingdom, Canada" });
+  assert.equal(releasedLabel("2026-11-20"), "20 Nov 2026");
+  assert.equal(factsOf({ country: "usa, uk" }).country, "USA, UK");
+  assert.equal(releasedLabel("soon"), "");
+  assert.equal(factLine(f, "The Example Saga"), "Released 20 Nov 2026 · United States, United Kingdom · Part of The Example Saga");
+  assert.deepEqual(aboutFacts({ ...f, runtime: "120 min", rating: "7.4", director: ["One"] }).map((r) => r.label), ["Released", "Runtime", "Rating", "Director", "Writers", "Country"]);
 });

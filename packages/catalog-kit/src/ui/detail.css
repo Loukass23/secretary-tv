@@ -5,8 +5,9 @@
 .det-caption { position: absolute; display: flex; flex-direction: column; }
 .det-caption .sg-kicker { font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .det-mark { margin-top: 14px; flex-shrink: 0; }
-/* A show's mark is smaller (its episode's line comes under it): the name on one line, a step down. */
-.det-mark.is-small .cat-mark-name { font-size: var(--sg-t-title); -webkit-line-clamp: 1; }
+/* A show's mark is smaller (its episode's line comes under it): the name a step down, on up to two lines across the
+   caption, never cut to one. */
+.det-mark.is-small .cat-mark-name { font-size: var(--sg-t-title); -webkit-line-clamp: 2; }
 /* A show's focused episode under the show's mark: its place, then its title. */
 .det-ep-name { display: block; margin-top: 12px; height: 1.25em; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .det-ep-tag { margin-right: 16px; font-family: var(--sg-font-num); color: var(--sg-accent); }
@@ -43,7 +44,8 @@
 .det-will-dim { color: var(--sg-ink-dim); }
 .det-badge { padding: 3px 10px; border-radius: 8px; background: var(--sg-raised); font-size: var(--sg-t-xs); font-weight: 700; }
 /* The actions: one row, clipped by the panel and moved by transform (Detail.tsx); the padding leaves room for focus's lift. */
-.det-actions { margin: 20px -10px 0; padding: 8px 10px; overflow: hidden; }
+/* The row runs across the page's width (1760 px between the insets), not the caption's, so every action shows whole. */
+.det-actions { width: 1780px; margin: 20px -10px 0; padding: 8px 10px; overflow: hidden; }
 .det-actions-run { position: relative; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
 .det-actions .sg-btn-row { margin-top: 0; }
 .det-actions .sg-btn { flex-shrink: 0; }
@@ -81,6 +83,13 @@
 .det-facts dt { color: var(--sg-ink-dim); font-weight: 600; }
 .det-facts dd { margin: 0; overflow-wrap: anywhere; }
 .det-raw { white-space: pre-wrap; color: var(--sg-ink-dim); font-size: var(--sg-t-xs); }
+/* A film's line of facts under its credits (released, country, saga, awards), dimmer than the credits. */
+.det-fact { margin-top: 8px; color: var(--sg-ink-dim); }
+/* A film's About panel: the whole synopsis, then its facts; it only reads, so nothing in it takes focus. */
+.det-about-sheet { display: flex; flex-direction: column; gap: 22px; }
+.det-about-sheet h2 { margin-top: 0; }
+.det-about-full { margin: 0 10px; font-size: var(--sg-t-m); line-height: 1.4; color: var(--sg-ink); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 10; overflow: hidden; }
+.det-about-sheet .det-facts { margin: 0 10px; }
 /* "16% watched · 38 min left" over the Resume button: a thin accent bar, moved by transform. */
 .det-progress { display: flex; align-items: center; gap: 14px; margin-top: 16px; font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
 .det-progress + .det-actions { margin-top: 8px; }

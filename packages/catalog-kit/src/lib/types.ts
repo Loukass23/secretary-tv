@@ -43,9 +43,17 @@ export interface Title {
   cast?: string[];
   /** The director or directors, when the catalog has them. */
   director?: string[];
+  /** The writers, when the catalog has them. */
+  writer?: string[];
+  /** When it came out (an ISO date, "2026-11-20"), when the catalog says. */
+  released?: string;
+  /** Where it was made, as the catalog writes it ("United States, United Kingdom"). */
+  country?: string;
+  /** Its awards line, as the catalog writes it ("Won 2 Oscars. 40 wins & 90 nominations total"). */
+  awards?: string;
   /** Optional catalog origin when mixed across categories (e.g. Continue watching or Search). */
   catalogType?: CatalogType;
-  /** Optional badge shown on cards (e.g. "Series · S01E02" or "Next · S01E03"). */
+  /** Optional badge shown on cards (e.g. "Show · S01E02" or "Next · S01E03"). */
   badge?: string;
   /** Optional watch progress percentage (0..100) for Continue watching cards. */
   progressPct?: number;
