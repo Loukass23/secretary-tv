@@ -29,7 +29,9 @@ export function makeAvplay(events: PlayerEvents): TvPlayer | null {
 
 /**
  * Prepare-ahead cut OK-to-first-frame from 5.1 s to 0.8 s on the reference TV
- * (docs/performance.md), so it is on unless localStorage sectv.prepareAhead is false.
+ * (docs/performance.md), so it is on unless localStorage sectv.prepareAhead is false. It is the one switch for work a
+ * title page does before the viewer asks: the source search for what Play would start, once the page rests, and the
+ * decoder prepared with its top source. Off, a title page searches only on Play or Sources.
  */
 export const prepareAheadEnabled = () => readJson<boolean>("sectv.prepareAhead") !== false;
 
