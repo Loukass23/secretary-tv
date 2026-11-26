@@ -33,6 +33,8 @@ function Caption({ style, size }: { style?: TypeStyle; size?: TextSize }) {
   const px = (n: number) => (f ? { fontSize: `${Math.round(n * f)}px` } : undefined);
   return (
     <div class="set-cap" style={style ? typeVars(style) : undefined}>
+      {/* The face itself, large: Studio and Bold set titles in the display face, Classic in the TV's own. */}
+      {style && <b class="set-cap-aa">Aa 12</b>}
       <span class="set-cap-kicker" style={px(21)}>Drama · Show</span>
       <b class="set-cap-title" style={px(38)}>{SHOW}</b>
       <span class="set-cap-num" style={px(24)}>8.4 · 2019 · 3 seasons</span>
@@ -176,6 +178,38 @@ function Stage({ line, s }: { line: PreviewLine; s: DashboardSettings }) {
             <span class="set-pill">❚❚</span>
           )}
         </Player>
+      );
+    case "playback.resumeAtOnce":
+      // OK on a Continue watching tile, then where it lands: the player at the saved time, or the title's page.
+      return (
+        <div class="set-flow">
+          <div class="set-flow-tile">
+            <Still tone={1} />
+            <i class="set-flow-bar" />
+            <small>Continue watching · OK</small>
+          </div>
+          <b class="set-flow-arrow">→</b>
+          {s.playback.resumeAtOnce ? (
+            <div class="set-flow-to">
+              <Player>
+                <div class="set-upnext">
+                  <small>Playing from 23:14</small>
+                  <b>E3 · Night Ferry</b>
+                </div>
+              </Player>
+              <small>Plays at once</small>
+            </div>
+          ) : (
+            <div class="set-flow-to">
+              <div class="set-flow-page">
+                <b>{SHOW}</b>
+                <i class="set-flow-btn">▶ Resume E3</i>
+                <i class="set-flow-btn is-dim">Start over</i>
+              </div>
+              <small>Opens the page first</small>
+            </div>
+          )}
+        </div>
       );
     case "playback.upNextCountdown":
       return (

@@ -42,7 +42,7 @@
   --sg-font-title: var(--sg-font-body);
   --sg-font-num: var(--sg-font-body);
   --sg-font-label: var(--sg-font-body);
-  --sg-title-weight: 600;
+  --sg-title-weight: 500;
   --sg-title-track: 0em;
 }
 :root[data-sg-type="bold"] {

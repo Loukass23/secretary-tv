@@ -22,3 +22,27 @@ export interface HostApp {
   /** A line under the name, e.g. that it has a card of its own. */
   note?: string;
 }
+
+/** One line of a category Secretary adds to Settings: shown and previewed like Settings' own. */
+export interface HostSettingRow {
+  key: string;
+  title: string;
+  /** What it does, in one short line. */
+  sub: string;
+  /** Its current value. */
+  value: string;
+  /** A switch that is on: its dot lit. */
+  on?: boolean;
+  /** What the preview beside the list shows for this line; without it, the line's text. */
+  preview?: import("preact").ComponentChildren;
+  /** OK, Left or Right on the line. Settings draws the lines again after it, so `rows()` gives the new state. */
+  act?(key: "Enter" | "Left" | "Right"): void;
+}
+
+/** A category Secretary adds to Settings (SmartThings): read each time Settings draws, so it shows the TV's state now. */
+export interface HostSettingsTab {
+  name: string;
+  /** The line under "Settings" while the category is shown. */
+  blurb: string;
+  rows(): readonly HostSettingRow[];
+}

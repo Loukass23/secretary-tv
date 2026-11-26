@@ -605,9 +605,9 @@ pages, Settings with previews and Lights) measured together on the Samsung TV in
 - **Home**: the focus push-in adds a few long frames per walk (6-16 against 2-13), and the first walk after launch is
   the worst on both builds. One frame of 1033 ms in the third run on `c9b11d4`, not seen again; watch it on the next
   walk.
-- **Settings**: 3 long frames per walk against 0-1, from the preview re-rendering on each key. Small, but steady. In
-  both builds `Down` from the tabs did not visibly move focus into the list, so this walk mostly switches tabs; walk
-  the list lines next time (`docs` G section above).
+- **Settings**: 3 long frames per walk against 0-1, from the preview re-rendering on each key. Small, but steady.
+  `Down` from the tabs does move focus into the list (corrected 26 Nov: an earlier note here said it did not), so
+  this walk covers the list lines as well as the tabs.
 - **Soak**: `cdp.mjs soak` presses header buttons (picture mode, sound), so a safer loop was used: from the Assistant
   card open Cinema, walk its rows, Back; open Shows, OK on a Continue watching tile, move on the title page, Back,
   Back; heap after a forced GC every 3 cycles, 12 minutes each.

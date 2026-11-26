@@ -25,14 +25,16 @@ same screen.
   "Preview and rank" shows `PreviewList`, the compact list beside a preview of its focused line that Settings and Lights
   build on (OK steps the line), and `RankNumber`, the one Top 10 numeral.
 - **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
-  home showing an answer and the full chat, the Lights panel (`launcher/src/lights.tsx`: the light effects as a list beside a preview of the focused one, then routines and lights by room,
-  with a fake SmartThings that answers after a short wait and refuses "Away", to show a failed run); the one search
+  home showing an answer and the full chat, the Mood panel (`launcher/src/mood.tsx`: Cinema, Music, Dining, Off and the routines chosen to show, as a list beside a
+  preview of what the focused one does, the active one marked); the one search
   (`launcher/src/search.tsx`), empty on its recent searches, with results and with no catalog answering (its error state), on fixture titles that answer after a
   short wait (type with the panel's keys); then the catalog pages Secretary opens inside itself: the catalog home
   (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page (with its cast) and a show page
   (`ui/Detail.tsx`, the film with a logo, the show with its name in the display face), and the show page with spoiler
   protection on Blur and on Hide. Last, Settings (`catalog-kit/src/ui/HubOverlay.tsx`) under Secretary's header, on fixture settings and apps,
-  opened on Watching, on Home screen's feature switches, on the Apps picker and on Appearance: each category is a
+  opened on Watching, on Home screen's feature switches, on the Apps picker, on Appearance and on SmartThings (the
+category Secretary adds, `launcher/src/smartthings-settings.tsx`: the light effects, the routines and every light by
+room, on a fake SmartThings that switches after a short wait): each category is a
   compact list beside a preview of what the focused setting does (`ui/setting-preview.tsx`). Its look rows (accent, type
   style, text size, Reduce motion) and the toolbar's switches are the same values, so a change in either shows in both. Up from a title page's buttons expands the header. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the

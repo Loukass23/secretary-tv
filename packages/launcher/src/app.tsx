@@ -117,15 +117,17 @@ import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library
 import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalog-kit/src/lib/animeguard.ts";
 import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
-import { effective, type LightFx, lightFx, onLightFx } from "./light-fx.ts";
+import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light-fx.ts";
 import { lightCount, lightsOnLabel } from "./light-count.ts";
-import { LightsPanel } from "./lights.tsx";
+import { MoodPanel } from "./mood.tsx";
+import { type Mood, MOODS, setActiveMood } from "./moods.ts";
+import { settled, SMARTTHINGS_TAB, smartThingsTab } from "./smartthings-settings.tsx";
 import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
 import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
-import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StScene } from "@secretary/smartthings";
+import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
 import { AssistantUnavailable, discoverCatalog, findCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
@@ -233,6 +235,13 @@ const CARD_ACTION: Record<Scene, { icon: IconName; label: string }> = {
   warm: { icon: "warm", label: "Warm" },
   off: { icon: "power", label: "Off" },
   music: { icon: "music", label: "Music" },
+};
+/** The same buttons as moods (moods.ts MOODS), in the Mood panel's order. */
+const MOOD_ACTION: Record<string, { icon: IconName; label: string }> = {
+  cinema: { icon: "cinema", label: "Cinema" },
+  music: { icon: "music", label: "Music" },
+  dining: { icon: "warm", label: "Dining" },
+  off: { icon: "power", label: "Off" },
 };
 
 /** localStorage, or memory when the TV refuses it: the TV's reminders then last until Nest restarts. */
@@ -389,6 +398,22 @@ export function App() {
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
   const [devices, setDevices] = useState<StDevice[]>([]);
   const [scenes, setScenes] = useState<StScene[]>([]);
+  // The rooms of the homes the lights are in, for Settings › SmartThings: read once per set of homes.
+  const [stRooms, setStRooms] = useState<StRoom[]>([]);
+  const homesKey = [...new Set(devices.map((d) => d.locationId).filter((l): l is string => Boolean(l)))].sort().join(",");
+  useEffect(() => {
+    if (!homesKey || !homeConfigured()) return;
+    let live = true;
+    home.roomsIn(homesKey.split(",")).then(
+      (r) => live && setStRooms(r),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [homesKey]);
+  // Switches made in Settings › SmartThings count at once until a poll confirms them.
+  useEffect(() => settled(devices), [devices]);
   const lux = useMemo(() => roomLux(devices), [devices]);
   const theme = useMemo(() => themeFor(themePref, new Date().getHours(), lux), [themePref, time, lux]);
   const scene = useRef(0);
@@ -1059,7 +1084,12 @@ export function App() {
     openSearch(q);
     setSearchFrom(from);
   };
+  /** The catalog screen Settings was opened from (the header's settings button), to come back to with Back. */
+  const settingsFrom = useRef<CatalogEntry | null>(null);
   const leaveCatalog = () => {
+    const back = settingsFrom.current;
+    settingsFrom.current = null;
+    if (back && catalog?.hub) return browse({ ...back, open: back.open && { ...back.open, autoPlay: false, room: undefined } });
     setCatalog(null);
     setView("home");
     // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
@@ -1076,6 +1106,10 @@ export function App() {
     person: headerPerson,
     onExit: leaveCatalog,
     onSearch: searchFromCatalog,
+    // Settings › SmartThings: the effects, routines and lights the Mood panel's moods are built from.
+    settingsTabs: homeConfigured()
+      ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
+      : [],
     // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
     apps: appsOnCard(apps, [], OWN_PLACES).map((a) => ({
       id: a.id,
@@ -1091,6 +1125,14 @@ export function App() {
         const i = at === "person" ? HEADER_PROFILE : HEADER_ORDER[at];
         // Search keeps the title page to come back to with Back.
         if (i === HEADER_SEARCH) return searchFromCatalog();
+        // Settings opens in the catalog anew; Back from it comes back to this screen (leaveCatalog).
+        if (i === HEADER_SETTINGS && catalog && !catalog.hub) {
+          const from = catalog;
+          leaveCatalog();
+          pressHeader(i);
+          settingsFrom.current = from;
+          return;
+        }
         // Picture and sound act in place; the rest are Secretary's own screens, so the catalog gives the screen back.
         if (i !== HEADER_PICTURE && i !== HEADER_SOUND) leaveCatalog();
         pressHeader(i);
@@ -1322,8 +1364,17 @@ export function App() {
     label: "Home",
     title: lights.total ? lightsOnLabel(lights) : "Lights",
     sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.total} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
-    actions: SCENES.map(([id]) => CARD_ACTION[id]),
-    run: (i) => runScene(SCENES[i][0], SCENES[i][1]),
+    // With SmartThings on the TV, the card's buttons are the Mood panel's four moods (moods.ts); through the server,
+    // its scenes as before.
+    actions: homeConfigured() ? MOODS.map((m) => MOOD_ACTION[m.key]) : SCENES.map(([id]) => CARD_ACTION[id]),
+    run: (i) => {
+      if (!homeConfigured()) return runScene(SCENES[i][0], SCENES[i][1]);
+      const m = MOODS[i];
+      applyMood(m).then(
+        () => flash(`${m.label} is on`),
+        (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the lights"),
+      );
+    },
   });
   const shownReminders = reminders.slice(0, 3);
   if (prefs.reminders) push({
@@ -1548,6 +1599,14 @@ export function App() {
   function toggleReminderAt(r: Reminder) {
     if (localRem.owns(r.id)) setLocalItems(localRem.toggle(r.id));
     else if (SERVER_URL) toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
+  }
+
+  /** A mood (moods.ts): its effects, then its lights (a show, a level or the viewer's routine). */
+  function applyMood(m: Mood): Promise<void> {
+    setLightFx(m.fx);
+    setActiveMood(m.key);
+    const done = "routine" in m.lights ? home.runScene(m.lights.routine).then(() => undefined) : runLights(m.lights, devices, scenes);
+    return done.then(() => pollHomeSoon());
   }
 
   /** A scene from the Home card: SmartThings from the TV, else through the server. */
@@ -1890,7 +1949,14 @@ export function App() {
           onJoinHere={(o) => browse({ type: o.type, open: { type: o.type, title: { ...o.title, year: "", rating: "" }, autoPlay: false, room: o.room } })}
         />
       ) : view === "lights" ? (
-        <LightsPanel devices={devices} scenes={scenes} header={panelHeader} onChange={() => pollHomeSoon()} onClose={() => setView("home")} />
+        <MoodPanel
+          devices={devices}
+          scenes={scenes}
+          header={panelHeader}
+          onMood={applyMood}
+          onSetup={() => browse({ type: "movie", hub: { tab: "settings", category: SMARTTHINGS_TAB } })}
+          onClose={() => setView("home")}
+        />
       ) : view === "search" ? (
         <SearchScreen
           key={query}

@@ -54,6 +54,7 @@
 .set-stage .set-col.is-on > em { color: var(--sg-accent); }
 .set-cap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .set-cap-kicker { font-family: var(--sg-font-label); font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sg-accent); }
+.set-cap-aa { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); font-size: var(--sg-t-xxl); line-height: 1; margin-bottom: 4px; }
 .set-cap-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); font-size: var(--sg-t-xl); line-height: 1.1; }
 .set-cap-num { font-family: var(--sg-font-num); font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
 .set-cap-btn { margin-top: 6px; padding: 6px 24px; border-radius: 999px; background: var(--sg-raised); font-family: var(--sg-font-label); font-size: var(--sg-t-s); font-weight: 600; }
@@ -136,3 +137,16 @@
 /* Reduce motion: nothing in the previews moves. */
 html[data-sg-motion="reduced"] .set-pv *,
 html[data-sg-motion="reduced"] .set-pv *::after { animation: none !important; }
+
+/* Resume from Continue watching: the tile, then where OK lands (the player, or the title's page). */
+.set-flow { display: flex; align-items: center; gap: 22px; height: 100%; }
+.set-flow-tile, .set-flow-to { position: relative; display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+.set-flow-tile > .set-still { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; }
+.set-flow-bar { display: block; height: 6px; width: 62%; border-radius: 3px; background: var(--sg-accent); }
+.set-flow small, .set-flow-to > small { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
+.set-flow-arrow { flex: none; font-size: var(--sg-t-xl); color: var(--sg-accent); }
+.set-flow-to .set-player { position: relative; width: 100%; aspect-ratio: 16 / 9; }
+.set-flow-page { display: flex; flex-direction: column; gap: 10px; padding: 18px; aspect-ratio: 16 / 9; border-radius: 14px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1.5px var(--sg-line); }
+.set-flow-page b { font-family: var(--sg-font-title); font-size: var(--sg-t-m); }
+.set-flow-btn { align-self: flex-start; padding: 4px 16px; border-radius: 999px; background: var(--sg-accent); color: var(--sg-accent-ink); font-style: normal; font-size: var(--sg-t-xs); font-weight: 600; }
+.set-flow-btn.is-dim { background: var(--sg-raised); color: var(--sg-ink); }

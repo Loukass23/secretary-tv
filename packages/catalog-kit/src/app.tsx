@@ -75,8 +75,8 @@ export interface CatalogConfig {
   open?: { type: CatalogType; title: Title; autoPlay?: boolean; room?: string };
   /** Open this folder of the profile's collections first. */
   folder?: { collectionId: string; folderId: string };
-  /** Open the Hub first, on this tab (embedded: Nest's Settings button). */
-  hub?: { tab: OverlayTab };
+  /** Open the Hub first, on this tab (embedded: Nest's Settings button), and Settings on this category. */
+  hub?: { tab: OverlayTab; category?: string };
 }
 
 /** What Secretary gives the catalog it hosts. The catalog plays in Secretary's page too (AVPlay and the player). */
@@ -93,6 +93,8 @@ export interface EmbeddedHost {
   header?: import("./host.ts").HostHeader;
   /** The TV's apps, for Settings › Apps to pick which the Apps card shows (`settings.home.hiddenApps`). */
   apps?: readonly import("./host.ts").HostApp[];
+  /** Categories Secretary adds to Settings (SmartThings), after Home screen. */
+  settingsTabs?: readonly import("./host.ts").HostSettingsTab[];
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -655,6 +657,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         onUpdateSettings={setSettings}
         header={embedded.header}
         apps={embedded.apps}
+        hostTabs={embedded.settingsTabs}
+        initialTab={hub?.category}
         onSearch={() => embedded.onSearch?.()}
         onOpenNest={openNest}
         onClose={goHome}

@@ -383,6 +383,13 @@ html, body {
 .lfx-stage.is-dance.is-on .lfx-lamp.is-right::after { background: #6ab4e0; animation-delay: 0.45s; }
 .lfx-stage.is-shimmer.is-on .lfx-sheen { animation: lfx-slide 4s linear infinite; }
 .lfx-stage.is-shimmer.is-on .lfx-lamp::after { opacity: 0; }
+/* Moods (mood.tsx) and Settings › SmartThings: Cinema dims the room around a lit screen, Dining lights the lamps warm and
+   still, one light alone for a light's line. Opacity and flat fills only. */
+.lfx-stage.is-dim { background: #0c0c10; }
+.lfx-stage.is-warm.is-on .lfx-lamp::after { background: #ffc56b; opacity: 1; }
+.lfx-stage.is-warm.is-on { background: #2a2016; }
+.lfx-stage.is-single .lfx-lamp.is-left { left: 50%; margin-left: -22px; }
+.mood-does { margin: 14px 0 0; padding: 0 0 0 22px; display: grid; gap: 8px; font-size: var(--sg-t-s); line-height: 1.3; color: var(--sg-ink); }
 @keyframes lfx-glow { 0%, 100% { opacity: 0.15; } 50% { opacity: 1; } }
 @keyframes lfx-slide { 0% { transform: translate3d(-100%, 0, 0); } 100% { transform: translate3d(560%, 0, 0); } }
 html[data-sg-motion="reduced"] .lfx-stage * ,
@@ -452,6 +459,17 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest .sg-card-row { font-size: var(--sg-t-xl); }
 .nest .sg-card-meta { font-size: var(--sg-t-l); }
 .nest .sg-card small { font-size: var(--sg-t-l); margin: 10px 0 0 30px; }
+/* Reminders, Recent and Add to home (the review's 23 and 25): a long title or line wraps to two lines, never cut. */
+.nest-kind-list .sg-card-row b,
+.nest-kind-list .sg-card small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; overflow-wrap: anywhere; line-height: 1.15; }
+.nest-kind-list .sg-card small { margin-top: 6px; }
+/* App names (24): two lines under the icon. */
+.nest-kind-apps .sg-app small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; text-align: center; line-height: 1.15; overflow-wrap: anywhere; }
+/* The weather card's next hours, along its foot (20). */
+.sg-glass > .nest-wc-hours { position: absolute; left: 36px; right: 36px; bottom: 34px; display: flex; justify-content: space-between; padding-top: 22px; box-shadow: inset 0 1.5px 0 var(--sg-line); }
+.nest-wc-hours > div { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.nest-wc-hours small { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
+.nest-wc-hours b { font-family: var(--sg-font-num); font-size: var(--sg-t-m); font-weight: 600; }
 .nest .sg-tile-cap { left: 22px; bottom: 18px; font-size: var(--sg-t-m); }
 .nest .sg-tile-cap small { font-size: var(--sg-t-s); }
 .nest .sg-tile-badge { left: 18px; top: 16px; padding: 5px 14px; border-radius: 16px; font-size: var(--sg-t-s); }

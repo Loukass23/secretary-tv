@@ -130,8 +130,8 @@ export const TYPE_STYLES = {
   },
   classic: {
     label: "Classic",
-    about: "Everything in the TV's own face",
-    tokens: { "font-title": "var(--sg-font-body)", "font-num": "var(--sg-font-body)", "font-label": "var(--sg-font-body)", "title-weight": "600", "title-track": "0em" },
+    about: "Everything in the TV's own face, lighter",
+    tokens: { "font-title": "var(--sg-font-body)", "font-num": "var(--sg-font-body)", "font-label": "var(--sg-font-body)", "title-weight": "500", "title-track": "0em" },
   },
   bold: {
     label: "Bold",
