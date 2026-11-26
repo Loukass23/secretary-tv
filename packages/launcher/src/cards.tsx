@@ -452,6 +452,7 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
                 w={b.w - b.lead}
                 h={b.h}
                 src={b.art === "still" ? (it.still ?? it.poster) : it.poster}
+                {...(b.art === "still" ? stillCaption(it) : {})}
                 badge={badgeOf(it, false)}
                 progress={it.progress}
                 focused={at === i}
@@ -463,6 +464,13 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
     </>
   );
 }
+
+/** What a landscape tile draws on its art: the logo, and for a title in progress its name (under no logo) and where
+ *  it is ("S1 · E5 · 23 min left"), on every tile and not only under the focused one. */
+const stillCaption = (it: MediaItem): { logo?: string; title?: string; sub?: string } =>
+  it.resume
+    ? { logo: it.logo, title: it.title, sub: [it.episode, it.left].filter(Boolean).join(" · ") || undefined }
+    : { logo: it.logo };
 
 /**
  * A Continue watching tile in an opened card: the landscape thumb with the title's logo (else its name) on it, then a

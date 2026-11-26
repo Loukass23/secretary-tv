@@ -53,6 +53,7 @@
   background: rgba(7, 8, 11, 0.72);
 }
 .cat-spot .sg-tile-cap b { display: block; font-size: var(--sg-t-l); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-spot .sg-tile-cap small { padding: 0; background: none; }
 
 /* --- the end of the rows --- */
 .cat-end { display: flex; align-items: center; justify-content: space-between; padding: 0 40px; }
