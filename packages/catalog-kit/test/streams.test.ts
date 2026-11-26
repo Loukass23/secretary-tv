@@ -50,6 +50,18 @@ test("watch: plugin torrents get the episode numbers; nothing found falls back t
   assert.deepEqual((await client.get("none")).map((x) => x.name), ["server"]);
 });
 
+test("a plain IMDb episode id still tells a season pack which episode it wants", async () => {
+  const find: FindStreams = async () => ({ streams: [s("t", "debrid:tb:abc"), s("t2", "debrid:tb:def/4")] });
+  const client = createPluginStreamClient(find, () => true, noServer, async (u) => u, "series");
+  // No hint from the page (an IMDb id with no running number), as for a show opened in Shows.
+  const ep = await client.get("tt0000001:1:5");
+  assert.deepEqual(ep.map((x) => x.url), ["debrid:tb:abc?s=1&e=5", "debrid:tb:def/4?s=1&e=5"]);
+  // A hint from the page wins over the id's numbers, and a movie id gets none.
+  const withAbs = await client.get("tt0000001:1:5", { absolute: 30 });
+  assert.equal(withAbs[0].url, "debrid:tb:abc?s=1&e=5&a=30");
+  assert.equal((await client.get("tt0000002"))[0].url, "debrid:tb:abc");
+});
+
 test("a fallback that never answers ends the search empty after its time, so Play is not left waiting", async () => {
   const hanging: StreamClient = { get: () => new Promise(() => {}), watch: () => () => {}, warm: async () => {} };
   const client = createPluginStreamClient(async () => ({ streams: [] }), () => true, hanging, async (u) => u, "movie", Date.now, 30);

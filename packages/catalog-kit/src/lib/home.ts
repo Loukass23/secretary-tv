@@ -4,6 +4,7 @@
 import type { HomeGrant } from "@secretary/nuvio";
 import { createLights, type LightsController, smartThings, staticToken, type StDevice } from "@secretary/smartthings";
 import { readJson, writeJson } from "@secretary/tv-kit";
+import type { PlayerRoom } from "./playermenu.ts";
 
 const HOME = "sectv.home";
 
@@ -76,6 +77,26 @@ export const playbackLights = {
   resume: () => void sideLights()?.playbackResume(),
   stop: () => sideLights()?.playbackStop().then(() => true) ?? Promise.resolve(false),
 };
+
+/**
+ * What the player's options menu offers for the room, from Nest's grant: the side lights (only while Cinema auto-dim runs
+ * them, which also puts them back when playback ends) and the movie and restore scenes. Undefined without a grant.
+ */
+export function playerRoom(autoDim: boolean, serverUrl: string, now = Date.now()): PlayerRoom | undefined {
+  const g = homeGrant(now);
+  if (!g) return undefined;
+  const lights = autoDim && sideLights(now) != null;
+  const scenes = Boolean(g.movie || g.restore);
+  if (!lights && !scenes) return undefined;
+  return {
+    lights,
+    scenes,
+    softLights: () => playbackLights.pause(),
+    darkLights: () => playbackLights.resume(),
+    movieScene: () => void runMovieScene("movie", serverUrl),
+    restoreScene: () => void runMovieScene("restore", serverUrl),
+  };
+}
 
 /** True when Nest's grant asks for the side lights to follow the poster in focus (its Lights panel, sync). */
 export const lightsFollowFocus = (now = Date.now()): boolean => homeGrant(now)?.lights?.sync === true;

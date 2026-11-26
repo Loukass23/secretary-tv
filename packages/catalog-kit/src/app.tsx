@@ -9,9 +9,10 @@ import {
 import { contentApp, normalizeCode, partyErrorText } from "@secretary/party/src/client.ts";
 import { targetPos, type Timeline } from "@secretary/party/src/protocol.ts";
 import { checkOwner, cloud, cloudEnabled, nuvioCollections, nuvioLibrary, nuvioRemote, partyApi, shareCloud, startListSync } from "./lib/cloud.ts";
-import { playbackLights, runMovieScene } from "./lib/home.ts";
+import { playbackLights, playerRoom, runMovieScene } from "./lib/home.ts";
 import { createPartySession, LEAVE_TEXT, type PartySession, releaseOf, type SocketLike, streamFor } from "./lib/party.ts";
 import { clearLocalLibrary, loadLibrary, setLibraryRemote, syncLibrary } from "./lib/library.ts";
+import { episodeHint } from "@secretary/core";
 import { episodeLabel, fileHintFor, nextEpisode } from "./lib/episodes.ts";
 import { type CardShape, loadRowStyles, saveRowStyle } from "./lib/collectionlayout.ts";
 import {
@@ -481,7 +482,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
     const itemType: CatalogType = app.type === "series" && type === "anime" ? "anime" : kindFor(app.type, { id: app.titleId });
     const meta = (await fetchMeta(itemType, app.titleId).catch(() => null)) ?? { id: app.titleId, name: tl.title, year: "", rating: "" };
     const episode = meta.videos?.find((v) => v.id === tl.contentId);
-    const stream = streamFor(tl.release, debrids()[0]?.id, tl.title, episode ? fileHintFor(episode) : undefined);
+    const stream = streamFor(tl.release, debrids()[0]?.id, tl.title, { ...episodeHint(tl.contentId), ...(episode ? fileHintFor(episode) : undefined) });
     if (!stream) {
       island.push({ key: "party", text: "Add a TorBox or Premiumize key in Settings to watch together", level: "error" });
       s.leave();
@@ -764,6 +765,9 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           streams={view.streams}
           startSec={view.start}
           party={view.together ? party ?? undefined : undefined}
+          audioLangs={settings.playback.audioLangs}
+          subLangs={settings.playback.subLangs.length ? settings.playback.subLangs : settings.playback.audioLangs}
+          room={playerRoom(settings.domotics.cinemaAutoDim, serverUrl)}
           onPrefetchNext={(next, playing) =>
             // Sources, and the link of the one Next will play (the same release when there is one), so moving on only
             // has to open and prepare. Warming resolves the link, so only for a source checking adds nothing to an

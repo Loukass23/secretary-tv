@@ -140,3 +140,27 @@ test("a source another player left open is closed before this one opens (one AVP
   await second.load("http://x/b.mkv", 0);
   assert.deepEqual(s.calls.slice(0, 3), ["stop", "close", "open http://x/b.mkv"]);
 });
+
+test("the audio pick and the picture fit survive the reopen a seek does", async () => {
+  const picked: number[] = [];
+  const s = stub([video, audio, { index: 2, type: "AUDIO", extra_info: "{}" }]);
+  s.av.setSelectTrack = (_t, i) => void picked.push(i);
+  const methods: string[] = [];
+  s.av.setDisplayMethod = (m) => void methods.push(m);
+  const p = make(s);
+  await p.load("http://x/a.mkv", 0);
+  p.selectAudio?.(2);
+  assert.deepEqual(picked, [2]);
+  const started = p.start();
+  s.fire().oncurrentplaytime?.(1000);
+  await started;
+  p.setAspect?.("fill");
+  assert.equal(methods.at(-1), "PLAYER_DISPLAY_MODE_CROPPED_FULL");
+  assert.ok(s.calls.at(-1)?.endsWith("0,0,1920,1080"));
+  // A seek reopens the source: the pick is applied again once it is prepared, and the fit is kept.
+  p.seekBy(30);
+  await new Promise((r) => setTimeout(r, 450));
+  assert.deepEqual(picked, [2, 2]);
+  assert.equal(p.aspect?.(), "fill");
+  assert.equal(p.audioIndex?.(), 2);
+});

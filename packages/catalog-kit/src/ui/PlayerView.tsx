@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { SkipSource, tryInOrder } from "../lib/autopick.ts";
 import { backgroundUrl } from "../lib/cinemeta.ts";
 import { episodeLabel } from "../lib/episodes.ts";
-import { loadDebrid, playable } from "../lib/plugins.ts";
+import { addons, loadDebrid, playable } from "../lib/plugins.ts";
 import { saveProgress } from "../lib/resume.ts";
 import { logoUrl, pauseFacts, pausePanelShown } from "../lib/pausepanel.ts";
 import { setNowPlaying } from "./ControlCentre.tsx";
@@ -22,6 +22,11 @@ import type { Phase } from "@secretary/party/src/protocol.ts";
 import type { PartySession } from "../lib/party.ts";
 import { createFollower, type PartyPlayer } from "../lib/partyplay.ts";
 import { PartyOverlay, partyLine, usePartyView } from "./PartyOverlay.tsx";
+import { PlayerMenu } from "./PlayerMenu.tsx";
+import { type MenuPage, type MenuRow, type PlayerRoom } from "../lib/playermenu.ts";
+import type { Subtitle } from "../lib/addons.ts";
+import { chosenSubLang, type Cue, cueAt, DELAY_STEP, delayLabel, groupSubtitles, loadCues, MAX_DELAY, rememberSubLang, SUB_SIZES } from "../lib/subtitles.ts";
+import { ASPECT_LABEL, ASPECTS, chosenAudioLang, preferredAudio, rememberAudioLang } from "../player/tracks.ts";
 import { HeroLayers, useBase, useHeroArt } from "./art.tsx";
 import "./player.css";
 
@@ -72,6 +77,12 @@ interface Props {
    * the end of an episode sends `next` from whoever may command.
    */
   party?: PartySession;
+  /** Settings › Playback audio languages, most wanted first: the track in the first of them plays. */
+  audioLangs?: string[];
+  /** Settings › Playback subtitle languages: listed first in the subtitle menu. */
+  subLangs?: string[];
+  /** The room's lights and scenes, offered in the options menu when Nest gave this app a grant. */
+  room?: PlayerRoom;
 }
 
 const clock = (sec: number) => {
@@ -97,6 +108,9 @@ export function PlayerView({
   onNext,
   onPrefetchNext,
   party,
+  audioLangs = [],
+  subLangs: settingsSubLangs,
+  room,
 }: Props) {
   if (party) {
     autoSkip = false;
@@ -146,6 +160,19 @@ export function PlayerView({
   const togetherNow = useRef(false);
   togetherNow.current = together;
   const [panelOpen, setPanelOpen] = useState(false);
+  // The options menu (ui/PlayerMenu.tsx): Up opens it; its rows are rebuilt from the player on every render.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [, setMenuTick] = useState(0);
+  // Subtitles from addons, drawn by the page (lib/subtitles.ts): the list, the one showing, its cues, size and delay.
+  const [subList, setSubList] = useState<Subtitle[] | null>(null);
+  const [subPick, setSubPick] = useState<{ lang: string; key: string; n: number } | null>(null);
+  const [subState, setSubState] = useState<"" | "loading" | "failed">("");
+  const [cap, setCap] = useState("");
+  const [subSize, setSubSize] = useState(1);
+  const [subDelay, setSubDelay] = useState(0);
+  const cues = useRef<Cue[]>([]);
+  const delayNow = useRef(0);
+  delayNow.current = subDelay;
   const loaded = useRef(false);
   const firstStart = useRef<(() => void) | null>(null);
   const starting = useRef(false);
@@ -516,6 +543,7 @@ export function PlayerView({
       return;
     }
     if (key === "Up" || key === "Blue") return void setPanelOpen(true);
+    if (key === "Info" && started) return void setMenuOpen(true);
     if (!tl) return false;
     flashControls();
     const moving = tl.state === "playing" || tl.state === "waiting";
@@ -539,7 +567,7 @@ export function PlayerView({
     }, PARTY_SEEK_SETTLE_MS);
   };
 
-  useKeys(!panelOpen, (key) => {
+  useKeys(!panelOpen && !menuOpen, (key) => {
     if (together) return partyKey(key);
     const p = player.current;
     // Any key restarts the pause panel's wait; OK on the panel resumes.
@@ -561,6 +589,7 @@ export function PlayerView({
       return;
     }
     if (!started || !p) return false;
+    if (key === "Up" || key === "Info") return void setMenuOpen(true);
     flashControls();
     if (key === "Enter" || key === "PlayPause") {
       p.toggle();
@@ -576,6 +605,159 @@ export function PlayerView({
 
   const pct = time.dur > 0 ? Math.min(1, time.pos / time.dur) : 0;
   const badges = activeStreamInfo?.badges ?? [];
+
+  // Audio: the language the viewer chose last (this session), then the Settings list, plays by itself once there is a
+  // picture; a file with one track, or none listed, keeps its own.
+  useEffect(() => {
+    const p = player.current;
+    if (!started || !p?.audioTracks || !p.selectAudio) return;
+    const tracks = p.audioTracks();
+    if (tracks.length < 2) return;
+    const wanted = preferredAudio(tracks, [chosenAudioLang(), ...audioLangs].filter((l): l is string => Boolean(l)));
+    if (wanted && wanted.index !== p.audioIndex?.()) p.selectAudio(wanted.index);
+  }, [started]);
+
+  // Subtitles: the list is asked for once there is a picture; a language the viewer chose last time comes back by itself.
+  const groups = useMemo(() => groupSubtitles(subList ?? [], [...(chosenSubLang() ? [chosenSubLang()!] : []), ...(settingsSubLangs ?? [])]), [subList]);
+  useEffect(() => {
+    if (!started) return;
+    let live = true;
+    addons
+      .subtitles(type === "movie" ? "movie" : "series", episode?.id ?? title.id)
+      .then((list) => live && setSubList(list), () => live && setSubList([]));
+    return () => void (live = false);
+  }, [started]);
+  const showSub = (lang: string, key: string, n: number, list: Subtitle[]) => {
+    const sub = list[n % list.length];
+    setSubPick({ lang, key, n: n % list.length });
+    setSubState("loading");
+    player.current?.silentSubtitles?.(true);
+    loadCues(sub.url).then(
+      (c) => {
+        if (cancelled.current) return;
+        cues.current = c;
+        setSubState("");
+      },
+      (err) => {
+        console.warn("[subtitles]", err);
+        if (cancelled.current) return;
+        cues.current = [];
+        setCap("");
+        setSubState("failed");
+      },
+    );
+  };
+  const subsOff = () => {
+    cues.current = [];
+    setSubPick(null);
+    setSubState("");
+    setCap("");
+    rememberSubLang(null);
+  };
+  useEffect(() => {
+    const want = chosenSubLang();
+    if (!want || subPick || !groups.length) return;
+    const g = groups.find((x) => x.lang === want);
+    if (g) showSub(g.lang, g.lang, 0, g.subs);
+  }, [groups]);
+  // The caption for the player's position, four times a second; it only draws when the line changes. The page reads the
+  // player's position rather than the once-a-second time state, so a line comes and goes on time.
+  useEffect(() => {
+    if (!subPick) return;
+    const t = setInterval(() => {
+      const p = player.current;
+      if (!p || !cues.current.length) return;
+      const i = cueAt(cues.current, p.position() - delayNow.current);
+      setCap(i >= 0 ? cues.current[i].text : "");
+    }, 250);
+    return () => clearInterval(t);
+  }, [subPick]);
+
+  const menuPage = (id: string): MenuPage | undefined => {
+    const p = player.current;
+    const tracks = p?.audioTracks?.() ?? [];
+    const current = p?.audioIndex?.() ?? -1;
+    const aspect = p?.aspect?.();
+    if (id === "top") {
+      const rows: MenuRow[] = [];
+      rows.push({ id: "audio", label: "Audio", go: "audio", value: tracks.find((t) => t.index === current)?.label.split(" · ")[0] ?? "" });
+      const shown = subPick ? groups.find((g) => g.lang === subPick.key || g.label === subPick.key) : undefined;
+      rows.push({ id: "subs", label: "Subtitles", go: "subs", value: shown?.label ?? "Off" });
+      if (aspect) rows.push({ id: "aspect", label: "Picture", cycles: true, value: ASPECT_LABEL[aspect] });
+      if (room && (room.lights || room.scenes)) rows.push({ id: "room", label: "Room", go: "room" });
+      rows.push({ id: "info", label: "Info", go: "info" });
+      return { id, title: "Options", rows };
+    }
+    if (id === "audio") {
+      return {
+        id,
+        title: "Audio",
+        rows: tracks.map((t) => ({ id: String(t.index), label: t.label, checked: t.index === current })),
+        empty: "This file lists no audio tracks to choose from.",
+      };
+    }
+    if (id === "subs") {
+      const rows: MenuRow[] = [{ id: "sub-off", label: "Off", checked: !subPick }];
+      for (const g of groups) {
+        const key = g.lang || g.label;
+        const on = subPick?.key === key;
+        rows.push({ id: `sub:${key}`, label: g.label, checked: on, value: g.subs.length > 1 ? `${on ? subPick!.n + 1 : 1} of ${g.subs.length}` : "", cycles: g.subs.length > 1 });
+      }
+      if (subPick) {
+        rows.push({ id: "sub-size", label: "Size", cycles: true, value: `${SUB_SIZES[subSize]}%` });
+        rows.push({ id: "sub-delay", label: "Delay", cycles: true, value: delayLabel(subDelay) });
+      }
+      const empty = subList == null ? "Looking for subtitles…" : "No installed addon has subtitles for this title.";
+      return { id, title: subState === "loading" ? "Subtitles · loading" : subState === "failed" ? "Subtitles · could not load" : "Subtitles", rows: subList?.length || subPick ? rows : [], empty };
+    }
+    if (id === "room" && room) {
+      const rows: MenuRow[] = [];
+      if (room.lights) rows.push({ id: "dark", label: "Lights off" }, { id: "soft", label: "Lights soft" });
+      if (room.scenes) rows.push({ id: "movie", label: "Movie scene" }, { id: "restore", label: "Back to normal" });
+      return { id, title: "Room", rows };
+    }
+    if (id === "info") {
+      const s = streams[activeIdx];
+      const rows: MenuRow[] = [{ id: "title", label: "Title", value: heading }];
+      // The file's name, never the link.
+      if (s) rows.push({ id: "file", label: "File", value: s.file ?? activeStreamInfo?.cleanTitle ?? "" });
+      if (badges.length) rows.push({ id: "quality", label: "Quality", value: badges.join(" · ") });
+      if (activeStreamInfo?.size) rows.push({ id: "size", label: "Size", value: activeStreamInfo.size });
+      return { id, title: "Info", rows };
+    }
+    return undefined;
+  };
+
+  const menuPick = (page: string, row: MenuRow, dir: -1 | 0 | 1) => {
+    const p = player.current;
+    if (page === "audio" && p?.selectAudio) {
+      p.selectAudio(Number(row.id));
+      rememberAudioLang(p.audioTracks?.().find((t) => t.index === Number(row.id))?.lang ?? "");
+    } else if (page === "subs") {
+      if (row.id === "sub-off") subsOff();
+      else if (row.id === "sub-size") setSubSize((n) => (n + (dir || 1) + SUB_SIZES.length) % SUB_SIZES.length);
+      else if (row.id === "sub-delay") setSubDelay((d) => Math.max(-MAX_DELAY, Math.min(MAX_DELAY, Math.round((d + (dir || 1) * DELAY_STEP) * 10) / 10)));
+      else if (row.id.startsWith("sub:")) {
+        const key = row.id.slice(4);
+        const g = groups.find((x) => (x.lang || x.label) === key);
+        if (g) {
+          // OK on the one showing, or Left and Right, moves to that language's next file; OK on another language shows it.
+          const same = subPick?.key === key;
+          showSub(g.lang, key, same ? subPick!.n + (dir || 1) + g.subs.length : 0, g.subs);
+          rememberSubLang(g.lang || null);
+        }
+      }
+    } else if (page === "top" && row.id === "aspect" && p?.setAspect) {
+      const at = ASPECTS.indexOf(p.aspect?.() ?? "fit");
+      p.setAspect(ASPECTS[(at + (dir || 1) + ASPECTS.length) % ASPECTS.length]);
+    } else if (page === "room" && room) {
+      if (row.id === "dark") room.darkLights();
+      else if (row.id === "soft") room.softLights();
+      else if (row.id === "movie") room.movieScene();
+      else if (row.id === "restore") room.restoreScene();
+    }
+    setMenuTick((n) => n + 1);
+  };
 
   return (
     <div class="player" ref={host}>
@@ -670,11 +852,21 @@ export function PlayerView({
                 ))}
               </div>
               <span class="ply-time">
+                {!together && <span class="ply-hint">Up · Options</span>}
                 {clock(time.pos)} / {clock(time.dur)}
               </span>
             </div>
           </Glass>
         </GlassRoot>
+      )}
+      {cap && (
+        // The line for this moment, drawn by the page over the video (lib/subtitles.ts): a flat plate, no shadow.
+        <div class="ply-cap" style={{ fontSize: `${Math.round(38 * SUB_SIZES[subSize] / 100)}px` }}>
+          {cap}
+        </div>
+      )}
+      {started && (
+        <PlayerMenu open={menuOpen} pageOf={menuPage} heading={heading} onPick={menuPick} onClose={() => setMenuOpen(false)} />
       )}
       {party && partyView && together && (
         <PartyOverlay
