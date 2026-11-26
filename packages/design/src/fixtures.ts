@@ -14,7 +14,8 @@ import { episodeLabel } from "@secretary/launcher/src/card-rows.ts";
 import { YOUTUBE_APP_ID } from "@secretary/launcher/src/config.ts";
 import type { AskView } from "@secretary/launcher/src/home.tsx";
 import { lightCount, lightsOnLabel } from "@secretary/launcher/src/light-count.ts";
-import type { LightsApi } from "@secretary/launcher/src/lights.tsx";
+import type { SmartThings } from "@secretary/smartthings";
+import type { SmartThingsSetup } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { StDevice, StRoom, StScene } from "@secretary/smartthings";
 import { type Art, TITLES } from "./art.ts";
 
@@ -313,12 +314,27 @@ export const LIGHT_SCENES: StScene[] = [
   { id: "scene-fail", name: "Away (fails here)", locationId: HOME },
 ];
 
-/** SmartThings as the panel calls it, answering after a short wait; "Away" is refused, to show the failure. */
-export const LIGHTS_API: LightsApi = {
+/** SmartThings as the Mood panel and Settings call it, answering after a short wait; "Away" is refused, to show the failure. */
+export const LIGHTS_API: Pick<SmartThings, "runScene" | "command" | "roomsIn"> = {
   runScene: (id) => new Promise((ok, no) => setTimeout(() => (id === "scene-fail" ? no(new Error("refused")) : ok({ status: "success" })), 900)),
   command: () => new Promise((ok) => setTimeout(() => ok({ results: [] }), 300)),
   roomsIn: () => new Promise((ok) => setTimeout(() => ok(LIGHT_ROOMS), 400)),
 };
+
+/** Settings › SmartThings on the fixture home: switches land after a short wait and stay for the page's life. */
+export function smartThingsFixture(devices: StDevice[], onChange: () => void): SmartThingsSetup {
+  return {
+    devices,
+    scenes: LIGHT_SCENES,
+    rooms: LIGHT_ROOMS,
+    command: (id, c) => LIGHTS_API.command(id, c).then(() => {
+      const d = devices.find((x) => x.id === id);
+      if (d) d.on = !d.on;
+      onChange();
+    }),
+    onChange,
+  };
+}
 
 /** The TV's apps as Settings › Apps lists them (made-up ids; the TV's own settings are left out, as Secretary does). */
 export const SETTINGS_APPS: HostApp[] = [

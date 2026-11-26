@@ -4,7 +4,7 @@
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass, GlassRoot, Header, HEADER, PreviewList, type PreviewListItem, Tabs } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { HostApp, HostHeader } from "../host.ts";
+import type { HostApp, HostHeader, HostSettingsTab } from "../host.ts";
 import { addonStore, loadDebrid, pluginStore, saveDebrid } from "../lib/plugins.ts";
 import {
   type DashboardSettings,
@@ -35,6 +35,8 @@ const LIST_W = 760;
 /** One line of a category: what it shows (and its preview), and what OK, Left and Right do on it. */
 interface Row extends PreviewLine {
   act?(key: "Enter" | "Left" | "Right"): void;
+  /** A host category's own preview (host.ts HostSettingRow). */
+  preview?: import("preact").ComponentChildren;
 }
 
 interface Props {
@@ -46,8 +48,10 @@ interface Props {
   header?: HostHeader;
   /** The TV's apps, for the Apps category; none off the TV. */
   apps?: readonly HostApp[];
-  /** The category Settings opens on (the design workbench's screens). */
-  initialTab?: SettingTab;
+  /** Categories Secretary adds (SmartThings), placed after Home screen. */
+  hostTabs?: readonly HostSettingsTab[];
+  /** The category Settings opens on (the design workbench's screens, the header's SmartThings entry). */
+  initialTab?: SettingTab | string;
   /** The search keys: Secretary's one search. */
   onSearch(): void;
   /** Gives the screen back to Secretary's home (CH+). */
@@ -59,8 +63,13 @@ function formatClock(fmt: "24h" | "12h"): string {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: fmt === "12h" });
 }
 
-export function HubOverlay({ active, activeType = "movie", settings, onUpdateSettings, header, apps = [], initialTab, onSearch, onOpenNest, onClose }: Props) {
-  const start = (): SettingsPlace => ({ ...SETTINGS_START, tab: Math.max(0, SETTING_TABS.indexOf(initialTab ?? "Watching")) });
+export function HubOverlay({ active, activeType = "movie", settings, onUpdateSettings, header, apps = [], hostTabs = [], initialTab, onSearch, onOpenNest, onClose }: Props) {
+  // Settings' own categories, with the host's after Home screen.
+  const at = SETTING_TABS.indexOf("Home screen") + 1;
+  const tabNames: readonly string[] = [...SETTING_TABS.slice(0, at), ...hostTabs.map((t) => t.name), ...SETTING_TABS.slice(at)];
+  const start = (): SettingsPlace => ({ ...SETTINGS_START, tab: Math.max(0, tabNames.indexOf(initialTab ?? "Watching")) });
+  // A host category's lines change outside Settings (a light switched): drawn again after each of their actions.
+  const [, setRev] = useState(0);
   const [place, setPlace] = useState<SettingsPlace>(start);
   const [clockText, setClockText] = useState(() => formatClock(settings.general.clockFormat));
   const [toast, setToast] = useState<string | null>(null);
@@ -74,7 +83,8 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
   const [addonList, setAddonList] = useState(() => addonStore.list());
   useEffect(() => pluginStore.subscribe(() => setPlugins(pluginStore.get())), []);
   useEffect(() => addonStore.subscribe(() => setAddonList(addonStore.list())), []);
-  const tab = SETTING_TABS[place.tab] ?? SETTING_TABS[0];
+  const tab = tabNames[place.tab] ?? tabNames[0];
+  const hostTab = hostTabs.find((t) => t.name === tab);
   const sources = useMemo(
     () =>
       tab !== "Sources"
@@ -198,6 +208,19 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
     })),
     ...sources.map((row): Row => ({ key: row.key, title: row.title, sub: row.sub, value: row.meta, act: (key) => runSource(row, key) })),
   ];
+  if (hostTab) {
+    for (const r of hostTab.rows()) {
+      rows.push({
+        ...r,
+        act: r.act
+          ? (key) => {
+              r.act!(key);
+              setRev((n) => n + 1);
+            }
+          : undefined,
+      });
+    }
+  }
   if (tab === "Apps") {
     if (!apps.length) rows.push({ key: "no-apps", title: "No other apps listed", sub: "The TV lists its apps when Secretary starts on it", value: "" });
     for (const app of apps) {
@@ -236,7 +259,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
     if (listAt >= rows.length) setPlace((p) => ({ ...p, focus: rows.length ? { area: "list", i: rows.length - 1 } : { area: "tabs" } }));
   }, [rows.length, listAt]);
 
-  const shape = { tabs: SETTING_TABS.length, rows: rows.length, header: header ? { person: Boolean(header.person), buttons: header.buttons.length } : null };
+  const shape = { tabs: tabNames.length, rows: rows.length, header: header ? { person: Boolean(header.person), buttons: header.buttons.length } : null };
 
   useKeys(active, (key) => {
     // CH-, Search and the voice key: Secretary's search.
@@ -268,9 +291,9 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
         <Header time={header?.time ?? clockText} person={header?.person} buttons={header?.buttons ?? []} focus={head} />
         <div class="hub-title" style={{ left: `${PAD}px`, top: `${TITLE_Y}px` }}>
           Settings
-          <small>{SETTING_TAB_BLURB[tab]}</small>
+          <small>{hostTab ? hostTab.blurb : SETTING_TAB_BLURB[tab as SettingTab]}</small>
         </div>
-        <Tabs x={PAD} y={TABS_Y} w={ROW_W} items={SETTING_TABS} picked={place.tab} focusIndex={place.focus.area === "tabs" ? place.tab : -1} />
+        <Tabs x={PAD} y={TABS_Y} w={ROW_W} items={tabNames} picked={place.tab} focusIndex={place.focus.area === "tabs" ? place.tab : -1} />
         <PreviewList
           key={tab}
           x={PAD}
@@ -280,7 +303,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
           listW={LIST_W}
           items={items}
           focusIndex={listAt}
-          preview={shownRow ? <SettingPreview line={shownRow} settings={settings} /> : null}
+          preview={shownRow ? (shownRow.preview ?? <SettingPreview line={shownRow} settings={settings} />) : null}
         />
 
         {toast && (

@@ -309,6 +309,17 @@ function WeatherCard({ w, page, focused, out }: { w: Weather | null; page: [numb
                 </small>
               )}
             </div>
+            {(w.hours?.length ?? 0) > 0 && (
+              <div class="nest-wc-hours">
+                {w.hours!.slice(0, 4).map((h) => (
+                  <div key={h.hour}>
+                    <small>{h.hour}h</small>
+                    <Icon name={h.glyph} size={36} />
+                    <b>{h.tempC}°</b>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <small class="nest-wc-none">No weather yet</small>

@@ -14,7 +14,10 @@ import { type CardStyle, openStyleMenu, type StyleMenu, stepStyleMenu } from "@s
 import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-order.ts";
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { HEADER_ITEMS, headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
-import { LightsPanel } from "@secretary/launcher/src/lights.tsx";
+import { MoodPanel } from "@secretary/launcher/src/mood.tsx";
+import { setActiveMood } from "@secretary/launcher/src/moods.ts";
+import { setLightFx } from "@secretary/launcher/src/light-fx.ts";
+import { smartThingsTab } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
 import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
 import "@secretary/launcher/src/style.css";
@@ -22,7 +25,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
 import { SearchScreen } from "@secretary/launcher/src/search.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, searchOffline, SETTINGS_APPS, SETTINGS_FIXTURE } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, searchOffline, SETTINGS_APPS, SETTINGS_FIXTURE, smartThingsFixture } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
@@ -30,7 +33,7 @@ export const SCREENS = [
   "Home",
   "Home · assistant",
   "Home · chat",
-  "Lights",
+  "Mood",
   "Cinema",
   "Shows",
   "Anime",
@@ -47,11 +50,13 @@ export const SCREENS = [
   "Settings · home screen",
   "Settings · apps",
   "Settings · appearance",
+  "Settings · SmartThings",
 ] as const;
 
 /** Settings' look rows, shared with the toolbar: a change in either shows in both (catalog-kit applyLook). */
 type Look = DashboardSettings["general"];
-const SETTINGS_TABS: Record<string, SettingTab> = {
+const SETTINGS_TABS: Record<string, SettingTab | "SmartThings"> = {
+  "Settings · SmartThings": "SmartThings",
   "Settings · home screen": "Home screen",
   "Settings · apps": "Apps",
   "Settings · appearance": "Appearance",
@@ -65,7 +70,7 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number; look:
   const type = CATALOG[name];
   if (name.startsWith("Settings")) return <SettingsPage key={name} tab={SETTINGS_TABS[name] ?? "Watching"} look={props.look} onLook={props.onLook} />;
   if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} offline={name === "Search · offline"} />;
-  if (name === "Lights") return <Lights {...props} />;
+  if (name === "Mood") return <Lights {...props} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
@@ -229,8 +234,12 @@ function SearchPage({ mode, theme, backdrop, art, results, offline }: PageProps 
  * Watching, the others on Home screen's feature switches, the Apps picker and Appearance. Changes live in this page
  * only, except the look (accent, type style, text size, Reduce motion), which goes to the toolbar and the page.
  */
-function SettingsPage({ tab, look, onLook }: { tab: SettingTab; look: Omit<Look, "bootAnimation" | "clockFormat">; onLook(g: Look): void }) {
+function SettingsPage({ tab, look, onLook }: { tab: SettingTab | "SmartThings"; look: Omit<Look, "bootAnimation" | "clockFormat">; onLook(g: Look): void }) {
   const [own, setSettings] = useState<DashboardSettings>(SETTINGS_FIXTURE);
+  // Settings › SmartThings, as Secretary adds it, on the fixture home (its switches redraw this page).
+  const [, setRev] = useState(0);
+  const devices = useMemo(() => LIGHT_DEVICES.map((d) => ({ ...d })), []);
+  const st = smartThingsTab(smartThingsFixture(devices, () => setRev((n) => n + 1)));
   const settings = { ...own, general: { ...own.general, ...look } };
   return (
     <HubOverlay
@@ -242,6 +251,7 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab; look: Omit<Look,
       }}
       header={HEADER}
       apps={SETTINGS_APPS}
+      hostTabs={[st]}
       initialTab={tab}
       onSearch={noop}
       onOpenNest={noop}
@@ -250,13 +260,25 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab; look: Omit<Look,
   );
 }
 
-/** The lights panel over home's wallpaper, as Secretary opens it from the header's lights button. */
+/** The Mood panel over home's wallpaper, as Secretary opens it from the header's lights button. */
 function Lights({ mode, theme, backdrop }: PageProps & { art: Art }) {
   // The panel re-mounts on every visit (fresh routine states), and Back reopens it here rather than leaving.
   const [visit, setVisit] = useState(0);
   return (
     <GlassRoot mode={mode} wallpaper={backdrop?.wallpaper} frost={backdrop?.frost} sheen={{ palette: null }} class={theme === "day" ? "nest sg-day" : "nest"}>
-      <LightsPanel key={visit} devices={LIGHT_DEVICES} scenes={LIGHT_SCENES} api={LIGHTS_API} header={PANEL_HEADER} onChange={noop} onClose={() => setVisit((v) => v + 1)} />
+      <MoodPanel
+        key={visit}
+        devices={LIGHT_DEVICES}
+        scenes={LIGHT_SCENES}
+        header={PANEL_HEADER}
+        onMood={(m) => {
+          setLightFx(m.fx);
+          setActiveMood(m.key);
+          return new Promise((ok) => setTimeout(ok, 600));
+        }}
+        onSetup={noop}
+        onClose={() => setVisit((v) => v + 1)}
+      />
     </GlassRoot>
   );
 }
