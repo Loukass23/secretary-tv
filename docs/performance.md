@@ -667,3 +667,15 @@ the other, 250 ms per key, 3 runs each.
 | | this change | 17-33 ms | 83-150 ms | 23, 54, 46 | 5-7 MB |
 
 The same within the run-to-run spread. One 350 ms frame in the second Cinema run, not seen in the others.
+
+### The pause menu (review 26 Nov, E; not yet measured on the TV)
+
+Paused, the player shows one flat smoked surface along the bottom (`ui/PauseMenu.tsx`, `GlassRoot mode="flat"`, no
+frost, as the controls it replaces) with a row of tv-kit buttons that show focus by opacity and transform. It draws
+only while paused, so playback frames are unchanged. Not measured: the paused player needs a real stream, which was
+not started for this change. To check on the TV: pause a title, `cdp.mjs <port> layers` (only the pause surface and
+the page-drawn caption over the video plane), then `cdp.mjs walk 250 Right,Right,Right,Right,Right,Left,Left,Left,Left,Left`
+with the menu up.
+
+Budget: the restored options menu and the pause menu bring the deploy build to 174.1 KB gzip; `budget.json` was raised
+from 172 KB to 178 KB for it.
