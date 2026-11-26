@@ -23,6 +23,8 @@ import type { PartySession } from "../lib/party.ts";
 import { createFollower, type PartyPlayer } from "../lib/partyplay.ts";
 import { PartyOverlay, partyLine, usePartyView } from "./PartyOverlay.tsx";
 import { PlayerMenu } from "./PlayerMenu.tsx";
+import { PauseMenu } from "./PauseMenu.tsx";
+import { type PauseAction, pauseActions, pauseMenuShown, stepPause } from "../lib/pausemenu.ts";
 import { type MenuPage, type MenuRow, type PlayerRoom } from "../lib/playermenu.ts";
 import type { Subtitle } from "../lib/addons.ts";
 import { chosenSubLang, type Cue, cueAt, DELAY_STEP, delayLabel, groupSubtitles, loadCues, MAX_DELAY, rememberSubLang, SUB_SIZES } from "../lib/subtitles.ts";
@@ -162,6 +164,14 @@ export function PlayerView({
   const [panelOpen, setPanelOpen] = useState(false);
   // The options menu (ui/PlayerMenu.tsx): Up opens it; its rows are rebuilt from the player on every render.
   const [menuOpen, setMenuOpen] = useState(false);
+  /** The page the options menu opens on: its top, or Subtitles or Audio from the pause menu. */
+  const [menuStart, setMenuStart] = useState("top");
+  const openMenu = (page = "top") => {
+    setMenuStart(page);
+    setMenuOpen(true);
+  };
+  /** The pause menu's focused button. */
+  const [pauseAt, setPauseAt] = useState(0);
   const [, setMenuTick] = useState(0);
   // Subtitles from addons, drawn by the page (lib/subtitles.ts): the list, the one showing, its cues, size and delay.
   const [subList, setSubList] = useState<Subtitle[] | null>(null);
@@ -407,6 +417,28 @@ export function PlayerView({
     return () => clearInterval(t);
   }, [started, playing, pausePanel]);
   const panelShown = pausePanelShown({ enabled: pausePanel, playing, pausedAt, lastKeyAt: lastKeyAt.current, now: Date.now() });
+  // The pause menu (ui/PauseMenu.tsx) replaces the panel: it shows as soon as playback pauses, with the Pause panel on.
+  const pauseShown = pauseMenuShown({ enabled: pausePanel, started, playing, together });
+  const pauseButtons: PauseAction[] = pauseActions({ next: Boolean(next), picture: Boolean(player.current?.setAspect) });
+  useEffect(() => {
+    if (pauseShown) setPauseAt(0);
+  }, [pauseShown]);
+  /** A pause menu button. Restart reopens at the start and stays paused, Play focused, so nothing starts unasked. */
+  const runPause = (a: PauseAction | undefined) => {
+    const p = player.current;
+    if (!p || !a) return;
+    if (a === "play") {
+      p.toggle();
+      setPlaying(p.isPlaying());
+    } else if (a === "restart") {
+      p.seekBy(-p.position());
+      setTime((t) => ({ ...t, pos: 0 }));
+      setPauseAt(0);
+    } else if (a === "next") goNextRef.current();
+    else if (a === "subs") openMenu("subs");
+    else if (a === "audio") openMenu("audio");
+    else if (a === "picture") menuPick("top", { id: "aspect", label: "Picture" }, 1);
+  };
   // The logo is decoded before it shows, so the panel never paints a half-loaded image over the video.
   const logo = logoUrl(title.id);
   useEffect(() => {
@@ -570,6 +602,26 @@ export function PlayerView({
   useKeys(!panelOpen && !menuOpen, (key) => {
     if (together) return partyKey(key);
     const p = player.current;
+    // Paused, the pause menu takes the keys: Left and Right along its buttons, OK runs one, Up the options.
+    if (pauseShown && p) {
+      lastKeyAt.current = Date.now();
+      if (key === "Back" || key === "Stop") {
+        persist();
+        onExit();
+        return;
+      }
+      if (key === "Up" || key === "Info") return void openMenu();
+      if (key === "PlayPause" || key === "Play") {
+        p.toggle();
+        setPlaying(p.isPlaying());
+        return;
+      }
+      if (key === "Rewind" || key === "FastForward") return void p.seekBy(key === "Rewind" ? -SEEK_SEC : SEEK_SEC);
+      const step = stepPause(pauseAt, pauseButtons.length, key);
+      if (!step) return false;
+      if ("at" in step) return void setPauseAt(step.at);
+      return void runPause(pauseButtons[step.run]);
+    }
     // Any key restarts the pause panel's wait; OK on the panel resumes.
     const wasPanel = panelShown;
     lastKeyAt.current = Date.now();
@@ -807,32 +859,23 @@ export function PlayerView({
           </Glass>
         </GlassRoot>
       )}
-      {panelShown && (
-        // What is playing, over the paused video: smoked glass with no frost, like the controls, which it replaces.
-        <GlassRoot mode="flat" class="ply-pause-root">
-          <Glass x={80} y={520} w={1060} h={500} class="ply-pause">
-            <span class="ply-state">You're watching</span>
-            {logo && logoReady ? <img class="ply-pause-logo" src={logo} alt={title.name} /> : <h1>{title.name}</h1>}
-            {(() => {
-              const f = pauseFacts(title, episode);
-              return (
-                <>
-                  {f.episodeLine && <span class="ply-title">{f.episodeLine}</span>}
-                  {f.facts && <span class="ply-dim">{f.facts}</span>}
-                  {f.synopsis && <p class="ply-pause-plot">{f.synopsis}</p>}
-                </>
-              );
-            })()}
-            <span class="ply-bar">
-              <i style={{ transform: `scaleX(${pct})` }} />
-            </span>
-            <span class="ply-dim">
-              {clock(time.pos)} / {clock(time.dur)} · OK resumes
-            </span>
-          </Glass>
-        </GlassRoot>
+      {pauseShown && !menuOpen && (
+        <PauseMenu
+          logo={logo && logoReady ? logo : null}
+          name={title.name}
+          episodeLine={pauseFacts(title, episode).episodeLine}
+          pos={time.pos}
+          dur={time.dur}
+          actions={pauseButtons}
+          at={pauseAt}
+          values={{
+            subs: subPick ? (groups.find((g) => g.lang === subPick.key || g.label === subPick.key)?.label ?? "On") : "Off",
+            picture: player.current?.aspect ? ASPECT_LABEL[player.current.aspect()] : undefined,
+          }}
+          badges={badges}
+        />
       )}
-      {started && !panelShown && (controls || !playing || buffering) && (
+      {started && !pauseShown && !panelShown && (controls || !playing || buffering) && (
         // Over the video: the video is a plane behind a transparent page, so this glass has no frost, only a smoked fill.
         <GlassRoot mode="flat" class="ply-osd">
           <Glass x={80} y={850} w={1760} h={182} class="ply-controls">
@@ -866,7 +909,7 @@ export function PlayerView({
         </div>
       )}
       {started && (
-        <PlayerMenu open={menuOpen} pageOf={menuPage} heading={heading} onPick={menuPick} onClose={() => setMenuOpen(false)} />
+        <PlayerMenu open={menuOpen} start={menuStart} pageOf={menuPage} heading={heading} onPick={menuPick} onClose={() => setMenuOpen(false)} />
       )}
       {party && partyView && together && (
         <PartyOverlay

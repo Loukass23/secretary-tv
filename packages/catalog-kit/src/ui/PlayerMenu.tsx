@@ -1,7 +1,7 @@
 import { keyName } from "@secretary/tv-kit";
 import { Glass, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { type MenuKey, type MenuPage, type MenuRow, openingRow, startMenu, stepMenu, TOP_PAGE, windowRows } from "../lib/playermenu.ts";
+import { type MenuKey, menuAt, type MenuPage, type MenuRow, openingRow, startMenu, stepMenu, TOP_PAGE, windowRows } from "../lib/playermenu.ts";
 
 const W = 620;
 const ROW_H = 68;
@@ -20,7 +20,10 @@ export function PlayerMenu({
   heading,
   onPick,
   onClose,
+  start = TOP_PAGE,
 }: {
+  /** The page it opens on (the pause menu's Subtitles or Audio); Back from there closes it. */
+  start?: string;
   open: boolean;
   pageOf(id: string): MenuPage | undefined;
   heading: string;
@@ -35,7 +38,7 @@ export function PlayerMenu({
   latest.current = { pageOf, onPick, onClose };
 
   useEffect(() => {
-    if (open) setNav({ stack: [TOP_PAGE], row: 0 });
+    if (open) setNav(menuAt(start, pageOf));
   }, [open]);
 
   useEffect(() => {

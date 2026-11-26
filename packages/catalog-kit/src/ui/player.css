@@ -67,6 +67,15 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-pause-logo { max-width: 520px; max-height: 120px; object-fit: contain; object-position: left center; }
 .ply-pause-plot { margin: 0; font-size: var(--sg-t-s); line-height: 1.4; color: var(--sg-ink-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ply-pause .ply-bar { margin-top: auto; }
+/* The pause menu (PauseMenu.tsx): the same smoked glass along the bottom, the title, where it is and the buttons. */
+.ply-pm { padding: 30px 40px 34px; display: flex; flex-direction: column; gap: 14px; }
+.ply-pm::after { background: var(--ply-smoke); }
+.ply-pm > * { position: relative; z-index: 2; }
+.ply-pm-name { margin: 0; font-family: var(--sg-font-title); font-size: var(--sg-t-xxl); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-pm .ply-bar { margin-top: 6px; height: 8px; border-radius: 4px; }
+.ply-pm-time { display: flex; align-items: center; gap: 18px; font-family: var(--sg-font-num); font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
+.ply-pm-time b { color: var(--sg-ink); font-weight: 600; }
+.ply-pm .sg-btn-row { margin-top: auto; }
 
 
 /* The options menu (PlayerMenu.tsx): the control centre's smoked glass, a column on the right that grows by transform.

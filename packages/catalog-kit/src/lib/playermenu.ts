@@ -89,3 +89,7 @@ export interface PlayerRoom {
   movieScene(): void;
   restoreScene(): void;
 }
+
+/** The menu opened straight on one page (the pause menu's Subtitles or Audio): Back from it closes the menu. */
+export const menuAt = (page: string, pageOf: (id: string) => MenuPage | undefined): MenuState =>
+  page === TOP_PAGE ? startMenu() : { stack: [page], row: openingRow(pageOf(page)) };

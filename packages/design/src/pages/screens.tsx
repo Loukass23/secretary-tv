@@ -2,6 +2,8 @@
 // (nest-nav.ts), and the catalog home (catalog-kit/src/ui/Home.tsx), which handles its own keys.
 import { type DashboardSettings, DEFAULT_SETTINGS, type SettingTab } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { HubOverlay } from "@secretary/catalog-kit/src/ui/HubOverlay.tsx";
+import { PauseMenu } from "@secretary/catalog-kit/src/ui/PauseMenu.tsx";
+import { pauseActions, stepPause } from "@secretary/catalog-kit/src/lib/pausemenu.ts";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
 import { Detail } from "@secretary/catalog-kit/src/ui/Detail.tsx";
@@ -47,6 +49,7 @@ export const SCREENS = [
   "Settings · home screen",
   "Settings · apps",
   "Settings · appearance",
+  "Player · paused",
 ] as const;
 
 /** Settings' look rows, shared with the toolbar: a change in either shows in both (catalog-kit applyLook). */
@@ -66,6 +69,7 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number; look:
   if (name.startsWith("Settings")) return <SettingsPage key={name} tab={SETTINGS_TABS[name] ?? "Watching"} look={props.look} onLook={props.onLook} />;
   if (name.startsWith("Search")) return <SearchPage key={name} {...props} results={name !== "Search"} offline={name === "Search · offline"} />;
   if (name === "Lights") return <Lights {...props} />;
+  if (name === "Player · paused") return <PausedPlayer art={props.art} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
   return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
@@ -241,6 +245,37 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab; look: Omit<Look,
       onOpenNest={noop}
       onClose={noop}
     />
+  );
+}
+
+/**
+ * The pause menu (catalog-kit ui/PauseMenu.tsx) over a paused frame: a fixture still stands in for the video plane.
+ * Left and Right move along the buttons; OK on Picture steps its fit.
+ */
+function PausedPlayer({ art }: { art: Art }) {
+  const actions = pauseActions({ next: true, picture: true });
+  const [at, setAt] = useState(0);
+  const [aspect, setAspect] = useState(0);
+  useKeys(true, (key) => {
+    const step = stepPause(at, actions.length, key);
+    if (!step) return false;
+    if ("at" in step) return void setAt(step.at);
+    if (actions[step.run] === "picture") setAspect((a) => (a + 1) % 3);
+  });
+  return (
+    <div class="player" style={{ position: "absolute", inset: 0, background: "#000" }}>
+      <img src={art.backgrounds[1 % art.backgrounds.length]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+      <PauseMenu
+        name="The Quiet Harbour"
+        episodeLine="S1E3 · A Door in the Fog"
+        pos={1394}
+        dur={3120}
+        actions={actions}
+        at={at}
+        values={{ subs: "English", picture: ["Fit", "Fill", "Stretch"][aspect] }}
+        badges={["4K", "HDR10", "Atmos"]}
+      />
+    </div>
   );
 }
 
