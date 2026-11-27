@@ -16,7 +16,9 @@ function gemini(heard: string, calls: string[] = []) {
       ? { inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: Buffer.from([1, 0, 2, 0]).toString("base64") } }
       : body.includes("inlineData")
         ? { text: heard }
-        : { text: "Very well." };
+        : body.includes('"responseMimeType":"application/json"')
+          ? { text: JSON.stringify({ intent: "chat", reply: "Very well." }) }
+          : { text: "Very well." };
     return new Response(JSON.stringify({ candidates: [{ content: { parts: [part] } }] }));
   }) as typeof fetch;
 }

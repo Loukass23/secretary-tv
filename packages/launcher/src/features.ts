@@ -10,11 +10,13 @@ export const remindersShown = <T>(prefs: Pick<HomePrefs, "reminders">, items: re
 /** Home notifications: what SmartThings reported changing, toasted and kept in the Recent card, or nothing. */
 export const alertsShown = <T>(prefs: Pick<HomePrefs, "homeAlerts">, news: readonly T[]): T[] => (prefs.homeAlerts ? [...news] : []);
 
-/** Spoken replies: an answer is read aloud only after a voice question, and only while they are on. */
-export const speaksReply = (prefs: Pick<HomePrefs, "spokenReplies">, spoken: boolean): boolean => spoken && prefs.spokenReplies;
+/** Spoken replies: an answer is read aloud only after a voice question, while they are on and this build has a speech key. */
+export const speaksReply = (prefs: Pick<HomePrefs, "spokenReplies">, spoken: boolean, hasKey = true): boolean =>
+  hasKey && spoken && prefs.spokenReplies;
 
 /**
- * Listening on focus: the microphone opens by itself when focus reaches the assistant only while this is on. OK and the
- * mic key still listen (`auto` false).
+ * Voice listening: without a transcription key (`NEST_GEMINI_API_KEY` or `NEST_GROQ_API_KEY`) voice is off altogether.
+ * With one, the microphone opens by itself on focus only while `listenOnFocus` is on; OK and the mic key still listen (`auto` false).
  */
-export const mayListen = (prefs: Pick<HomePrefs, "listenOnFocus">, auto: boolean): boolean => !auto || prefs.listenOnFocus;
+export const mayListen = (prefs: Pick<HomePrefs, "listenOnFocus">, auto: boolean, hasKey = true): boolean =>
+  hasKey && (!auto || prefs.listenOnFocus);

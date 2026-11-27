@@ -181,6 +181,9 @@ export interface Reminder {
   id: string;
   text: string;
   due?: string;
+  /** Epoch ms when the reminder is due on this TV, and when its toast fired (`localReminders`). */
+  dueAt?: number;
+  firedAt?: number;
   completed: boolean;
   source: "companion" | "gemini" | "local";
 }
