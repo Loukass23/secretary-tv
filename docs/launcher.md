@@ -322,7 +322,8 @@ last 8 turns in memory with no server call:
 - **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
 - **Watch prompts and the search** ask the catalogs straight from the TV.
-- **The weather** ("what's the weather", "do I need an umbrella") is answered from the forecast, with no Gemini call.
+- **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
+  answered from the forecast (now, the next hours and tomorrow), with no Gemini call.
 - **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has
   its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`
   unasked. The key ships inside the package: restrict it to the Generative Language API. Without `NEST_GEMINI_API_KEY` or

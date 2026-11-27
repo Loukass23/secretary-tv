@@ -134,7 +134,7 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
     expectedQuery: "“heat”",
   },
   {
-    prompt: "I would like to see Andor",
+    prompt: "I'd like to see Andor",
     expectedAction: "watch",
     expectedWatch: { term: "andor" },
     expectedQuery: "“andor”",
@@ -246,5 +246,7 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Find my reminders", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "What tasks do I have?", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "Warm lights", expectedAction: "domotics_updated", expectedLights: { scene: "warm" }, nearMiss: true },
+  { prompt: "Is The Lighthouse scary?", expectedAction: "briefing", freeText: true, nearMiss: true },
+  { prompt: "What's on my plate today?", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "Play", expectedAction: "briefing", nearMiss: true },
 ];
