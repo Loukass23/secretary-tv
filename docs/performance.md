@@ -778,3 +778,24 @@ from 172 KB to 178 KB for it.
 Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so every deploy stopped at
 `check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
 and player work. Each sprint PR states how much it adds.
+
+### The mood strip and the picture mode (sprint 27 Nov, D)
+
+OK on the header's lights button now opens a small strip of mood icons under it (`launcher/src/mood-strip.tsx`): one
+frosted panel with the icons as their own unfrosted `IconButton`s beside it (no glass inside glass), focus by the
+glass's own sheet (opacity), drawn only while open. The picture mode is read on the TV (`webapis.settings`, about 16 ms
+a call), only on load, on `visibilitychange`/`focus`, every 30 s with the clock and at a press, never per frame.
+
+Measured on the Samsung TV inside Secretary, `main` at `eeaa7c2` and this branch deployed the same way one after the
+other, 250 ms per key, 3 runs each, from the home row:
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Header (`Up`, `Right`x6, `Left`x6, `Down`) | `main` | 17 ms | 33-50 ms | 3, 3, 4 | 4-5 MB |
+| | branch | 17 ms | 33-50 ms | 5, 5, 4 | 6-7 MB |
+| Mood strip (`Up,Right,Right,Enter`, `Right`x4, `Left`x4, `Back,Down`) | branch | 17 ms | 33 ms | 5, 4, 4 | 4-5 MB |
+
+The strip costs about what the header walk does; no mood was set while measuring (they act on the room).
+
+Budget: the branch adds 3.3 KB gzip (187.7 KB on `main` at `eeaa7c2`, 191.0 KB with it, deploy build with the owner's
+keys), 1 KB over the 190 KB `budget.json`, which this branch leaves for the sprint's integration to settle.
