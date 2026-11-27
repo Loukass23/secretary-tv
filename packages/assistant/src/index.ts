@@ -1,4 +1,5 @@
 export * from "./base64.ts";
+export * from "./followup.ts";
 export * from "./gemini.ts";
 export * from "./groq.ts";
 export * from "./intent.ts";

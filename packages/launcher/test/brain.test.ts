@@ -85,3 +85,52 @@ test("the TV answers directly and gives each new turn a higher positive id", asy
   assert.ok(st.turns.every((t) => t.source === "tv"));
   assert.equal(brain.note("couch light off", "Turning off Couch.", "domotics_updated").id, 4);
 });
+
+test("localBrain threads recent turns into route() so ordinal and comparative follow-ups resolve in context", async () => {
+  const rem = localReminders(memory());
+  const requestedUrls: string[] = [];
+  const fakeFetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url.includes("genre=Comedy")) {
+      return new Response(
+        JSON.stringify({
+          metas: [{ id: "tt4468740", name: "Paddington 2", releaseInfo: "2017", imdbRating: "7.8" }],
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        metas: [
+          { id: "tt3397884", name: "Sicario", releaseInfo: "2015", imdbRating: "7.7" },
+          { id: "tt1392214", name: "Prisoners", releaseInfo: "2013", imdbRating: "8.2" },
+        ],
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  const brain = localBrain({
+    reminders: rem,
+    lights: async () => undefined,
+    fetch: fakeFetch,
+  });
+
+  const t1 = await brain.ask("show me a thriller movie");
+  assert.equal(t1.action, "watch");
+  assert.deepEqual(t1.results?.map((r) => r.title.name), ["Sicario", "Prisoners"]);
+
+  // "the second one" resolves from t1.results without hitting the network again.
+  const callsBeforeOrdinal = requestedUrls.length;
+  const t2 = await brain.ask("the second one");
+  assert.equal(requestedUrls.length, callsBeforeOrdinal);
+  assert.equal(t2.action, "watch");
+  assert.deepEqual(t2.results?.map((r) => r.title.name), ["Prisoners"]);
+
+  // "something lighter" shifts the prior movie turn to Comedy films.
+  const t3 = await brain.ask("something lighter");
+  assert.equal(t3.action, "watch");
+  assert.equal(t3.query, "comedy films");
+  assert.deepEqual(t3.results?.map((r) => r.title.name), ["Paddington 2"]);
+});

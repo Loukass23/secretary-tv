@@ -335,6 +335,10 @@ last 8 turns in memory with no server call:
   is Blur or Hide.
 - **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
   answered from the forecast (now, the next hours and tomorrow), with no Gemini call.
+- **Follow-ups** (`packages/assistant/src/followup.ts`, `src/brain.ts`): `localBrain` passes the last four turns (including
+  any titles shown) to `route()`. Ordinal selections ("the second one", "play the first one") resolve locally from the
+  latest watch turn with no model call; comparative and pronoun follow-ups ("something lighter", "who's in it?", "is it any
+  good?") use multi-turn Gemini context when a key is set and fall back offline when it is not.
 - **Gemini** (structured intent routing when no local rule matches, free questions, the briefing, voice and spoken
   replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. Unmatched phrasings ("I'm in the mood for Miyazaki", "don't let
   me forget the laundry") ask Gemini for a validated JSON intent (`responseSchema` in `packages/assistant/src/schema.ts`)

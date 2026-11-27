@@ -65,6 +65,7 @@ test("every eval prompt routes offline to its expected action and payload", asyn
       myList: () => [{ type: "movie", title: { id: "tt1160419", name: "Dune", year: "2021", rating: "8.0" } }],
       setMyList: (want) => ({ name: "Dune", saved: want }),
       weather: async () => FORECAST,
+      history: c.history,
       geminiKey: "k-test",
       fetch: fakeFetch,
     };

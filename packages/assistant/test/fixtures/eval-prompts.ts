@@ -1,5 +1,6 @@
 // Offline evaluation set for Ask Nest's route(): 64 viewer prompts and near misses across every AskAction.
 // Kept under test/ so Vite never bundles it into Secretary's .wgt while tsc still typechecks it.
+import type { TurnHistoryItem } from "../../src/followup.ts";
 import type { AskAction, LightsCommand } from "../../src/route.ts";
 import type { CatalogKind } from "../../src/types.ts";
 
@@ -15,6 +16,8 @@ export interface EvalCase {
   expectedLights?: LightsCommand;
   /** True for natural questions/briefings that test-drive a live Gemini model in eval-live.ts. */
   freeText?: boolean;
+  /** Optional conversation history to evaluate multi-turn follow-ups. */
+  history?: readonly TurnHistoryItem[];
   /** Prompts whose surface words resemble another handler ("show me the weather", "warm lights"). */
   nearMiss?: boolean;
 }
@@ -270,5 +273,50 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Is The Lighthouse scary?", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "What's on my plate today?", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "Play Goodnight Mommy", expectedAction: "watch", expectedWatch: { term: "goodnight mommy" }, nearMiss: true },
+  {
+    prompt: "The second one",
+    expectedAction: "watch",
+    expectedQuery: "“Prisoners”",
+    history: [
+      {
+        prompt: "show me a thriller",
+        reply: "Here are thriller films worth a look.",
+        action: "watch",
+        results: [
+          { type: "movie", title: { id: "tt3397884", name: "Sicario", year: "2015", rating: "7.7" } },
+          { type: "movie", title: { id: "tt1392214", name: "Prisoners", year: "2013", rating: "8.2" } },
+        ],
+      },
+    ],
+  },
+  {
+    prompt: "Play the first one",
+    expectedAction: "resume",
+    expectedQuery: "“Sicario”",
+    history: [
+      {
+        prompt: "show me a thriller",
+        reply: "Here are thriller films worth a look.",
+        action: "watch",
+        results: [
+          { type: "movie", title: { id: "tt3397884", name: "Sicario", year: "2015", rating: "7.7" } },
+          { type: "movie", title: { id: "tt1392214", name: "Prisoners", year: "2013", rating: "8.2" } },
+        ],
+      },
+    ],
+  },
+  {
+    prompt: "Who's in it?",
+    expectedAction: "briefing",
+    freeText: true,
+    history: [
+      {
+        prompt: "Play Dune",
+        reply: "Here is what I found for “dune”.",
+        action: "watch",
+        results: [{ type: "movie", title: { id: "tt1160419", name: "Dune", year: "2021", rating: "8.0" } }],
+      },
+    ],
+  },
   { prompt: "Play", expectedAction: "briefing", nearMiss: true },
 ];

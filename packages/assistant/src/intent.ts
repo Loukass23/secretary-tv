@@ -76,6 +76,17 @@ export function parseWatchIntent(prompt: string): WatchIntent | null {
   // A bare verb ("play", "show me") with nothing else is not a request to browse.
   if (!term && !kind && !genre && !m[0].match(/something|anything|what should|what(?:'s| is)|watch|tonight/)) return null;
   if (!term) return { kind, genre };
+  // Comparative follow-ups ("something lighter", "something less violent", "something like that") need turn history, not a literal title search.
+  if (
+    !kind &&
+    !genre &&
+    /^(?:any|anything|something)\b/.test(m[0]) &&
+    /^(?:lighter|darker|funnier|scarier|spookier|tenser|grittier|shorter|longer|older|newer|calmer|cozier|faster|slower|better|different|else|similar|like\s+(?:that|it|this)|(?:more|less)\s+.+)$/.test(
+      term,
+    )
+  ) {
+    return null;
+  }
   // Searches keep the words as typed, minus "the movie" / "the series".
   const asked = m[1]
     .trim()

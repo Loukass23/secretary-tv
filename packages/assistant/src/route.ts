@@ -1,6 +1,15 @@
 // Ask Nest's answers: a prompt goes to reminders, something to watch, the weather, the lights, then Gemini, then a canned
 // briefing. The effects come from the caller, so the server (its state store, SmartThings through it) and Nest on the
 // TV (local reminders, SmartThings straight from the TV) answer the same way.
+import {
+  buildGeminiContents,
+  lastResultsTurn,
+  parseOrdinalFollowUp,
+  parsePronounTitleFollowUp,
+  resolveOrdinalFollowUp,
+  runOfflineFollowUp,
+  type TurnHistoryItem,
+} from "./followup.ts";
 import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
 import { type LibraryEffects, parseLibraryIntent, runLibraryIntent } from "./library-intent.ts";
@@ -36,6 +45,8 @@ export interface Effects extends LibraryEffects {
   focusedTitle?(): Promise<FocusedTitleContext | null>;
   /** The forecast here; without it weather prompts go to Gemini like any other. */
   weather?(): Promise<Weather | null>;
+  /** Recent conversation turns (oldest to newest), passed to Gemini and ordinal follow-ups. */
+  history?: readonly TurnHistoryItem[];
   /** Clock for relative due times ("in 20 minutes", "tomorrow at 8"); defaults to `new Date()`. */
   now?(): Date;
   geminiKey?: string;
@@ -134,8 +145,17 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
   const routine = parseRoutine(clean);
   if (routine) return runRoutine(routine, fx);
 
+  // 1b2. Ordinal follow-ups ("the second one", "play the first one") resolve locally from the latest watch turn.
+  const ord = parseOrdinalFollowUp(clean);
+  if (ord) {
+    const picked = resolveOrdinalFollowUp(ord, fx.history);
+    if (picked) return picked;
+  }
+
   // 1c. Questions about the focused title: "what's this about?", "is it any good?", "catch me up".
-  const titleQ = fx.focusedTitle ? parseTitleQuestion(clean) : null;
+  // When a recent turn showed titles and the viewer asks about "it"/"that" rather than "this", defer to turn history.
+  const deferPronounToHistory = Boolean(lastResultsTurn(fx.history) && parsePronounTitleFollowUp(clean));
+  const titleQ = fx.focusedTitle && !deferPronounToHistory ? parseTitleQuestion(clean) : null;
   if (titleQ && fx.focusedTitle) {
     const ctx = await fx.focusedTitle().catch(() => null);
     if (!ctx) {
@@ -226,15 +246,10 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
       GEMINI_FALLBACK_MODELS,
       fx.geminiKey,
       {
-        contents: [
-          {
-            parts: [
-              {
-                text: `${persona}\nClassify this viewer request as JSON (intent: watch, reminder, lights, weather, or chat). Include a 1-sentence plain-text reply (under 140 chars, no Markdown) in \`reply\`. Request: ${clean}`,
-              },
-            ],
-          },
-        ],
+        contents: buildGeminiContents(
+          fx.history,
+          `${persona}\nClassify this viewer request as JSON (intent: watch, reminder, lights, weather, or chat), using any earlier conversation turns for follow-ups like "something lighter" or "who's in it?". Include a 1-sentence plain-text reply (under 140 chars, no Markdown) in \`reply\`. Request: ${clean}`,
+        ),
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: INTENT_RESPONSE_SCHEMA,
@@ -288,15 +303,10 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
           GEMINI_FALLBACK_MODELS,
           fx.geminiKey,
           {
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `${persona} Reply in 1 witty, imperious sentence (under 140 chars, no Markdown) for a TV screen: ${clean}`,
-                  },
-                ],
-              },
-            ],
+            contents: buildGeminiContents(
+              fx.history,
+              `${persona} Reply in 1 witty, imperious sentence (under 140 chars, no Markdown) for a TV screen: ${clean}`,
+            ),
           },
           f,
         );
@@ -305,6 +315,9 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
       }
     }
   }
+
+  const offline = await runOfflineFollowUp(clean, fx);
+  if (offline) return offline;
 
   const pendingCount = open.length;
   const lightsOn = fx.lightsOn?.();

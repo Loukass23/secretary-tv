@@ -78,6 +78,7 @@ export async function runLiveEval(cases: readonly EvalCase[], opts: LiveEvalOpti
       openReminders: () => opts.openReminders ?? ["water the plants", "call mum at 18:00"],
       lights: async () => undefined,
       weather: async () => (opts.weather === undefined ? SAMPLE_WEATHER : opts.weather),
+      history: c.history,
       geminiKey: opts.key,
       fetch: trackedFetch,
     });
