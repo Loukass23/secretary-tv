@@ -9,11 +9,13 @@ export type Rgb = readonly [number, number, number];
 export const BANDS = 5;
 /** The sheen's lean (tv-kit glass/sheen.tsx): a band's top sits this far right of its foot, per pixel of height. */
 export const LEAN = 0.243;
-/** The ink the bands are pulled toward, so a light still never washes the white title out. */
+/** An empty slice (nothing drawn there) takes the ink's hue. */
 const INK: Rgb = [7, 8, 11];
-/** How far each band goes toward the ink: the first band, then one more step per band. */
-const DARK = 0.5;
-const STEP = 0.07;
+/**
+ * Each band's luminance, left to right: the first at 0.12 (the white title reads at about 6:1 on it), each a step
+ * darker. A dark still is lifted to these and a light one brought down, its hue kept, so the bands show on any still.
+ */
+export const BAND_LUMA = [0.12, 0.098, 0.08, 0.065, 0.052] as const;
 
 /** The average colour of each of `n` vertical slices of an RGBA picture `w` x `h` (canvas ImageData order). */
 export function sliceColours(data: ArrayLike<number>, w: number, h: number, n = BANDS): Rgb[] {
@@ -34,11 +36,29 @@ export function sliceColours(data: ArrayLike<number>, w: number, h: number, n = 
   return sums.map(([r, g, b, a]) => (a > 0 ? [Math.round(r / a), Math.round(g / a), Math.round(b / a)] : INK));
 }
 
-const mix = (c: Rgb, t: number): Rgb => [0, 1, 2].map((j) => Math.round(c[j] + (INK[j] - c[j]) * t)) as unknown as Rgb;
+const toLin = (v: number) => {
+  const c = v / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const toByte = (l: number) => Math.round(255 * (l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055));
 
-/** The bands' fills: each slice's colour pulled toward the ink, one step further per band. */
+/** `c` with its luminance set to `target`, its hue kept (scaled in linear light; a channel at full stays there). */
+function atLuma(c: Rgb, target: number): Rgb {
+  let lin = c.map(toLin);
+  if (luminance(c) < 0.002) lin = INK.map(toLin);
+  const w = [0.2126, 0.7152, 0.0722];
+  // A few passes: a channel clipped at 1 hands its share to the others.
+  for (let pass = 0; pass < 4; pass++) {
+    const l = lin.reduce((s, v, j) => s + v * w[j], 0);
+    if (l <= 0 || Math.abs(l - target) < 1e-4) break;
+    lin = lin.map((v) => Math.min(1, v * (target / l)));
+  }
+  return [toByte(lin[0]), toByte(lin[1]), toByte(lin[2])];
+}
+
+/** The bands' fills: each slice's colour at its band's luminance (`BAND_LUMA`), stepping darker left to right. */
 export function stepBands(colours: readonly Rgb[]): Rgb[] {
-  return colours.map((c, k) => mix(c, Math.min(0.9, DARK + k * STEP)));
+  return colours.map((c, k) => atLuma(c, BAND_LUMA[Math.min(k, BAND_LUMA.length - 1)]));
 }
 
 /** Relative luminance (sRGB, 0..1), to check the title reads on a band. */

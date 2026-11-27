@@ -357,7 +357,7 @@ export const SETTINGS_APPS: HostApp[] = [
   { id: "111299001912", name: "YouTube", note: "Has its own card on the home screen too" },
 ];
 
-/** Settings as a viewer left them: spoiler protection on Blur, home notifications off, the guide and YouTube hidden. */
+/** Settings as a viewer left them: spoiler protection on Bands, home notifications off, the guide and YouTube hidden. */
 export const SETTINGS_FIXTURE: DashboardSettings = {
   ...DEFAULT_SETTINGS,
   playback: { ...DEFAULT_SETTINGS.playback, spoilerProtection: "blur" },

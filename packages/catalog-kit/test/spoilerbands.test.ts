@@ -33,14 +33,26 @@ test("spoiler bands: transparent pixels do not count, and an empty slice is ink"
   assert.deepEqual(second, [100, 100, 100]);
 });
 
-test("spoiler bands: every band steps darker, and a white still keeps the white title readable", () => {
-  const white: Rgb[] = Array.from({ length: BANDS }, () => [255, 255, 255] as const);
-  const bands = stepBands(white);
-  for (let k = 1; k < bands.length; k++) assert.ok(luminance(bands[k]) < luminance(bands[k - 1]), `band ${k} is darker than band ${k - 1}`);
-  // The title is #f4f4f6: at least 3:1 against the lightest band, whatever the still.
+test("spoiler bands: every band steps darker, the title reads on any still, and a dark still still shows", () => {
   const title = luminance([244, 244, 246]);
-  assert.ok((title + 0.05) / (luminance(bands[0]) + 0.05) >= 3, "contrast with the lightest band");
-  assert.match(css(bands[0]), /^rgb\(\d+,\d+,\d+\)$/);
+  const stills: Rgb[] = [
+    [255, 255, 255],
+    [250, 230, 40],
+    [10, 12, 30],
+    [0, 0, 0],
+    [40, 90, 60],
+  ];
+  for (const c of stills) {
+    const bands = stepBands(Array.from({ length: BANDS }, () => c));
+    for (let k = 1; k < bands.length; k++) assert.ok(luminance(bands[k]) < luminance(bands[k - 1]), `band ${k} darker than ${k - 1} on ${c}`);
+    // The title is #f4f4f6: at least 5.5:1 against the lightest band, whatever the still.
+    assert.ok((title + 0.05) / (luminance(bands[0]) + 0.05) >= 5.5, `contrast on ${c}`);
+    assert.ok(luminance(bands[BANDS - 1]) > 0.045, `the darkest band is no black hole on ${c}`);
+  }
+  // The hue is kept: a green still gives green bands.
+  const [g] = stepBands([[40, 90, 60]]);
+  assert.ok(g[1] > g[0] && g[1] > g[2]);
+  assert.match(css(g), /^rgb\(\d+,\d+,\d+\)$/);
 });
 
 test("spoiler bands: the bands lean as the sheen does and cover the tile edge to edge", () => {
