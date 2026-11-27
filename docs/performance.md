@@ -778,3 +778,38 @@ from 172 KB to 178 KB for it.
 Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so every deploy stopped at
 `check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
 and player work. Each sprint PR states how much it adds.
+
+### Look and type, 27 Nov sprint B (2026-11-27)
+
+Plumage accents, the Font setting (Oswald and Outfit beside Space Grotesk), tabs sized to their labels, list lines and
+preview captions that fit at Large, the home's push-in in the Reduce motion preview, and Settings keeping its preview
+between keys that do not change it (`HubOverlay` memoises `SettingPreview` on the line and the settings). Measured on
+the Samsung TV inside Secretary, `207b41e` against `main` at `eeaa7c2` deployed the same way, at 250 ms per key. The
+TV's own settings were in use: text size Large, the saved accent (Raptor Orange, which the branch maps to Burnt Orange).
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Settings, Watching (header button; `Down`x6, `Up`x6, `Right,Right,Left,Left,Down,Down,Up,Up`), 3 runs | `main` | 17 ms | 33 ms | 5, 5, 2 | 5-8 MB |
+| | branch | 17 ms | 33-50 ms | 10, 1, 4 | 6-7 MB |
+| Settings, tabs only (`Right`x5 to Appearance, `Left`x5), 4 runs on main, 6 on the branch | `main` | 17 ms | 50-67 ms | 13, 3, 5, 6 | 5-8 MB |
+| | branch | 17 ms | 50 ms | 6, 5, 9, 8, 6, 6 | 6 MB |
+| Settings, Appearance (`Right`x5, `Down,Down,Up,Up`, `Left`x5), 4 runs each | `main` | 17 ms | 50 ms | 7, 6, 6, 6 | 5 MB |
+| | branch | 17 ms | 50-67 ms | 12, 6, 8, 8 | 6-7 MB |
+| Home cards from the Assistant card (`Right,Right,Right,Left,Left,Left` twice) | `main`, 3 runs | 33 ms | 83-100 ms | 24, 24, 25 | 6-8 MB |
+| | branch, 7 runs | 33 ms | 83-150 ms | 31, 29, 19, 25, 28, 24, 23 | 6-9 MB |
+
+- **Settings**: about one or two long frames more per walk on the branch, inside the spread between runs of the same
+  build (main's Appearance walk gave 3-5 in an earlier set of runs the same afternoon). Every change of tab redraws the
+  list and its preview on both builds; that is where these frames come from, not the tab row. Turning off the tabs'
+  clip (`.sg-tab` `overflow: hidden`, live on the TV) changed nothing (5-9). The tabs measure their labels once per
+  set of labels and type, never on a key.
+- **Preview memo**: on `main` the 25 Nov integration measured 3 long frames per Watching walk from the preview
+  redrawing on every key; here the branch gives 1 and 4 after the first walk. Not a clear win at this walk's size.
+- **Home**: the same within the spread (median 25 against 24). One frame of 1050 ms in one branch run, as the 25 Nov
+  integration saw once on its build; not seen again in the next four runs.
+- **Fonts**: only the face in use is fetched; with Grotesk, the default, nothing new loads. Not measured with
+  Condensed or Geometric picked.
+- Not measured: Reduce motion on, the Reduce motion preview looping by itself, Normal text size.
+
+Budget: +0.8 KB JS gzip (vite build 184.1 → 184.9 KB; deploy build with the keys 188.1 → 189.0 KB of 190 KB) and
++65 KB in the package (the two woff2 files).
