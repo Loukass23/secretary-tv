@@ -1,7 +1,5 @@
-// Ask Nest without the server (docs/launcher.md, "Ask Nest on the TV"): the same answers as the server's /ai/ask,
-// from @secretary/assistant's route(), with reminders kept on the TV and the lights through SmartThings from the TV.
-// With a server, Nest still asks it first (the phone companion shares its turns and reminders); this answers when
-// there is none or it is down.
+// Ask Nest on the TV (docs/launcher.md, "Ask Nest on the TV"): answers from @secretary/assistant's route(), with
+// reminders kept on the TV and the lights through SmartThings from the TV.
 import {
   discoverCatalog,
   type LightsCommand,
@@ -14,7 +12,6 @@ import type { AssistantState, AssistantTurn } from "./assistant.ts";
 import type { Reminder } from "./apps.ts";
 
 const REMINDERS_KEY = "nest.reminders";
-/** As many turns as the server keeps. */
 const MAX_TURNS = 8;
 const MAX_REMINDERS = 30;
 
@@ -23,7 +20,7 @@ export interface KeyValue {
   setItem(k: string, v: string): void;
 }
 
-/** Reminders kept on this TV (source "local"), next to the server's when there is one. */
+/** Reminders kept on this TV (source "local"), next to the server's while row 3 remains. */
 export function localReminders(store: KeyValue) {
   const load = (): Reminder[] => {
     try {
@@ -71,16 +68,16 @@ const find = (f: typeof fetch) => async (intent: { term?: string; kind?: SearchR
     ? (await searchCatalogs(intent.term, f)).filter((x) => !intent.kind || x.type === intent.kind)
     : discoverCatalog(intent.kind, intent.genre, f);
 
-/** Answers on the TV and keeps its own turns, shaped like the server's /ai/state. */
+/** Answers on the TV and keeps the conversation's recent turns. */
 export function localBrain(opts: LocalBrainOptions) {
   const f = opts.fetch ?? fetch;
   const turns: AssistantTurn[] = [];
   let rev = 0;
-  // Below the server's ids, so the two never collide when Nest shows both.
-  let nextId = -1;
+  // Positive and increasing, so `lastAnswer.id > since` shows each new turn after the assistant is entered.
+  let nextId = 1;
 
   const note = (prompt: string, reply: string, action: string, extra: Partial<AssistantTurn> = {}): AssistantTurn => {
-    const turn: AssistantTurn = { id: nextId--, prompt, reply, action, source: "tv", at: Date.now(), ...extra };
+    const turn: AssistantTurn = { id: nextId++, prompt, reply, action, source: "tv", at: Date.now(), ...extra };
     turns.push(turn);
     if (turns.length > MAX_TURNS) turns.shift();
     rev++;
@@ -107,7 +104,7 @@ export function localBrain(opts: LocalBrainOptions) {
       }
     },
     state(): AssistantState {
-      return { rev, pending: null, turns: [...turns] };
+      return { rev, turns: [...turns] };
     },
   };
 }
@@ -116,14 +113,3 @@ export type LocalBrain = ReturnType<typeof localBrain>;
 
 /** A failure whose message is fit to show on the TV as the answer. */
 export class NestError extends Error {}
-
-/** Both conversations, the server's and the TV's own, in the order they happened. */
-export function mergeTurns(server: AssistantState | null, local: AssistantState): AssistantState {
-  if (!server) return local;
-  if (!local.turns.length) return server;
-  return {
-    rev: server.rev * 1000 + local.rev,
-    pending: server.pending,
-    turns: [...server.turns, ...local.turns].sort((a, b) => a.at - b.at).slice(-MAX_TURNS),
-  };
-}

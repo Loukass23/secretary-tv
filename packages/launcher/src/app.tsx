@@ -30,11 +30,7 @@ import {
 } from "./apps.ts";
 import {
   artProxy,
-  askNest,
-  type AssistantState,
   type AssistantTurn,
-  CHIPS,
-  fetchAssistant,
   fetchWeather,
   THEME_PREFS,
   type ThemePref,
@@ -42,14 +38,13 @@ import {
   flipTheme,
   ripplePrompt,
   themePrompt,
-  transcribeClip,
   VoiceError,
   WAVE_STATUS,
   briefing,
   waveState,
   type Weather,
 } from "./assistant.ts";
-import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
+import { localBrain, localReminders, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY, YOUTUBE_APP_ID } from "./config.ts";
 import { alertsShown, mayListen, remindersShown, speaksReply } from "./features.ts";
@@ -134,8 +129,7 @@ import { AssistantUnavailable, discoverCatalog, findCatalogs, transcribeGroq, sp
 
 const EXIT_WINDOW_MS = 2000;
 const THEME_KEY = "nest.theme";
-/** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
-const ASSISTANT_POLL_MS = 2500;
+const VOICE_KEYS = { listen: Boolean(GEMINI_KEY || GROQ_KEY), speak: Boolean(GEMINI_KEY) };
 /** Open-Meteo updates every 15 min; the header has no need to be fresher than half an hour. */
 const WEATHER_POLL_MS = 30 * 60_000;
 /** Answers and home alerts in the Recent row, newest first. */
@@ -390,7 +384,6 @@ export function App() {
   /** The picture mode Nest last set (kept across restarts): SmartThings' own status for it is stale on this TV. */
   const [pictureSet, setPictureSet] = useState<string | null>(() => lastPictureMode() ?? null);
   const [time, setTime] = useState(clock);
-  const [assistant, setAssistant] = useState<AssistantState | null>(null);
   const [asking, setAsking] = useState(false);
   const [listening, setListening] = useState(false);
   const [answered, setAnswered] = useState(false);
@@ -412,8 +405,6 @@ export function App() {
   /** No room microphone (or no transcription): the mic key opens the TV keyboard, as before. */
   const keyboardOnly = useRef(false);
   const [glow, setGlow] = useState<string | undefined>();
-  /** The newest turn already handled; undefined until the first poll, whose turns are history. */
-  const lastTurn = useRef<number>();
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
   const [devices, setDevices] = useState<StDevice[]>([]);
   const [scenes, setScenes] = useState<StScene[]>([]);
@@ -451,7 +442,7 @@ export function App() {
       }),
     [],
   );
-  const [localState, setLocalState] = useState(() => brain.state());
+  const [talk, setTalk] = useState(() => brain.state());
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -508,12 +499,9 @@ export function App() {
     setAnswered(true);
     clearTimeout(speakTimer.current);
     speakTimer.current = setTimeout(() => setAnswered(false), SPEAK_MS);
-    // What was asked moves the view to the card concerned, unless the chat has the whole screen or the phone asked.
-    showTurn(turn, turn.source !== "companion" && focusRef.current.area !== "chat");
-    if (turn.action === "reminder_added") {
-      setLocalItems(localRem.list());
-      if (SERVER_URL) fetchReminders(SERVER_URL).then(applyReminders, () => {});
-    }
+    // What was asked moves the view to the card concerned, unless the chat has the whole screen.
+    showTurn(turn, focusRef.current.area !== "chat");
+    if (turn.action === "reminder_added") setLocalItems(localRem.list());
   };
 
   /** What an answer is about: films it recommends open the Cinema card (or Shows, Anime), the weather opens its card, and so on. */
@@ -532,24 +520,13 @@ export function App() {
     else if (here && turn.action === "reminder_added") setGoto({ key: "reminders", inside: true });
   }
 
-  /** An answer from the TV's own assistant. */
+  /** An answer from the TV's assistant. */
   const showLocal = (turn: AssistantTurn) => {
-    setLocalState(brain.state());
+    setTalk(brain.state());
     onNewTurn(turn);
   };
 
-  const applyAssistant = (st: AssistantState) => {
-    setAssistant((prev) => (prev && prev.rev === st.rev ? prev : st));
-    const last = st.turns[st.turns.length - 1];
-    if (lastTurn.current === undefined) {
-      lastTurn.current = last?.id ?? 0;
-    } else if (last && last.id > lastTurn.current) {
-      lastTurn.current = last.id;
-      onNewTurn(last);
-    }
-  };
-
-  /** Asks the server; `spoken` prompts get their answer read aloud too, unless replies are muted. */
+  /** Asks the assistant on the TV; `spoken` prompts get their answer read aloud too, unless replies are muted. */
   const send = async (prompt: string, spoken = false) => {
     const pref = themePrompt(prompt);
     if (pref) return pickTheme(pref);
@@ -559,7 +536,7 @@ export function App() {
       flash(rippleStyle === "launch" ? "✨ Launch ripple" : "✨ Open ripple");
       return void playRippleTest(rippleStyle).catch(() => flash("SmartThings didn't take that; try again"));
     }
-    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no server or Gemini.
+    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no Gemini.
     const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes, independentLights()) : null;
     if (act) {
       flash(act.reply);
@@ -575,28 +552,12 @@ export function App() {
       return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
     }
     setAsking(true);
-    const wantSpeech = speaksReply(prefs, spoken);
-    let speech: string | Uint8Array | null | undefined;
+    const wantSpeech = speaksReply(prefs, spoken, VOICE_KEYS.speak);
+    let speech: Uint8Array | null | undefined;
     try {
-      // The server first when it is up (the phone shares its turns and reminders), else the TV answers itself.
-      let reply: string | undefined;
-      if (SERVER_URL && serverOnline) {
-        try {
-          ({ reply, speech } = await askNest(SERVER_URL, prompt, fetch, wantSpeech));
-          applyAssistant(await fetchAssistant(SERVER_URL));
-        } catch {
-          reply = undefined;
-        }
-      }
-      if (reply === undefined) {
-        const turn = await brain.ask(prompt);
-        reply = turn.reply;
-        showLocal(turn);
-      }
-      if (wantSpeech && !speech && GEMINI_KEY) {
-        const wav = await speakGemini(reply, GEMINI_KEY);
-        speech = wav;
-      }
+      const turn = await brain.ask(prompt);
+      showLocal(turn);
+      if (wantSpeech) speech = await speakGemini(turn.reply, GEMINI_KEY);
     } finally {
       setAsking(false);
     }
@@ -611,10 +572,10 @@ export function App() {
 
   /**
    * The mic key: a clip from the room microphone (docs/launcher.md, "Room microphone"), the key again to stop early.
-   * Falls back to the TV keyboard's dictation when the TV gives the app no microphone or the server cannot transcribe.
+   * Without a transcription key, or when the TV gives the app no microphone, it opens the TV keyboard instead.
    */
   const listen = async (auto = false) => {
-    if (!SERVER_URL && !GEMINI_KEY && !GROQ_KEY) return auto ? undefined : openAsk();
+    if (!mayListen(prefsRef.current, auto, VOICE_KEYS.listen)) return auto ? undefined : openAsk();
     if (recording.current) return recording.current.stop();
     if (opening.current) return;
     if (keyboardOnly.current) return auto ? undefined : openAsk();
@@ -639,13 +600,10 @@ export function App() {
     setAsking(true);
     let words = "";
     try {
-      words = GEMINI_KEY || GROQ_KEY ? await transcribeOnTv(clip) : await transcribeClip(SERVER_URL, clip);
+      words = await transcribeOnTv(clip);
     } catch (e) {
       const reason = e instanceof VoiceError ? e.reason : "failed";
-      if (reason === "unavailable") {
-        keyboardOnly.current = true;
-        flash("Voice needs a Gemini key on the server or in this build");
-      } else if (reason === "no-assistant") {
+      if (reason === "no-assistant") {
         flash("No assistant connected: check the API key");
       } else {
         flash(reason === "no-speech" ? "Couldn't hear anything" : "Couldn't reach the assistant");
@@ -682,6 +640,7 @@ export function App() {
   };
 
   const toggleSpeech = () => {
+    if (!VOICE_KEYS.speak) return flash("Spoken replies need NEST_GEMINI_API_KEY in this build");
     const next = !speakReplies;
     // A setting now (Settings › Home screen); saving also keeps the old nest.speak key in step.
     saveHome({ spokenReplies: next });
@@ -701,7 +660,7 @@ export function App() {
     if (!opened) {
       setListening(false);
       flash(SERVER_URL ? `No TV keyboard here: ask from your phone at ${SERVER_URL}/companion` : "No TV keyboard here");
-    } else {
+    } else if (VOICE_KEYS.listen) {
       flash("🎤 Listening");
     }
   };
@@ -894,18 +853,6 @@ export function App() {
     };
   }, [theme]);
 
-  // What the assistant is doing, while the home screen is up: prompts from the phone show here too.
-  useEffect(() => {
-    if (view !== "home" || !SERVER_URL) return;
-    const poll = () => {
-      if (document.visibilityState === "hidden") return;
-      fetchAssistant(SERVER_URL).then(applyAssistant, () => {});
-    };
-    poll();
-    const t = setInterval(poll, ASSISTANT_POLL_MS);
-    return () => clearInterval(t);
-  }, [view]);
-
   // Weather straight from the TV (the SmartThings home, else the build's place); the server's only as a last resort.
   useEffect(() => {
     const get = async () => {
@@ -1009,8 +956,6 @@ export function App() {
     };
   }, []);
 
-  // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
-  const talk = mergeTurns(assistant, localState);
   // Recent: the assistant's latest answers and the home's latest news, newest first, then Continue Watching.
   // The same prompt asked again shows once, as its newest answer.
   const recentTurns = talk.turns
@@ -1035,7 +980,7 @@ export function App() {
   // answer rises in the Ask panel on its own (docs/performance.md, "Voice").
   const [recent, setRecent] = useState<RecentCard[]>(latest);
   const latestKey = latest.map((c) => c.key).join();
-  const idle = !listening && !asking && !answered && !talk.pending;
+  const idle = !listening && !asking && !answered;
   useEffect(() => {
     if (idle) setRecent(latest);
   }, [latestKey, idle]);
@@ -1133,6 +1078,7 @@ export function App() {
         : []),
       accountsTab(),
     ],
+    voice: VOICE_KEYS,
     // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
     apps: appsOnCard(apps, [], OWN_PLACES).map((a) => ({
       id: a.id,
@@ -1512,7 +1458,7 @@ export function App() {
       ...g.__sectv,
       continueItems,
       reminders,
-      assistant,
+      assistant: talk,
       // spoken: the reply is read aloud as after a voice prompt (Gemini speech, envelope, playback).
       ask: (q: string, spoken = false) => send(q, spoken),
       // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
@@ -1522,14 +1468,14 @@ export function App() {
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => openSearch(q),
     };
-  }, [continueItems, reminders, assistant]);
+  }, [continueItems, reminders, talk]);
 
 
   const menuItems = [
     cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
     "TV settings",
     THEME_LABEL[themePref],
-    speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off",
+    ...(VOICE_KEYS.speak ? [speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off"] : []),
   ];
   // A media card is open while the remote is inside it: its row of titles takes the width.
   const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
@@ -1551,7 +1497,7 @@ export function App() {
   useEffect(() => {
     if (!talking || view !== "home") return;
     setSince(talk.turns[talk.turns.length - 1]?.id ?? 0);
-    if (mayListen(prefs, true) && !recording.current && !keyboardOnly.current && (SERVER_URL || GEMINI_KEY || GROQ_KEY)) void listen(true);
+    if (mayListen(prefs, true, VOICE_KEYS.listen) && !recording.current && !keyboardOnly.current) void listen(true);
     return () => recording.current?.cancel();
   }, [talking, view, prefs.listenOnFocus]);
 
@@ -1933,15 +1879,14 @@ export function App() {
   ];
 
   const lastAnswer = talk.turns[talk.turns.length - 1];
-  const pending = talk.pending;
-  const wave = waveState({ listening, asking, pending: Boolean(pending), answered });
+  const wave = waveState({ listening, asking, answered });
   // An answer from before the assistant was entered is not shown again in it.
-  const stale = !pending && (lastAnswer?.id ?? 0) <= since;
+  const stale = (lastAnswer?.id ?? 0) <= since;
   const askView = {
     wave,
-    status: WAVE_STATUS[wave] || (lastAnswer?.source === "companion" ? "From your phone" : ""),
-    prompt: listening || stale ? undefined : (pending?.prompt ?? lastAnswer?.prompt),
-    reply: pending || stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
+    status: WAVE_STATUS[wave],
+    prompt: listening || stale ? undefined : lastAnswer?.prompt,
+    reply: stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
     turnId: lastAnswer?.id ?? 0,
     focused: focus.area === "ask",
     full: focus.area === "chat",

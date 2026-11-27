@@ -2,11 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { briefing, flipTheme, ripplePrompt, themeFor, themePrompt, waveState } from "../src/assistant.ts";
 
-test("the wave follows the keyboard, the request and the answer", () => {
-  const none = { listening: false, asking: false, pending: false, answered: false };
+test("the wave follows the microphone, the request and the answer", () => {
+  const none = { listening: false, asking: false, answered: false };
   assert.equal(waveState(none), "idle");
-  assert.equal(waveState({ ...none, listening: true, pending: true }), "listening");
-  assert.equal(waveState({ ...none, pending: true }), "thinking");
+  assert.equal(waveState({ ...none, listening: true, asking: true }), "listening");
+  assert.equal(waveState({ ...none, asking: true }), "thinking");
   assert.equal(waveState({ ...none, asking: true, answered: true }), "thinking");
   assert.equal(waveState({ ...none, answered: true }), "speaking");
 });

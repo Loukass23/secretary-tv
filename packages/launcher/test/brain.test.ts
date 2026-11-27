@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { localBrain, localReminders, mergeTurns, NestError } from "../src/brain.ts";
+import { localBrain, localReminders, NestError } from "../src/brain.ts";
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -24,7 +24,7 @@ test("reminders on the TV: add, toggle, survive a reload", () => {
   assert.deepEqual(localReminders(store).list(), []);
 });
 
-test("the TV answers with no server and keeps the turns", async () => {
+test("the TV answers directly and gives each new turn a higher positive id", async () => {
   const rem = localReminders(memory());
   const brain = localBrain({
     reminders: rem,
@@ -41,16 +41,10 @@ test("the TV answers with no server and keeps the turns", async () => {
   // The catalogs are unreachable: the watch answer says so instead of failing.
   assert.equal((await brain.ask("show me a comedy")).reply, "I couldn't find anything for comedy films and series.");
   const st = brain.state();
-  assert.equal(st.turns.length, 3);
-  assert.ok(st.turns.every((t) => t.id < 0 && t.source === "tv"));
-  assert.equal(brain.note("couch light off", "Turning off Couch.", "domotics_updated").id, -4);
-});
-
-test("server and TV turns merge in time order", () => {
-  const turn = (id: number, at: number) => ({ id, prompt: "", reply: "", action: "briefing", source: "tv" as const, at });
-  const server = { rev: 2, pending: null, turns: [turn(1, 10), turn(2, 30)] };
-  const local = { rev: 1, pending: null, turns: [turn(-1, 20)] };
-  assert.deepEqual(mergeTurns(server, local).turns.map((t) => t.id), [1, -1, 2]);
-  assert.equal(mergeTurns(null, local), local);
-  assert.equal(mergeTurns(server, { rev: 0, pending: null, turns: [] }), server);
+  assert.deepEqual(
+    st.turns.map((t) => t.id),
+    [1, 2, 3],
+  );
+  assert.ok(st.turns.every((t) => t.source === "tv"));
+  assert.equal(brain.note("couch light off", "Turning off Couch.", "domotics_updated").id, 4);
 });
