@@ -19,7 +19,7 @@ test("eval fixture covers 50+ prompts across every AskAction and near misses", (
   const actions = new Set<AskAction>(EVAL_PROMPTS.map((c) => c.expectedAction));
   assert.deepEqual(
     [...actions].sort(),
-    ["briefing", "domotics_updated", "reminder_added", "title_info", "watch", "weather"],
+    ["briefing", "domotics_updated", "mylist_updated", "reminder_added", "resume", "title_info", "watch", "weather"],
   );
   assert.ok(EVAL_PROMPTS.filter((c) => c.nearMiss).length >= 5);
   assert.ok(EVAL_PROMPTS.filter((c) => c.freeText).length >= 8);
@@ -57,6 +57,9 @@ test("every eval prompt routes offline to its expected action and payload", asyn
         spoilerMode: "blur",
         nextEpisode: { label: "S1 · E2", name: "Half Loop", overview: "Secret plot.", unwatched: true },
       }),
+      continueWatching: () => [{ type: "series", title: { id: "tt11280740", name: "Severance", year: "2022", rating: "8.7" } }],
+      myList: () => [{ type: "movie", title: { id: "tt1160419", name: "Dune", year: "2021", rating: "8.0" } }],
+      setMyList: (want) => ({ name: "Dune", saved: want }),
       weather: async () => FORECAST,
       geminiKey: "k-test",
       fetch: fakeFetch,

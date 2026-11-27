@@ -243,6 +243,10 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Is it any good?", expectedAction: "title_info" },
   { prompt: "Catch me up", expectedAction: "title_info" },
   { prompt: "What's the next episode about?", expectedAction: "title_info" },
+  { prompt: "What was I watching?", expectedAction: "watch", expectedQuery: "Continue watching" },
+  { prompt: "Resume Severance", expectedAction: "resume", expectedQuery: "“Severance”" },
+  { prompt: "Show my list", expectedAction: "watch", expectedQuery: "My List" },
+  { prompt: "Add this to My List", expectedAction: "mylist_updated" },
 
   // 6. Free-text / briefing prompts (8)
   { prompt: "Briefing", expectedAction: "briefing", freeText: true },

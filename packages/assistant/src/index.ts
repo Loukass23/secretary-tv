@@ -2,6 +2,7 @@ export * from "./base64.ts";
 export * from "./gemini.ts";
 export * from "./groq.ts";
 export * from "./intent.ts";
+export * from "./library-intent.ts";
 export * from "./reminder.ts";
 export * from "./route.ts";
 export * from "./routine.ts";

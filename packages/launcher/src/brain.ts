@@ -3,6 +3,7 @@
 import {
   discoverCatalog,
   type FocusedTitleContext,
+  type LibraryEffects,
   type LightsCommand,
   route,
   searchCatalogs,
@@ -83,7 +84,7 @@ export function localReminders(store: KeyValue) {
 
 export type LocalReminders = ReturnType<typeof localReminders>;
 
-export interface LocalBrainOptions {
+export interface LocalBrainOptions extends LibraryEffects {
   reminders: LocalReminders;
   /** Runs a lights command on SmartThings; throws when this TV has no SmartThings. */
   lights(cmd: LightsCommand): Promise<unknown>;
@@ -128,6 +129,9 @@ export function localBrain(opts: LocalBrainOptions) {
           lights: opts.lights,
           find: find(f),
           focusedTitle: opts.focusedTitle,
+          continueWatching: opts.continueWatching,
+          myList: opts.myList,
+          setMyList: opts.setMyList,
           weather: opts.weather,
           now: opts.now,
           geminiKey: opts.geminiKey,

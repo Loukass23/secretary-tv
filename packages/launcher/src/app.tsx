@@ -435,8 +435,8 @@ export function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   /** What the TV's own assistant reads when it answers: the latest devices, scenes, forecast and focused title. */
   const lastFocusedTarget = useRef<{ type: CatalogKind; title: SlimTitle } | null>(null);
-  const live = useRef({ devices, scenes, weather, continueItems });
-  live.current = { devices, scenes, weather, continueItems };
+  const live = useRef({ devices, scenes, weather, continueItems, myList });
+  live.current = { devices, scenes, weather, continueItems, myList };
   const readFocusedTitle = async (): Promise<FocusedTitleContext | null> => {
     const pick =
       lastFocusedTarget.current ??
@@ -505,6 +505,18 @@ export function App() {
         reminders: localRem,
         lights: (cmd) => runLights(cmd, live.current.devices, live.current.scenes),
         focusedTitle: readFocusedTitle,
+        continueWatching: () => live.current.continueItems.map((e) => ({ type: e.type, title: e.title })),
+        myList: () =>
+          [...live.current.myList]
+            .sort((a, b) => b.addedAt - a.addedAt)
+            .map((l) => ({ type: l.type, title: l.title })),
+        setMyList: (wantSaved) => {
+          const pick = lastFocusedTarget.current;
+          if (!pick) return null;
+          const currently = inLibrary(pick.type, pick.title.id);
+          if (currently !== wantSaved) toggleLibrary(pick.type, pick.title);
+          return { name: pick.title.name, saved: wantSaved, item: { type: pick.type, title: pick.title } };
+        },
         weather: async () => live.current.weather,
         geminiKey: GEMINI_KEY,
       }),
@@ -584,7 +596,12 @@ export function App() {
         if (good.length && good.length < items.length) setFound((f) => (f && f.prompt === turn.prompt && f.reply === turn.reply ? { ...f, items: good } : f));
       });
       if (m && here) setGoto({ key: m.key, inside: true });
-    } else if (here && turn.action === "title_info" && turn.results?.[0]) {
+    } else if (here && turn.action === "resume" && turn.results?.[0]) {
+      const hit = turn.results[0];
+      const inProgress = live.current.continueItems.find((e) => e.title.id === hit.title.id);
+      if (inProgress) resume(inProgress);
+      else openHit(hit);
+    } else if (here && (turn.action === "title_info" || turn.action === "mylist_updated") && turn.results?.[0]) {
       const m = MEDIA.find((k) => k.kind === turn.results![0].type);
       if (m && focusRef.current.area !== "row") setGoto({ key: m.key, inside: false });
     } else if (here && turn.action === "weather") setGoto({ key: "weather", inside: true });
@@ -1683,8 +1700,8 @@ export function App() {
     if (card.kind === "alert") return homeConfigured() ? void setView("lights") : undefined;
     const turn = talk.turns.find((t) => `t${t.id}` === card.key);
     if (!turn) return;
-    if (turn.action === "watch" || turn.action === "weather") return showTurn(turn, true);
-    if (turn.action === "title_info" && turn.results?.[0]) return openHit(turn.results[0]);
+    if (turn.action === "watch" || turn.action === "weather" || turn.action === "resume") return showTurn(turn, true);
+    if ((turn.action === "title_info" || turn.action === "mylist_updated") && turn.results?.[0]) return openHit(turn.results[0]);
     if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
     if (turn.action === "reminder_added") return focusReminders(reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text)));
     void send(turn.prompt);

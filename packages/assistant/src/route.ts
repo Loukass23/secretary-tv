@@ -3,17 +3,26 @@
 // TV (local reminders, SmartThings straight from the TV) answer the same way.
 import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
+import { type LibraryEffects, parseLibraryIntent, runLibraryIntent } from "./library-intent.ts";
 import { parseReminder } from "./reminder.ts";
 import { parseRoutine, runRoutine } from "./routine.ts";
 import { answerTitleQuestion, type FocusedTitleContext, parseTitleQuestion } from "./title-qa.ts";
 import type { SearchResult } from "./types.ts";
 import { glyphLabel, isWetGlyph, type Weather } from "./weather.ts";
 
-export type AskAction = "reminder_added" | "domotics_updated" | "briefing" | "watch" | "weather" | "title_info";
+export type AskAction =
+  | "reminder_added"
+  | "domotics_updated"
+  | "briefing"
+  | "watch"
+  | "weather"
+  | "title_info"
+  | "resume"
+  | "mylist_updated";
 
 export type LightsCommand = { scene: "cinema" | "warm" | "off" | "music" } | { level: number };
 
-export interface Effects {
+export interface Effects extends LibraryEffects {
   addReminder(text: string, due?: string, dueAt?: number): unknown;
   /** Open reminders' text, for the briefing. */
   openReminders(): string[];
@@ -135,6 +144,24 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
       };
     }
     return answerTitleQuestion(titleQ, ctx, { geminiKey: fx.geminiKey, fetch: fx.fetch });
+  }
+
+  // 1d. Continue Watching and My List ("what was I watching?", "resume Severance", "show my list", "add this to My List").
+  const lib = parseLibraryIntent(clean);
+  if (lib) {
+    const answered = await runLibraryIntent(lib, fx);
+    if (answered) return answered;
+    // "resume <title>" for a title not in progress falls back to a catalog search when `find` is wired.
+    if (lib.kind === "resume_named" && fx.find) {
+      const query = `“${lib.term}”`;
+      const results = await fx.find({ term: lib.term }).catch(() => [] as SearchResult[]);
+      return {
+        reply: results.length ? `Here is what I found for ${query}.` : `I couldn't find anything for ${query}.`,
+        action: "watch",
+        query,
+        results,
+      };
+    }
   }
 
   // 2. Something to watch: "show me a comedy", "play dune", "something for tonight".

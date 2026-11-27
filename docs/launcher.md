@@ -324,9 +324,11 @@ last 8 turns in memory with no server call:
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
 - **Routines** ("goodnight", "movie night", "good morning") combine effects in one answer: "goodnight" turns the lights
   off, reads tomorrow's forecast and counts open reminders; "movie night" sets Cinema lights and opens tonight's films.
-- **Watch prompts and the search** ask the catalogs straight from the TV. Pressing **Recommend me** on an opened media
-  card's end bar (`src/recommend.ts`) scores genres from Continue Watching and My List first (leaving out watched and
-  dismissed titles) and writes a one-line reason beside the orb ("Because you watched Severance · Sci-Fi").
+- **Watch prompts and the search** ask the catalogs straight from the TV; "what was I watching?", "resume Severance",
+  "show my list" and "add this to My List" act on Continue Watching and My List directly without a model call. Pressing
+  **Recommend me** on an opened media card's end bar (`src/recommend.ts`) scores genres from Continue Watching and My
+  List first (leaving out watched and dismissed titles) and writes a one-line reason beside the orb ("Because you watched
+  Severance · Sci-Fi").
 - **Title questions** ("what's this about?", "is it any good?", "who's in this?", "catch me up", "what's the next
   episode about?") answer about the focused card or tile from catalog metadata (`packages/assistant/src/title-qa.ts`),
   even without Gemini, and strip unwatched episode synopses beforehand whenever Settings › Watching › Spoiler protection
