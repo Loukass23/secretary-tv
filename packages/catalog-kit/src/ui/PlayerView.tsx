@@ -1,5 +1,5 @@
 import { mark, measure, useKeys } from "@secretary/tv-kit";
-import { Glass, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
+import { ButtonRow, Glass, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
 import { LoadingScreen } from "./Loading.tsx";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { SkipSource, tryInOrder } from "../lib/autopick.ts";
@@ -7,10 +7,10 @@ import { backgroundUrl } from "../lib/cinemeta.ts";
 import { episodeLabel } from "../lib/episodes.ts";
 import { addons, loadDebrid, playable } from "../lib/plugins.ts";
 import { saveProgress } from "../lib/resume.ts";
-import { logoUrl, pauseFacts, pausePanelShown } from "../lib/pausepanel.ts";
+import { endsAtLabel, logoUrl, pauseFacts, pausePanelShown } from "../lib/pausepanel.ts";
 import { setNowPlaying } from "./ControlCentre.tsx";
 import { creditsStart, pillAt, type Segment, segmentKey } from "../lib/skip.ts";
-import { cardAt, type Countdown, countdownSec, durationWatch, prefetchAt, STABLE_MS } from "../lib/upnext.ts";
+import { atEnd, cardAt, type Countdown, countdownSec, durationWatch, prefetchAt, STABLE_MS, stepCard } from "../lib/upnext.ts";
 import { checkFailure, failureReason, worthProbing } from "../lib/failures.ts";
 import { checkSource, createVerifier, safeToCheck } from "../lib/verify.ts";
 import { parseStreamInfo, type Stream } from "../lib/streams.ts";
@@ -24,6 +24,9 @@ import { createFollower, type PartyPlayer } from "../lib/partyplay.ts";
 import { PartyOverlay, partyLine, usePartyView } from "./PartyOverlay.tsx";
 import { PlayerMenu } from "./PlayerMenu.tsx";
 import { PauseMenu } from "./PauseMenu.tsx";
+import { PlayerSources } from "./PlayerSources.tsx";
+import { switchedStreams } from "../lib/playersources.ts";
+import type { SheetOrder } from "./sheet.ts";
 import { type PauseAction, pauseActions, pauseMenuShown, stepPause } from "../lib/pausemenu.ts";
 import { type MenuPage, type MenuRow, type PlayerRoom } from "../lib/playermenu.ts";
 import type { Subtitle } from "../lib/addons.ts";
@@ -85,6 +88,17 @@ interface Props {
   subLangs?: string[];
   /** The room's lights and scenes, offered in the options menu when Nest gave this app a grant. */
   room?: PlayerRoom;
+  /** This title's or episode's sources, for the pause menu's Sources; without it (and onSwitchSource) there is none. */
+  findSources?(): Promise<Stream[]>;
+  /**
+   * A source picked in the player's sheet: this player has saved its place and stopped; the app opens a new one on
+   * `streams` (the pick first) at `startSec`.
+   */
+  onSwitchSource?(streams: Stream[], startSec: number): void;
+  /** Settings › Playback "Sources sheet order" (ui/sheet.ts). */
+  sheetOrder?: SheetOrder;
+  /** Settings › General clock format, for the pause screen's "Ends at". */
+  clockFormat?: "24h" | "12h";
 }
 
 const clock = (sec: number) => {
@@ -113,6 +127,10 @@ export function PlayerView({
   audioLangs = [],
   subLangs: settingsSubLangs,
   room,
+  findSources,
+  onSwitchSource,
+  sheetOrder,
+  clockFormat = "24h",
 }: Props) {
   if (party) {
     autoSkip = false;
@@ -123,9 +141,12 @@ export function PlayerView({
   const cancelled = useRef(false);
   /** The source that is playing, for Next. */
   const playingSource = useRef<Stream | undefined>(undefined);
-  // The Up next card (lib/upnext.ts): the duration must hold still first; Back hides the card for this episode.
+  // The Up next card (lib/upnext.ts): the duration must hold still first. Cancel (or Back) hides the card for this
+  // episode and nothing plays by itself at its end; the card's focused button is Play now or Cancel.
   const durStable = useRef(durationWatch());
   const [cardHidden, setCardHidden] = useState(false);
+  const nextCancelled = useRef(false);
+  const [cardFocus, setCardFocus] = useState(0);
   /** Moving on to the next episode, by the card or by the end of this one: only once. */
   const movingOn = useRef(false);
   const goNextRef = useRef<() => void>(() => {});
@@ -172,6 +193,9 @@ export function PlayerView({
   };
   /** The pause menu's focused button. */
   const [pauseAt, setPauseAt] = useState(0);
+  // The sources sheet (ui/PlayerSources.tsx), from the pause menu: the list, null while it is looked up.
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourceList, setSourceList] = useState<Stream[] | null | "error">(null);
   const [, setMenuTick] = useState(0);
   // Subtitles from addons, drawn by the page (lib/subtitles.ts): the list, the one showing, its cues, size and delay.
   const [subList, setSubList] = useState<Subtitle[] | null>(null);
@@ -231,7 +255,7 @@ export function PlayerView({
         ended.current = true;
         // Together, the end only moves the room on when this TV may command; the others wait for its `next`.
         if (party && togetherNow.current) return void (next && party.canControl() && goNextRef.current());
-        if (!next) {
+        if (atEnd({ hasNext: Boolean(next), cancelled: nextCancelled.current, countdown }) === "exit") {
           const dur = player.current?.duration() ?? 0;
           saveProgress(type, title, episode, dur, dur, next);
           return onExit();
@@ -419,7 +443,11 @@ export function PlayerView({
   const panelShown = pausePanelShown({ enabled: pausePanel, playing, pausedAt, lastKeyAt: lastKeyAt.current, now: Date.now() });
   // The pause menu (ui/PauseMenu.tsx) replaces the panel: it shows as soon as playback pauses, with the Pause panel on.
   const pauseShown = pauseMenuShown({ enabled: pausePanel, started, playing, together });
-  const pauseButtons: PauseAction[] = pauseActions({ next: Boolean(next), picture: Boolean(player.current?.setAspect) });
+  const pauseButtons: PauseAction[] = pauseActions({
+    next: Boolean(next),
+    picture: Boolean(player.current?.setAspect),
+    sources: Boolean(findSources && onSwitchSource),
+  });
   useEffect(() => {
     if (pauseShown) setPauseAt(0);
   }, [pauseShown]);
@@ -437,16 +465,56 @@ export function PlayerView({
     } else if (a === "next") goNextRef.current();
     else if (a === "subs") openMenu("subs");
     else if (a === "audio") openMenu("audio");
+    else if (a === "sources") openSources();
     else if (a === "picture") menuPick("top", { id: "aspect", label: "Picture" }, 1);
+  };
+  /** Sources from the pause menu: the sheet opens at once and fills when the search answers (usually from its cache). */
+  const openSources = () => {
+    if (!findSources) return;
+    mark("sources-open");
+    setSourceList(null);
+    setSourcesOpen(true);
+    findSources().then(
+      (found) => {
+        if (cancelled.current) return;
+        // The one playing stays listed even when the search no longer returns it.
+        const now = playingSource.current;
+        setSourceList(now && !found.some((s) => s.url === now.url) ? [now, ...found] : found);
+        mark("sources-list");
+        measure("sources-list", "sources-open", "sources-list");
+      },
+      (err) => {
+        console.warn("[player] sources", err);
+        if (!cancelled.current) setSourceList("error");
+      },
+    );
+  };
+  /**
+   * A pick in the sheet: the place is saved, this player stops (one decoder), and the app reopens the player on the pick
+   * at this second. The source playing now only closes the sheet.
+   */
+  const switchSource = (s: Stream) => {
+    setSourcesOpen(false);
+    const p = player.current;
+    if (!p || !onSwitchSource || !Array.isArray(sourceList) || s.url === playingSource.current?.url) return;
+    const at = p.position();
+    persist();
+    if (remember) sourcePrefs.remember("manual", title.id, s);
+    console.info(`[player] switching source at ${Math.round(at)} s`);
+    mark("ok");
+    cancelled.current = true;
+    p.stop();
+    player.current = null;
+    onSwitchSource(switchedStreams(s, sourceList), at);
   };
   // The logo is decoded before it shows, so the panel never paints a half-loaded image over the video.
   const logo = logoUrl(title.id);
   useEffect(() => {
-    if (!panelShown || !logo || logoReady) return;
+    if (!(panelShown || pauseShown) || !logo || logoReady) return;
     const img = new Image();
     img.src = logo;
     img.decode().then(() => setLogoReady(true), () => {});
-  }, [panelShown]);
+  }, [panelShown || pauseShown]);
 
   const pill = started ? pillAt(segments, time.pos, skipped) : null;
   /** One seek to the segment's end: AVPlay's seekTo blocks the page until it re-buffers, so never a series of them. */
@@ -492,6 +560,16 @@ export function PlayerView({
     setNowPlaying({ title: heading, badges: activeStreamInfo?.badges ?? [] });
     return () => setNowPlaying(null);
   }, [started, heading, activeIdx]);
+
+  useEffect(() => {
+    if (cardShown) setCardFocus(0);
+  }, [cardShown]);
+  /** Cancel on the card: it goes, and the end of this episode goes back to the title page. */
+  const cancelNext = () => {
+    nextCancelled.current = true;
+    setCardHidden(true);
+    console.info("[upnext] cancelled");
+  };
 
   // The countdown: when it runs out the next episode starts; hiding the card stops it.
   useEffect(() => {
@@ -599,7 +677,7 @@ export function PlayerView({
     }, PARTY_SEEK_SETTLE_MS);
   };
 
-  useKeys(!panelOpen && !menuOpen, (key) => {
+  useKeys(!panelOpen && !menuOpen && !sourcesOpen, (key) => {
     if (together) return partyKey(key);
     const p = player.current;
     // Paused, the pause menu takes the keys: Left and Right along its buttons, OK runs one, Up the options.
@@ -632,9 +710,12 @@ export function PlayerView({
     }
     // While the skip pill shows, OK skips the segment.
     if (pill && key === "Enter") return void skip(pill);
-    // While the Up next card shows: OK plays the next episode now, Back hides the card and keeps watching.
-    if (cardShown && key === "Enter") return void goNextRef.current();
-    if (cardShown && key === "Back") return void setCardHidden(true);
+    // While the Up next card shows: Left and Right between Play now and Cancel, OK runs one, Back cancels.
+    const card = cardShown ? stepCard(cardFocus, key) : null;
+    if (card) {
+      if ("at" in card) return void setCardFocus(card.at);
+      return void (card.run === "play" ? goNextRef.current() : cancelNext());
+    }
     if (key === "Back" || key === "Stop") {
       persist();
       onExit();
@@ -844,26 +925,34 @@ export function PlayerView({
       {cardShown && next && (
         // Over the video, like the controls: smoked glass, no frost. The countdown bar moves by transform.
         <GlassRoot mode="flat" class="ply-next-root">
-          <Glass x={1160} y={560} w={680} h={250} class="ply-next">
+          <Glass x={1060} y={500} w={780} h={310} class="ply-next">
             {next.thumbnail && <img class="ply-next-art" src={next.thumbnail} alt="" />}
             <div class="ply-next-text">
               <span class="ply-state">Up next</span>
               <span class="ply-title">{`${episodeLabel(next)} · ${next.name}`}</span>
-              <span class="ply-dim">{cardCount != null ? `Starts in ${cardCount} s` : ""}</span>
+              <span class="ply-dim">{cardCount != null ? `Starts in ${cardCount} s · Back cancels` : "Back cancels"}</span>
               {cardCount != null && (
                 <span class="ply-bar">
                   <i class="ply-count" style={{ animationDuration: `${cardCount}s` }} />
                 </span>
               )}
+              <ButtonRow
+                items={[
+                  { id: "play", label: "Play now", primary: true },
+                  { id: "cancel", label: "Cancel" },
+                ]}
+                focusIndex={cardFocus}
+              />
             </div>
           </Glass>
         </GlassRoot>
       )}
-      {pauseShown && !menuOpen && (
+      {pauseShown && !menuOpen && !sourcesOpen && (
         <PauseMenu
           logo={logo && logoReady ? logo : null}
           name={title.name}
-          episodeLine={pauseFacts(title, episode).episodeLine}
+          {...pauseFacts(title, episode, time.dur)}
+          endsAt={endsAtLabel(time.pos, time.dur, new Date(), clockFormat === "12h")}
           pos={time.pos}
           dur={time.dur}
           actions={pauseButtons}
@@ -907,6 +996,17 @@ export function PlayerView({
         <div class="ply-cap" style={{ fontSize: `${Math.round(38 * SUB_SIZES[subSize] / 100)}px` }}>
           {cap}
         </div>
+      )}
+      {sourcesOpen && (
+        <PlayerSources
+          streams={sourceList}
+          playing={Array.isArray(sourceList) ? sourceList.find((s) => s.url === playingSource.current?.url) : undefined}
+          heading={episode ? `${episodeLabel(episode)} ${episode.name}` : title.name}
+          order={sheetOrder}
+          isLow={(s) => deadLinks.get(s) != null}
+          onPick={switchSource}
+          onClose={() => setSourcesOpen(false)}
+        />
       )}
       {started && (
         <PlayerMenu open={menuOpen} start={menuStart} pageOf={menuPage} heading={heading} onPick={menuPick} onClose={() => setMenuOpen(false)} />

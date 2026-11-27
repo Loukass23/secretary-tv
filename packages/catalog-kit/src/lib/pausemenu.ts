@@ -1,18 +1,31 @@
 // The pause menu (ui/PauseMenu.tsx): what paused playback offers, in the order the buttons run. Pure, so it is tested.
 import { pausePanelShown } from "./pausepanel.ts";
 
-export type PauseAction = "play" | "restart" | "next" | "subs" | "audio" | "picture";
+export type PauseAction = "play" | "restart" | "next" | "subs" | "audio" | "sources" | "picture";
 
 export interface PauseOffer {
   /** The episode after this one, when there is one. */
   next: boolean;
   /** The player can switch the picture's fit (AVPlay). */
   picture: boolean;
+  /** Another source can be picked from inside the player (not watching together: the room plays one release). */
+  sources?: boolean;
 }
 
-/** The buttons: Play, Restart, Next episode (a show with one after), Subtitles, Audio, Picture (where it can change). */
+/**
+ * The buttons: Play, Restart, Next episode (a show with one after), Subtitles, Audio, Sources (where the player can
+ * switch), Picture (where it can change).
+ */
 export function pauseActions(o: PauseOffer): PauseAction[] {
-  return ["play", "restart", ...(o.next ? (["next"] as const) : []), "subs", "audio", ...(o.picture ? (["picture"] as const) : [])];
+  return [
+    "play",
+    "restart",
+    ...(o.next ? (["next"] as const) : []),
+    "subs",
+    "audio",
+    ...(o.sources ? (["sources"] as const) : []),
+    ...(o.picture ? (["picture"] as const) : []),
+  ];
 }
 
 /** "42 min left", "1 h 5 min left", or nothing without a duration. */

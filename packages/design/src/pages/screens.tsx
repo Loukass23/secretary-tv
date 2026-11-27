@@ -4,6 +4,9 @@ import { type DashboardSettings, DEFAULT_SETTINGS, type SettingTab } from "@secr
 import { HubOverlay } from "@secretary/catalog-kit/src/ui/HubOverlay.tsx";
 import { PauseMenu } from "@secretary/catalog-kit/src/ui/PauseMenu.tsx";
 import { pauseActions, stepPause } from "@secretary/catalog-kit/src/lib/pausemenu.ts";
+import { endsAtLabel, shortSynopsis } from "@secretary/catalog-kit/src/lib/pausepanel.ts";
+import { PlayerSources } from "@secretary/catalog-kit/src/ui/PlayerSources.tsx";
+import type { Stream } from "@secretary/catalog-kit/src/lib/streams.ts";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
 import { Detail } from "@secretary/catalog-kit/src/ui/Detail.tsx";
@@ -264,33 +267,62 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab | "SmartThings"; 
   );
 }
 
+/** Made-up sources for the player's sheet: documentation-only addresses, no real provider. */
+const PLAYER_SOURCES: Stream[] = [
+  { name: "Example 4K", title: "The.Quiet.Harbour.S01E03.2160p.WEB-DL.HDR10.HEVC.Atmos\n18.2 GB", url: "https://cdn.example.com/a.mkv" },
+  { name: "Example 4K", title: "The.Quiet.Harbour.S01E03.2160p.WEB-DL.HEVC\n14.1 GB", url: "https://cdn.example.com/b.mkv" },
+  { name: "Example 1080p", title: "The.Quiet.Harbour.S01E03.1080p.WEB-DL.x264\n3.4 GB", url: "https://cdn.example.com/c.mp4" },
+  { name: "Example 1080p", title: "The.Quiet.Harbour.S01E03.1080p.WEB-DL.HEVC.MULTI\n2.1 GB", url: "https://cdn.example.com/d.mkv" },
+  { name: "Example 720p", title: "The.Quiet.Harbour.S01E03.720p.WEB-DL.x264\n1.2 GB", url: "https://cdn.example.com/e.mp4" },
+];
+
 /**
  * The pause menu (catalog-kit ui/PauseMenu.tsx) over a paused frame: a fixture still stands in for the video plane.
- * Left and Right move along the buttons; OK on Picture steps its fit.
+ * Left and Right move along the buttons; OK on Picture steps its fit, OK on Sources opens the player's sources sheet
+ * (Back closes it, OK on a source closes it as switching would).
  */
 function PausedPlayer({ art }: { art: Art }) {
-  const actions = pauseActions({ next: true, picture: true });
+  const actions = pauseActions({ next: true, picture: true, sources: true });
   const [at, setAt] = useState(0);
   const [aspect, setAspect] = useState(0);
-  useKeys(true, (key) => {
+  const [sheet, setSheet] = useState(false);
+  useKeys(!sheet, (key) => {
     const step = stepPause(at, actions.length, key);
     if (!step) return false;
     if ("at" in step) return void setAt(step.at);
     if (actions[step.run] === "picture") setAspect((a) => (a + 1) % 3);
+    if (actions[step.run] === "sources") setSheet(true);
   });
   return (
     <div class="player" style={{ position: "absolute", inset: 0, background: "#000" }}>
       <img src={art.backgrounds[1 % art.backgrounds.length]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-      <PauseMenu
-        name="The Quiet Harbour"
-        episodeLine="S1E3 · A Door in the Fog"
-        pos={1394}
-        dur={3120}
-        actions={actions}
-        at={at}
-        values={{ subs: "English", picture: ["Fit", "Fill", "Stretch"][aspect] }}
-        badges={["4K", "HDR10", "Atmos"]}
-      />
+      {!sheet && (
+        <PauseMenu
+          name="The Quiet Harbour"
+          episodeLine="S1E3 · A Door in the Fog"
+          facts="2024  ·  ★ 8.1  ·  Drama, Mystery"
+          runtime="52 min"
+          synopsis={shortSynopsis(
+            "The fog rolls in for a week and the ferry stops running. Ines finds a door in the old lighthouse that was bricked up before she was born, and her brother will not say why. In town, the harbour master starts keeping a list of the people who walk out into the fog and come back.",
+          )}
+          endsAt={endsAtLabel(1394, 3120, new Date())}
+          pos={1394}
+          dur={3120}
+          actions={actions}
+          at={at}
+          values={{ subs: "English", picture: ["Fit", "Fill", "Stretch"][aspect] }}
+          badges={["4K", "HDR10", "Atmos"]}
+        />
+      )}
+      {sheet && (
+        <PlayerSources
+          streams={PLAYER_SOURCES}
+          playing={PLAYER_SOURCES[0]}
+          heading="S1E3 A Door in the Fog"
+          onPick={() => setSheet(false)}
+          onClose={() => setSheet(false)}
+        />
+      )}
     </div>
   );
 }

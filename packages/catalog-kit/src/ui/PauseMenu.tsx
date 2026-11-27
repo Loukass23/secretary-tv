@@ -1,8 +1,9 @@
-// The pause menu over paused video (PlayerView.tsx, lib/pausemenu.ts): what is playing, where it is, and a row of
-// buttons. It replaces the old pause card and the bare progress bar while Settings › Watching › Pause panel is on.
-// The video is a plane behind the page, so this is flat smoked glass with no frost (GlassRoot "flat"), and the buttons
-// show focus by opacity and transform only (tv-kit Button).
-import { ButtonRow, Glass, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
+// The pause menu over paused video (PlayerView.tsx, lib/pausemenu.ts): the whole screen, with no box. A smoke layer of
+// flat stepped bands (no gradient, its own layer) darkens the frame; the title's logo sits large at the top left, and
+// what is playing, where it is and the row of buttons at the bottom left. It replaces the old pause card and the bare
+// progress bar while Settings › Watching › Pause panel is on. The video is a plane behind the page, so nothing here
+// frosts (GlassRoot "flat"), and the buttons show focus by opacity and transform only (tv-kit Button).
+import { ButtonRow, GlassRoot } from "@secretary/tv-kit/src/glass/index.ts";
 import { type PauseAction, timeLeftLabel } from "../lib/pausemenu.ts";
 import "./player.css";
 
@@ -12,6 +13,7 @@ const LABEL: Record<PauseAction, string> = {
   next: "Next episode",
   subs: "Subtitles",
   audio: "Audio",
+  sources: "Sources",
   picture: "Picture",
 };
 
@@ -21,12 +23,29 @@ const clock = (sec: number) => {
   return `${h ? `${h}:` : ""}${String(Math.floor((s % 3600) / 60)).padStart(h ? 2 : 1, "0")}:${String(s % 60).padStart(2, "0")}`;
 };
 
+/** The smoke's bands, top to bottom: a little behind the logo, clear through the middle, darkest under the text. */
+const BANDS = [
+  { top: 0, h: 380, a: 0.42 },
+  { top: 380, h: 140, a: 0.28 },
+  { top: 520, h: 120, a: 0.46 },
+  { top: 640, h: 120, a: 0.6 },
+  { top: 760, h: 320, a: 0.74 },
+] as const;
+
 export interface PauseMenuProps {
   /** The title's logo once decoded, else its name in the display face. */
   logo?: string | null;
   name: string;
   /** "S1E5 · The Long Night" for an episode. */
   episodeLine?: string;
+  /** "2015  ·  ★ 9.0  ·  Crime, Drama" (lib/pausepanel.ts pauseFacts). */
+  facts?: string;
+  /** "50 min". */
+  runtime?: string;
+  /** The episode's synopsis, short. */
+  synopsis?: string;
+  /** "Ends at 21:42" (lib/pausepanel.ts endsAtLabel). */
+  endsAt?: string;
   pos: number;
   dur: number;
   actions: readonly PauseAction[];
@@ -38,15 +57,39 @@ export interface PauseMenuProps {
   badges?: readonly string[];
 }
 
-export function PauseMenu({ logo, name, episodeLine, pos, dur, actions, at, values = {}, badges = [] }: PauseMenuProps) {
+export function PauseMenu({
+  logo,
+  name,
+  episodeLine,
+  facts,
+  runtime,
+  synopsis,
+  endsAt,
+  pos,
+  dur,
+  actions,
+  at,
+  values = {},
+  badges = [],
+}: PauseMenuProps) {
   const pct = dur > 0 ? Math.min(1, pos / dur) : 0;
   const left = timeLeftLabel(pos, dur);
+  const line = [facts, runtime].filter(Boolean).join("  ·  ");
   return (
     <GlassRoot mode="flat" class="ply-pause-root">
-      <Glass x={80} y={600} w={1760} h={420} class="ply-pm">
+      <div class="ply-smoke" aria-hidden="true">
+        {BANDS.map((b) => (
+          <i key={b.top} style={{ top: `${b.top}px`, height: `${b.h}px`, opacity: b.a }} />
+        ))}
+      </div>
+      <div class="ply-pf-top">
         <span class="ply-state">Paused</span>
         {logo ? <img class="ply-pause-logo" src={logo} alt={name} /> : <h1 class="ply-pm-name">{name}</h1>}
-        {episodeLine && <span class="ply-title">{episodeLine}</span>}
+      </div>
+      <div class="ply-pf-info">
+        {episodeLine && <span class="ply-pf-ep">{episodeLine}</span>}
+        {line && <span class="ply-pf-facts">{line}</span>}
+        {synopsis && <p class="ply-pf-plot">{synopsis}</p>}
         <span class="ply-bar">
           <i style={{ transform: `scaleX(${pct})` }} />
         </span>
@@ -55,6 +98,7 @@ export function PauseMenu({ logo, name, episodeLine, pos, dur, actions, at, valu
             {clock(pos)} / {clock(dur)}
           </span>
           {left && <b>{left}</b>}
+          {endsAt && <span>{endsAt}</span>}
           {badges.map((b) => (
             <span key={b} class="ply-badge">
               {b}
@@ -69,7 +113,7 @@ export function PauseMenu({ logo, name, episodeLine, pos, dur, actions, at, valu
           }))}
           focusIndex={at}
         />
-      </Glass>
+      </div>
     </GlassRoot>
   );
 }

@@ -46,7 +46,9 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-next::after { background: var(--ply-smoke); }
 .ply-next-art { width: 300px; height: 206px; object-fit: cover; border-radius: 14px; flex: none; position: relative; z-index: 2; }
 .ply-next-text { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-width: 0; position: relative; z-index: 2; }
-.ply-next .ply-title { white-space: normal; }
+.ply-next .ply-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ply-next-art { align-self: center; }
+.ply-next .sg-btn-row { margin-top: 4px; }
 .ply-count { width: 100%; animation: plyCount linear forwards; }
 @keyframes plyCount {
   from { transform: scaleX(1); }
@@ -58,25 +60,33 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-skip { display: flex; align-items: center; justify-content: center; font-size: var(--sg-t-m); font-weight: 700; }
 .ply-skip > span { position: relative; z-index: 2; }
 
-/* The pause panel (PlayerView.tsx): over the paused video, smoked glass with no frost, in place of the controls. */
+/* The pause menu (PauseMenu.tsx): the whole screen, no box. The smoke is flat stepped bands on one layer of its own
+   (no gradient: each band is a flat fill at its own opacity); the logo at the top left, the rest at the bottom left. */
 .sg-root.ply-pause-root { z-index: 3; background: transparent; }
-.ply-pause { padding: 30px 36px; display: flex; flex-direction: column; gap: 12px; }
-.ply-pause::after { background: var(--ply-smoke); }
-.ply-pause > * { position: relative; z-index: 2; }
-.ply-pause h1 { margin: 0; font-size: var(--sg-t-xxl); font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ply-pause-logo { max-width: 520px; max-height: 120px; object-fit: contain; object-position: left center; }
-.ply-pause-plot { margin: 0; font-size: var(--sg-t-s); line-height: 1.4; color: var(--sg-ink-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ply-pause .ply-bar { margin-top: auto; }
-/* The pause menu (PauseMenu.tsx): the same smoked glass along the bottom, the title, where it is and the buttons. */
-.ply-pm { padding: 30px 40px 34px; display: flex; flex-direction: column; gap: 14px; }
-.ply-pm::after { background: var(--ply-smoke); }
-.ply-pm > * { position: relative; z-index: 2; }
-.ply-pm-name { margin: 0; font-family: var(--sg-font-title); font-size: var(--sg-t-xxl); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ply-pm .ply-bar { margin-top: 6px; height: 8px; border-radius: 4px; }
+.ply-smoke { left: 0; top: 0; width: 1920px; height: 1080px; will-change: transform; transform: translateZ(0); pointer-events: none; }
+.ply-smoke i { position: absolute; left: 0; width: 100%; background: #0a0b0e; }
+.ply-pf-top { left: 96px; top: 72px; display: flex; flex-direction: column; gap: 18px; }
+.ply-pause-logo { display: block; max-width: 900px; max-height: 300px; object-fit: contain; object-position: left top; }
+.ply-pm-name { margin: 0; max-width: 1200px; font-family: var(--sg-font-title); font-size: var(--sg-t-hero); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ply-pf-info { left: 96px; bottom: 72px; width: 1728px; display: flex; flex-direction: column; gap: 14px; }
+.ply-pf-ep { font-size: var(--sg-t-xl); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1200px; }
+.ply-pf-facts { font-size: var(--sg-t-s); font-weight: 600; color: var(--sg-ink-dim); white-space: nowrap; }
+.ply-pf-plot { margin: 0; max-width: 1100px; font-size: var(--sg-t-s); line-height: 1.4; color: var(--sg-ink-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ply-pf-info .ply-bar { margin-top: 10px; height: 8px; border-radius: 4px; }
 .ply-pm-time { display: flex; align-items: center; gap: 18px; font-family: var(--sg-font-num); font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
 .ply-pm-time b { color: var(--sg-ink); font-weight: 600; }
-.ply-pm .sg-btn-row { margin-top: auto; }
+.ply-pf-info .sg-btn-row { margin-top: 14px; }
 
+/* The sources sheet in the player (PlayerSources.tsx): the title page's sheet on the player's smoked glass. */
+.sg-root.ply-src-root { z-index: 4; background: transparent; }
+.ply-src { padding: 34px 30px; }
+.ply-src::after { background: var(--ply-smoke); }
+.ply-src > .ply-state { position: relative; z-index: 2; display: block; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-src > h2 { position: relative; z-index: 2; margin: 10px 10px 0; font-size: var(--sg-t-xl); font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ply-src > .ply-src-chips { position: absolute; }
+.ply-src-chips .sg-seg-item { font-size: var(--sg-t-xs); white-space: nowrap; }
+.ply-src-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
+.ply-src > .ply-src-sec { position: absolute; }
 
 /* The options menu (PlayerMenu.tsx): the control centre's smoked glass, a column on the right that grows by transform.
    The rows are flat fills; the focused row takes the glass focus colours, as everywhere in Secretary. */
