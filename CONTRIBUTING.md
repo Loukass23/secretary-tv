@@ -11,6 +11,9 @@ Thanks for helping. A few rules keep the project small and safe to host:
   `docs/performance.md`. `docs/lessons.md` lists what Tizen does not allow. Try UI first in the design workbench
   (`pnpm design`, `docs/design.md`), whose linter flags those rules on a desktop.
 
+Coding agents read the same rules: `CLAUDE.md` (Claude Code), `AGENTS.md` and `.agents/` (Google Antigravity and
+others). Antigravity setup and a kickoff prompt are in `docs/antigravity.md`.
+
 Before opening a PR:
 
 ```bash
