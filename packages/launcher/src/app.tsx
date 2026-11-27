@@ -1,8 +1,9 @@
 import { exitApp, getTvInputBridge, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
-import { readJson, writeJson } from "@secretary/tv-kit";
+import { readJson, whenIdle, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { artCache } from "@secretary/tv-kit/src/art-cache.ts";
 import { Profiles, SignIn } from "./account.tsx";
 import {
   addReminder,
@@ -61,7 +62,24 @@ import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
 import type { EmbeddedHost } from "@secretary/catalog-kit";
 import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./discover.ts";
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
-import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
+import {
+  type CollectionCard,
+  collectionLine,
+  collectionStyle,
+  FOLDER_TITLES,
+  folderRowKey,
+  folderRows,
+  foldersRowKey,
+  foldersShape,
+  type FolderTitle,
+  folderTitlesKey,
+  isCollectionKey,
+  loadCards,
+  loadFolderTitles,
+  saveCards,
+  saveFolderTitles,
+  toCards,
+} from "./collections.ts";
 import { loadVideos, refreshVideos, regionOf, CARD_VIDEOS, watchUrl, type Video } from "./youtube.ts";
 import { applyLook, loadSettings, onSettings, saveHome } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { dismiss, loadDismissed, saveDismissed } from "./dismissed.ts";
@@ -300,6 +318,8 @@ export function App() {
   const [youtube, setYoutube] = useState<Video[]>(() => loadVideos(storage).videos);
   // The profile's Nuvio collections, one home card each (collections.ts); the last pull shows at once.
   const [collectionCards, setCollectionCards] = useState<CollectionCard[]>(() => loadCards(storage, collectionOwner()));
+  // Each folder's first titles, for its row in the opened collection card; the last load shows at once.
+  const [folderTitles, setFolderTitles] = useState<Record<string, FolderTitle[]>>(() => loadFolderTitles(storage, collectionOwner()));
   // Secretary's own settings (Settings › Home screen and Apps): the features switched off and the apps hidden.
   const [prefs, setPrefs] = useState(() => loadSettings().home);
   // The one accent and the type (glass tokens.ts) come from the settings, from the first frame and on every change.
@@ -1373,18 +1393,47 @@ export function App() {
       run: () => void openYoutube().catch(failed("YouTube")),
     });
   }
-  // Each Nuvio collection is a card of its folders; OK opens the folder in the app that fits it.
+  // Each Nuvio collection is a card like Cinema's (collections.ts): folded, its folders' covers in the style picked for
+  // it; opened, the folders as the first row (OK opens that folder's page) and each folder's titles as a row under it.
+  // The end bar's "Open collection" opens the folder page at the first folder.
   for (const c of collectionCards) {
-    const shown = c.folders.slice(0, CARD_FOLDERS);
+    const folderItems: MediaItem[] = c.folders.map((f) => ({ poster: f.cover ?? "", still: f.cover, title: f.title, named: true }));
+    const rowsHere = folderRows(c, folderTitles);
+    const titleItem = (t: FolderTitle): MediaItem => ({
+      poster: posterUrl(t),
+      still: t.background,
+      title: t.name,
+      sub: t.year || undefined,
+      rating: t.rating || undefined,
+      about: t.description,
+    });
+    const slim = (t: FolderTitle): SlimTitle => ({ id: t.id, name: t.name, year: t.year ?? "", rating: t.rating ?? "", poster: t.poster, background: t.background, description: t.description });
+    const more: MoreRow[] = rowsHere.map(({ folder, titles }) => ({
+      label: folder.title,
+      items: titles.map(titleItem),
+      shape: rowLooks[folderRowKey(c, folder.id)],
+      run: (i: number) => titles[i] && openHit({ type: titles[i].kind, title: slim(titles[i]) }),
+      target: (i: number): TileTarget | null => (titles[i] ? { type: titles[i].kind, title: slim(titles[i]), resume: false, row: folderRowKey(c, folder.id) } : null),
+    }));
+    const openFolder = (k: number) => c.folders[k] && browse({ type: c.folders[k].kind, folder: { collectionId: c.id, folderId: c.folders[k].id } });
     push(
       {
-        kind: "folders",
+        kind: "media",
         key: c.key,
+        name: c.title,
+        unit: "titles",
         label: c.title,
-        folders: shown.map((f) => ({ title: f.title, cover: f.cover })),
-        run: (i) => browse({ type: shown[i].kind, folder: { collectionId: c.id, folderId: shown[i].id } }),
+        items: folderItems,
+        style: shownStyle(styleMenu, c.key, cardStyles[c.key] ?? collectionStyle(c.folders)),
+        heading: "Folders",
+        shape: rowLooks[foldersRowKey(c)] ?? foldersShape(c.folders),
+        more,
+        run: openFolder,
+        seeAll: () => openFolder(0),
+        allLabel: "Open collection",
+        endLine: collectionLine(c),
       },
-      shown.map((f) => (f.cover ? { src: f.cover, type: f.kind } : undefined)),
+      [...c.folders.map((f) => (f.cover ? { src: f.cover, type: f.kind } : undefined)), ...rowsHere.flatMap((r) => r.titles.map((t) => ({ src: posterUrl(t), type: t.kind })))],
     );
   }
   // The same count as the Lights panel's (light-count.ts).
@@ -1449,6 +1498,62 @@ export function App() {
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   mediaFocused.current = columns[colAt]?.kind === "media";
+  // The home's own pictures (the folded cards, then each card's first row: Continue watching and the picks) are kept on
+  // the TV (tv-kit art-cache.ts), so the next start draws them on its first frame. Once the home has settled, so the
+  // fetches never compete with the tiles' own loads.
+  const homeArt = columns
+    .flatMap((c) => (c.kind === "media" ? [...(c.small ?? []), ...c.items.slice(0, 12)] : []))
+    .flatMap((it) => [it.poster, it.still, it.plain, it.logo])
+    .filter((u): u is string => !!u)
+    .slice(0, 150);
+  const homeArtKey = homeArt.join(" ");
+  useEffect(() => {
+    if (view !== "home" || !homeArt.length) return;
+    const t = setTimeout(() => whenIdle(() => void artCache().keep(homeArt)), 4000);
+    return () => clearTimeout(t);
+  }, [homeArtKey, view]);
+  // A collection card picked or opened: its folders' titles load (once a visit) for the rows under its folders, through
+  // catalog-kit lib/folder-titles.ts, imported only now so the addon client stays out of the first bundle.
+  const pickedCollection = colAt >= 0 && isCollectionKey(columns[colAt]?.key ?? "") ? columns[colAt].key : null;
+  const foldersAsked = useRef(new Set<string>());
+  useEffect(() => {
+    const c = collectionCards.find((k) => k.key === pickedCollection);
+    const owner = collectionOwner();
+    if (!c || !owner) return;
+    const todo = c.folders.filter((f) => f.sources?.length && !foldersAsked.current.has(folderTitlesKey(c.id, f.id)));
+    if (!todo.length) return;
+    for (const f of todo) foldersAsked.current.add(folderTitlesKey(c.id, f.id));
+    void import("@secretary/catalog-kit/src/lib/folder-titles.ts").then(async ({ folderTitles: load }) => {
+      const got = await Promise.all(
+        todo.map(async (f) => {
+          const list = await load(f.sources ?? [], f.kind, FOLDER_TITLES).catch(() => []);
+          const titles: FolderTitle[] = list.map((t) => ({
+            id: t.id,
+            name: t.name,
+            ...(t.poster ? { poster: t.poster } : {}),
+            ...(t.background ? { background: t.background } : {}),
+            ...(t.year ? { year: t.year } : {}),
+            ...(t.rating ? { rating: t.rating } : {}),
+            ...(t.description ? { description: t.description.slice(0, 280) } : {}),
+            kind: t.catalogType ?? f.kind,
+          }));
+          return [folderTitlesKey(c.id, f.id), titles] as const;
+        }),
+      );
+      if (collectionOwner() !== owner) return;
+      setFolderTitles((was) => {
+        // Moved to the end, so the cache keeps the folders seen last (collections.ts saveFolderTitles).
+        const next = { ...was };
+        // A folder that failed to load keeps its last titles.
+        for (const [k, t] of got.filter(([, t]) => t.length)) {
+          delete next[k];
+          next[k] = t;
+        }
+        saveFolderTitles(storage, owner, next);
+        return next;
+      });
+    }, () => {});
+  }, [pickedCollection, collectionCards]);
   // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
   const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =

@@ -167,12 +167,22 @@ export function nestColumns(art: Art, styles: Record<string, CardStyle> = {}, tu
       run: noop,
       videos: [0, 1, 2].map((k) => ({ title: ["A long walk through Example Bay", "Ten tips for tidy shelves", "Live: the evening news"][k], channel: ["Example Channel", "Home Hacks", "News Desk"][k], thumb: art.stills[k % art.stills.length] })),
     },
+    // A Nuvio collection (launcher collections.ts): folded, its folders' covers; opened, the folders and then a row of
+    // titles per folder, with "Open collection" on the end bar.
     {
-      kind: "folders",
+      kind: "media",
       key: "nuvio:example",
+      name: "Weekend marathons",
+      unit: "titles",
       label: "Weekend marathons",
+      items: ["Space operas", "Slow burns", "Heists", "Road trips", "Rainy Sundays"].map((title, k) => ({ poster: art.posters[k % art.posters.length], title, named: true })),
+      style: styles["nuvio:example"] ?? { layout: "grid", size: "l" },
+      heading: "Folders",
       run: noop,
-      folders: ["Space operas", "Slow burns", "Heists", "Road trips"].map((title, k) => ({ title, cover: art.posters[k % art.posters.length] })),
+      seeAll: noop,
+      allLabel: "Open collection",
+      endLine: { title: "Weekend marathons", sub: "5 folders · Open collection for every title" },
+      more: ["Space operas", "Slow burns", "Heists"].map((label, r) => ({ label, items: media(art, r * 2, 10, 0, () => "2021"), run: noop })),
     },
     { key: "home", label: "Home", run: noop, kind: "home", title: lightsOnLabel(lightCount(LIGHT_DEVICES)), sub: "120 lux in the room", actions: [{ icon: "cinema", label: "Cinema" }, { icon: "warm", label: "Warm" }, { icon: "power", label: "Off" }, { icon: "music", label: "Music" }] },
     {

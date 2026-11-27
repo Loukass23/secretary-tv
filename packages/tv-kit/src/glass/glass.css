@@ -294,6 +294,43 @@
 /* MediaTile's art (and any img marked sg-fade) waits for its load, then fades in. */
 .sg-tile img.sg-fade { opacity: 0; transition: opacity 240ms var(--sg-ease); will-change: opacity; }
 .sg-tile img.sg-fade.is-ready { opacity: 1; }
+/* The art above its skeleton (and the tile's own marks above the art): the skeleton sits under the art as it fades in,
+   and goes once it is in (or failed). */
+.sg-tile.has-skel > img.sg-fade { position: relative; z-index: 1; }
+.sg-tile.has-skel > .sg-tile-cap,
+.sg-tile.has-skel > .sg-tile-badge,
+.sg-tile.has-skel > .sg-tile-count,
+.sg-tile.has-skel > .sg-tile-progress { z-index: 1; }
+/*
+ * MediaTile's skeleton while its art loads: a flat block a step lighter than the tile's fill, and a title bar where the
+ * caption goes. It comes in after a beat (a warmed picture is there before it would show), then pulses by opacity on
+ * its own layer. Flat fills, no gradient, no shimmer sweep; still under Reduce motion.
+ */
+.sg-skel {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0;
+  animation: sgSkelIn 200ms 160ms var(--sg-ease) forwards, sgSkelPulse 1400ms 360ms ease-in-out infinite alternate;
+  will-change: opacity;
+}
+.sg-skel i { position: absolute; left: 20px; bottom: 22px; width: 46%; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, 0.1); }
+/* A tile with its own caption keeps the bar out of the way of the name. */
+.sg-skel.has-cap i { bottom: auto; top: 22px; width: 28%; height: 14px; }
+.sg-tile img.sg-fade.is-ready ~ .sg-skel,
+.sg-tile img.sg-fade.is-failed ~ .sg-skel { visibility: hidden; animation: none; }
+/* A logo slot waiting for its logo: a bar about a logo's size, in the caption's flow, pulsing with the tile's. */
+.sg-logo-skel { display: block; width: 46%; height: 48px; margin-bottom: 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.12); animation: sgSkelPulse 1400ms ease-in-out infinite alternate; will-change: opacity; }
+.sg-tile-logo.is-ready + .sg-logo-skel,
+.sg-tile-logo.is-failed + .sg-logo-skel { display: none; }
+@keyframes sgSkelIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sgSkelPulse { from { opacity: 1; } to { opacity: 0.5; } }
+html[data-sg-motion="reduced"] .sg-skel { animation: none; opacity: 1; }
+html[data-sg-motion="reduced"] .sg-logo-skel { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sg-skel { animation: none; opacity: 1; }
+  .sg-logo-skel { animation: none; }
+}
 /* Watched: dimmed while not focused, with a tick in the top-right corner. */
 .sg-tile.is-watched img.sg-fade.is-ready { opacity: 0.62; }
 .sg-tile.is-watched.is-focus img.sg-fade.is-ready { opacity: 1; }

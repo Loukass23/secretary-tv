@@ -1,6 +1,7 @@
 // Glass controls for TV screens. Each is placed absolutely (BoxProps) and takes its focus state
 // from the caller, so screens keep their own remote navigation (see grid.ts / use-keys.ts).
 import type { ComponentChildren } from "preact";
+import { artCache } from "../art-cache.ts";
 import { type BoxProps, Glass } from "./Glass.tsx";
 import { type IconName, iconMask } from "./icons.ts";
 
@@ -57,11 +58,19 @@ export function AppChip({ icon, label, ...box }: BoxProps & { icon?: string; lab
   );
 }
 
-/** A logo that does not load gives its place back to the title's name. */
+/** A logo that does not load gives its place back to the title's name (its skeleton goes too, glass.css). */
 function logoFailed(e: Event) {
   const img = e.currentTarget as HTMLImageElement;
   img.style.display = "none";
-  img.nextElementSibling?.removeAttribute("hidden");
+  img.classList.add("is-failed");
+  img.parentElement?.querySelector("b[hidden]")?.removeAttribute("hidden");
+}
+
+/** A tile's art that does not load: hidden, and its skeleton stops (glass.css). */
+function artFailed(e: Event) {
+  const img = e.currentTarget as HTMLImageElement;
+  img.style.visibility = "hidden";
+  img.classList.add("is-failed");
 }
 
 function hideImg(e: Event) {
@@ -108,22 +117,39 @@ interface TileProps {
   watched?: boolean;
   /** The title's stylized logo (Fanart.tv), drawn in place of its name; the name comes back if the logo fails. */
   logo?: string;
+  /** While the art loads: a flat block and a title bar, pulsing by opacity (glass.css). Off for art that is never
+   *  waited on (a banded still made on the TV). Never shown on a tile with no art at all. */
+  skeleton?: boolean;
 }
 
-/** Artwork with a caption; the focused tile lifts (transform only) and gets a white ring. */
-export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched, logo }: Omit<BoxProps, "page"> & TileProps) {
+/**
+ * Artwork with a caption; the focused tile lifts (transform only) and gets a white ring. Until the art has loaded the
+ * tile shows its skeleton, and a logo slot its own bar; pictures the art cache warmed (art-cache.ts) come from their
+ * blobs, so they are usually there on the first frame.
+ */
+export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched, logo, skeleton = true }: Omit<BoxProps, "page"> & TileProps) {
+  const cache = artCache();
+  const art = cache.src(src);
+  const mark = cache.src(logo);
+  const skel = !!art && skeleton;
   return (
     <div
-      class={`sg-tile${focused ? " is-focus" : ""}${watched ? " is-watched" : ""}${cls ? ` ${cls}` : ""}`}
+      class={`sg-tile${skel ? " has-skel" : ""}${focused ? " is-focus" : ""}${watched ? " is-watched" : ""}${cls ? ` ${cls}` : ""}`}
       style={{ left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` }}
     >
-      <img class="sg-fade" src={src} alt="" decoding="async" onLoad={showImg} onError={hideImg} />
+      {art && <img class="sg-fade" src={art} alt="" decoding="async" onLoad={showImg} onError={artFailed} />}
+      {skel && (
+        <span class={`sg-skel${title || logo ? " has-cap" : ""}`} aria-hidden="true">
+          <i />
+        </span>
+      )}
       {badge && <span class="sg-tile-badge">{badge}</span>}
       {watched && <span class="sg-tile-tick">✓</span>}
       {(title || sub || logo) && (
         <div class="sg-tile-cap">
-          {logo && <img class="sg-tile-logo" src={logo} alt="" decoding="async" onError={logoFailed} />}
-          {title && <b hidden={!!logo}>{title}</b>}
+          {mark && <img class="sg-tile-logo sg-fade" src={mark} alt="" decoding="async" onLoad={showImg} onError={logoFailed} />}
+          {mark && <i class="sg-logo-skel" aria-hidden="true" />}
+          {title && <b hidden={!!mark}>{title}</b>}
           {sub && <small>{sub}</small>}
         </div>
       )}

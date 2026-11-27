@@ -28,14 +28,15 @@ export type AccentTheme = "raptor" | "rose" | "blue" | "gold";
 export type ArtworkProviderPref = "fanart" | "tmdb" | "addon";
 export type ReminderSource = "companion" | "local";
 /**
- * Spoiler protection on a show's page, for episodes not yet watched (lib/titlepage.ts `isSpoiler`). `blur`: their
- * stills and synopses are shown blurred; `hide`: only their number and title show. The titles always stay readable.
+ * Spoiler protection on a show's page, for episodes not yet watched (lib/titlepage.ts `isSpoiler`). `blur` (shown as
+ * "Bands", the id kept for saved settings): their stills are flat bands of their own colours and their synopses flat
+ * bars (lib/spoilerbands.ts); `hide`: only their number and title show. The titles always stay readable.
  */
 export type SpoilerMode = "off" | "blur" | "hide";
 export const SPOILER_MODES: readonly SpoilerMode[] = ["off", "blur", "hide"];
-export const SPOILER_LABELS: Record<SpoilerMode, string> = { off: "Off", blur: "Blur", hide: "Hide" };
+export const SPOILER_LABELS: Record<SpoilerMode, string> = { off: "Off", blur: "Bands", hide: "Hide" };
 
-/** A stored spoiler setting: the old switch (on) is Blur; anything unknown is Off. */
+/** A stored spoiler setting: the old switch (on) is Bands; anything unknown is Off. */
 export function spoilerModeOf(v: unknown): SpoilerMode {
   if (v === true) return "blur";
   return SPOILER_MODES.includes(v as SpoilerMode) ? (v as SpoilerMode) : "off";

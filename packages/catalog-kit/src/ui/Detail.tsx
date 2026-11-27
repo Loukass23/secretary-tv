@@ -43,7 +43,8 @@ import {
 import { audioLangsOf, type ClockFormat, type SpoilerMode, subLangsOf } from "../lib/settings.ts";
 import type { HostHeader } from "../host.ts";
 import { aboutFacts, creditLines, type EpisodeLook, episodeLook, episodePanel, episodeTag, factLine, seasonsLabel, type SpoilerState } from "../lib/titlepage.ts";
-import { BLANK, blurredStill, blurredText, readableStill } from "./stillblur.ts";
+import { css } from "../lib/spoilerbands.ts";
+import { bandedStill, BLANK, readableStill, stillBands } from "./stillbands.ts";
 import type { ProviderStatus } from "@secretary/plugins";
 import { decide, type StartAfter, waitMs } from "../lib/autoplay.ts";
 import { releaseOf } from "../lib/party.ts";
@@ -87,7 +88,7 @@ const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
 const CAPTION_MOVIE = { x: PAD, foot: 772, w: 1060, mark: { w: 720, h: 160 }, name: { w: 1060, h: 200 } };
 // A logo keeps its box; a show's name without one wraps to two lines across the caption rather than being cut.
 const CAPTION_SERIES = { x: PAD, foot: 612, w: 1060, mark: { w: 600, h: 110 }, name: { w: 1060, h: 180 } };
-/** The synopsis' lines, as `.det-about` sets them (detail.css): the blurred copy (Blur) is laid out the same. */
+/** The synopsis' lines, as `.det-about` sets them (detail.css): its bars under Bands take the same room. */
 const ABOUT_SERIES = { lines: 2, lineH: 39 };
 const ABOUT_MOVIE = { lines: 3, lineH: 39 };
 const SEASONS_Y = 636;
@@ -210,8 +211,8 @@ function SourceDetails({
 
 /**
  * One episode, as the home row's landscape tiles: the still with the title and its place on the art. Spoiler protection
- * on an unwatched episode (lib/titlepage.ts `episodeLook`): Blur swaps the still for its pre-blurred copy
- * (ui/stillblur.ts), Hide shows no still at all; the number and the title always stay.
+ * on an unwatched episode (lib/titlepage.ts `episodeLook`): Bands swaps the still for flat bands of its own colours
+ * (lib/spoilerbands.ts, ui/stillbands.ts), Hide shows no still at all; the number and the title always stay.
  */
 function EpisodeTile({
   x,
@@ -230,14 +231,14 @@ function EpisodeTile({
   watched: boolean;
   focused: boolean;
 }) {
-  // The show's own art is no spoiler: an episode without a still shows it under Blur; Hide shows no picture at all.
+  // The show's own art is no spoiler: an episode without a still shows it under Bands; Hide shows no picture at all.
   const src = v.thumbnail ?? fallback;
-  const blur = look === "blur" && Boolean(v.thumbnail);
-  const [shown, setShown] = useState(() => (look === "hide" || blur ? BLANK : src));
+  const bands = look === "blur" && Boolean(v.thumbnail);
+  const [shown, setShown] = useState(() => (look === "hide" || bands ? BLANK : src));
   useEffect(() => {
     if (look === "hide") return void setShown(BLANK);
     let live = true;
-    if (!blur) {
+    if (!bands) {
       // The title sits on the still: its readable copy (darkened under the title, made once), the still until then.
       setShown(src);
       if (v.thumbnail) readableStill(src).then((u) => live && setShown(u), () => {});
@@ -246,14 +247,14 @@ function EpisodeTile({
       };
     }
     setShown(BLANK);
-    blurredStill(src).then(
+    bandedStill(src).then(
       (u) => live && setShown(u),
       () => live && setShown(BLANK),
     );
     return () => {
       live = false;
     };
-  }, [src, blur, look]);
+  }, [src, bands, look]);
   const aired = hasAired(v);
   return (
     <LandscapeTile
@@ -265,32 +266,32 @@ function EpisodeTile({
       progress={progress}
       watched={watched}
       focused={focused}
+      // Bands and Hide are made on the TV or are nothing at all: there is no load to wait on.
+      skeleton={look === "clear"}
       class={`det-ep${aired ? "" : " is-soon"}${look === "clear" ? "" : ` is-${look}`}`}
     />
   );
 }
 
 /**
- * A protected synopsis under Blur: its blurred picture (ui/stillblur.ts `blurredText`), laid out as the caption sets
- * text, with soft bars in its place until it is made (or if it cannot be).
+ * A protected synopsis under Bands: flat bars where its lines would be, each a step shorter, in the colours of the
+ * episode's still when it has one (lib/spoilerbands.ts), else the raised fill. Never the text, never blurred.
  */
-function BlurredAbout({ text, w, lines, lineH }: { text: string; w: number; lines: number; lineH: number }) {
-  const [src, setSrc] = useState<string | null>(null);
+function BandedAbout({ still, lines, lineH }: { still?: string; lines: number; lineH: number }) {
+  const [fills, setFills] = useState<string[] | null>(null);
   useEffect(() => {
     let live = true;
-    setSrc(null);
-    const face = getComputedStyle(document.documentElement).getPropertyValue("--sg-font-body").trim() || "sans-serif";
-    blurredText(text, { w, lines, lineH, font: `${Math.round(lineH / 1.38)}px ${face}`, color: "rgba(244,244,246,0.85)" }).then(
-      (u) => live && setSrc(u),
-      () => {},
-    );
+    setFills(null);
+    if (still) stillBands(still).then((c) => live && setFills(c.map(css)), () => {});
     return () => {
       live = false;
     };
-  }, [text, w, lines, lineH]);
+  }, [still]);
   return (
     <div class="det-about det-redact" style={{ height: `${lines * lineH}px` }}>
-      {src ? <img class="det-redact-img" src={src} alt="" /> : Array.from({ length: lines }, (_, i) => <i key={i} />)}
+      {Array.from({ length: lines }, (_, i) => (
+        <i key={i} style={fills ? { background: fills[i % fills.length] } : undefined} />
+      ))}
     </div>
   );
 }
@@ -1114,7 +1115,7 @@ export function Detail({
           )}
           <small class="det-meta">{metaLine.join(" · ") || " "}</small>
           {panel?.hidden && look === "blur" && panel.about ? (
-            <BlurredAbout text={panel.about} w={cap.w} lines={aboutBox.lines} lineH={aboutBox.lineH} />
+            <BandedAbout still={target?.thumbnail} lines={aboutBox.lines} lineH={aboutBox.lineH} />
           ) : (
             // Hide leaves the synopsis out; its room stays, so the buttons never move between episodes.
             <p class="det-about" style={{ WebkitLineClamp: aboutBox.lines, height: `${aboutBox.lines * aboutBox.lineH}px` }}>

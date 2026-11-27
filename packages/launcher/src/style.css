@@ -516,13 +516,13 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest-col-note { position: absolute; left: 380px; top: 9px; max-width: 1100px; font-size: var(--sg-t-m); color: #ffd08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nest-col-note b { font-weight: 500; color: var(--sg-accent); }
 
-/* The YouTube and collection cards: small captions, two lines at most, on a flat band so they read on any picture. */
+/* The YouTube card and collection folders: small captions, two lines at most, on a flat band so they read on any picture. */
 .nest-kind-videos .sg-tile-cap,
-.nest-kind-folders .sg-tile-cap { left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 14px; background: rgba(8, 9, 12, 0.55); font-size: var(--sg-t-s); }
+.nest-named .sg-tile-cap { left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 14px; background: rgba(8, 9, 12, 0.55); font-size: var(--sg-t-s); }
 .nest-kind-videos .sg-tile-cap b,
-.nest-kind-folders .sg-tile-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; line-height: 1.2; }
+.nest-named .sg-tile-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; line-height: 1.2; }
 .nest-kind-videos .sg-tile-cap small,
-.nest-kind-folders .sg-tile-cap small { display: block; margin: 0; padding: 0; background: none; font-size: var(--sg-t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-named .sg-tile-cap small { display: block; margin: 0; padding: 0; background: none; font-size: var(--sg-t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* The catalog chunk is loading (catalog-host.tsx): a quiet line until it is in. */
 .nest-catalog-loading { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
