@@ -196,8 +196,8 @@ A Nuvio collection card opens like Cinema (`MediaRow` in `src/cards.tsx`; the ca
 have (poster, landscape or square; the row's look can still be picked), each with its name on the cover; OK on a folder
 opens its page in the catalog inside Secretary (catalog-kit `NuvioFolder`). Under it, one row per folder holds that
 folder's first 20 titles (the first page of each source the TV can read, taken in turn, as the folder page's All tab:
-catalog-kit `lib/folder-titles.ts`). They load when the card is picked, through a lazy import so the addon client stays
-out of Secretary's first bundle, and the last load is kept per profile (`localStorage["nest.folderTitles"]`, the 40
+catalog-kit `lib/folder-titles.ts`). They load when the card is picked, from the catalog's own chunk (imported then, so
+the addon client stays out of Secretary's first bundle and no chunk is split off for it), and the last load is kept per profile (`localStorage["nest.folderTitles"]`, the 40
 folders seen last), so an opened card shows them on its first frame. A folder still loading, or that no source on this
 TV can fill, has no row, and the remote never stops on one. Each folder's row keeps its own look (`<card>/<folder id>`
 in `nest.rowLooks`) and the title menu works as in Cinema's rows. The end bar has no Recommend me: it names the
