@@ -85,6 +85,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
   useEffect(() => addonStore.subscribe(() => setAddonList(addonStore.list())), []);
   const tab = tabNames[place.tab] ?? tabNames[0];
   const hostTab = hostTabs.find((t) => t.name === tab);
+  useEffect(() => hostTab?.subscribe?.(() => setRev((n) => n + 1)), [hostTab]);
   const sources = useMemo(
     () =>
       tab !== "Sources"

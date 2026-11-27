@@ -189,6 +189,9 @@ importers:
       '@secretary/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@secretary/simkl':
+        specifier: workspace:*
+        version: link:../simkl
       '@secretary/smartthings':
         specifier: workspace:*
         version: link:../smartthings
@@ -243,6 +246,9 @@ importers:
       '@secretary/party':
         specifier: workspace:*
         version: link:../party
+      '@secretary/simkl':
+        specifier: workspace:*
+        version: link:../simkl
       '@secretary/smartthings':
         specifier: workspace:*
         version: link:../smartthings
@@ -281,6 +287,8 @@ importers:
       '@secretary/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/simkl: {}
 
   packages/smartthings: {}
 

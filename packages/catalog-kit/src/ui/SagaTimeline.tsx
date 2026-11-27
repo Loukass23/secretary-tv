@@ -108,7 +108,7 @@ export function SagaTimeline({
 
   const handleToggleWatched = () => {
     if (!focusedStep) return;
-    toggleTitleWatched(focusedStep.id);
+    toggleTitleWatched(focusedStep.id, collection.type);
     setWatchedIds(loadWatchedIds());
     onStateChange();
   };
