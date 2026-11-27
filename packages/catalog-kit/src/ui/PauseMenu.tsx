@@ -32,6 +32,20 @@ const BANDS = [
   { top: 760, h: 320, a: 0.74 },
 ] as const;
 
+/**
+ * The smoke on its own: the player keeps it mounted from the first frame, invisible, and pausing only fades it in, so
+ * the full-screen layer is never rasterised at the moment of the pause (measured on the TV: docs/performance.md).
+ */
+export function PauseSmoke({ on }: { on: boolean }) {
+  return (
+    <div class={`ply-smoke${on ? " is-on" : ""}`} aria-hidden="true">
+      {BANDS.map((b) => (
+        <i key={b.top} style={{ top: `${b.top}px`, height: `${b.h}px`, opacity: b.a }} />
+      ))}
+    </div>
+  );
+}
+
 export interface PauseMenuProps {
   /** The title's logo once decoded, else its name in the display face. */
   logo?: string | null;
@@ -55,6 +69,8 @@ export interface PauseMenuProps {
   values?: Partial<Record<PauseAction, string>>;
   /** The release's badges (4K, HDR, Atmos), small, beside the time. */
   badges?: readonly string[];
+  /** Draws its own smoke (the workbench); the player passes false and keeps a PauseSmoke mounted instead. */
+  smoke?: boolean;
 }
 
 export function PauseMenu({
@@ -71,17 +87,14 @@ export function PauseMenu({
   at,
   values = {},
   badges = [],
+  smoke = true,
 }: PauseMenuProps) {
   const pct = dur > 0 ? Math.min(1, pos / dur) : 0;
   const left = timeLeftLabel(pos, dur);
   const line = [facts, runtime].filter(Boolean).join("  ·  ");
   return (
     <GlassRoot mode="flat" class="ply-pause-root">
-      <div class="ply-smoke" aria-hidden="true">
-        {BANDS.map((b) => (
-          <i key={b.top} style={{ top: `${b.top}px`, height: `${b.h}px`, opacity: b.a }} />
-        ))}
-      </div>
+      {smoke && <PauseSmoke on />}
       <div class="ply-pf-top">
         <span class="ply-state">Paused</span>
         {logo ? <img class="ply-pause-logo" src={logo} alt={name} /> : <h1 class="ply-pm-name">{name}</h1>}

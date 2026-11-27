@@ -63,7 +63,10 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 /* The pause menu (PauseMenu.tsx): the whole screen, no box. The smoke is flat stepped bands on one layer of its own
    (no gradient: each band is a flat fill at its own opacity); the logo at the top left, the rest at the bottom left. */
 .sg-root.ply-pause-root { z-index: 3; background: transparent; }
-.ply-smoke { left: 0; top: 0; width: 1920px; height: 1080px; will-change: transform; transform: translateZ(0); pointer-events: none; }
+.ply-smoke { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; opacity: 0; transition: opacity 160ms ease-out; will-change: opacity; pointer-events: none; }
+.ply-smoke.is-on { opacity: 1; }
+/* The player's own, mounted while it plays, under the pause menu. */
+.ply-smoke-root { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
 .ply-smoke i { position: absolute; left: 0; width: 100%; background: #0a0b0e; }
 .ply-pf-top { left: 96px; top: 72px; display: flex; flex-direction: column; gap: 18px; }
 .ply-pause-logo { display: block; max-width: 900px; max-height: 300px; object-fit: contain; object-position: left top; }
@@ -85,6 +88,8 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-src > h2 { position: relative; z-index: 2; margin: 10px 10px 0; font-size: var(--sg-t-xl); font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ply-src > .ply-src-chips { position: absolute; }
 .ply-src-chips .sg-seg-item { font-size: var(--sg-t-xs); white-space: nowrap; }
+.ply-src .sg-card-row { font-size: var(--sg-t-m); }
+.ply-src .sg-card small { font-size: var(--sg-t-xs); margin-left: 26px; }
 .ply-src-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }
 .ply-src > .ply-src-sec { position: absolute; }
 

@@ -23,7 +23,7 @@ import type { PartySession } from "../lib/party.ts";
 import { createFollower, type PartyPlayer } from "../lib/partyplay.ts";
 import { PartyOverlay, partyLine, usePartyView } from "./PartyOverlay.tsx";
 import { PlayerMenu } from "./PlayerMenu.tsx";
-import { PauseMenu } from "./PauseMenu.tsx";
+import { PauseMenu, PauseSmoke } from "./PauseMenu.tsx";
 import { PlayerSources } from "./PlayerSources.tsx";
 import { switchedStreams } from "../lib/playersources.ts";
 import type { SheetOrder } from "./sheet.ts";
@@ -961,8 +961,14 @@ export function PlayerView({
           </Glass>
         </GlassRoot>
       )}
+      {started && pausePanel && !together && (
+        <div class="ply-smoke-root">
+          <PauseSmoke on={pauseShown && !menuOpen && !sourcesOpen} />
+        </div>
+      )}
       {pauseShown && !menuOpen && !sourcesOpen && (
         <PauseMenu
+          smoke={false}
           logo={logo && logoReady ? logo : null}
           name={title.name}
           {...pauseFacts(title, episode, time.dur)}
