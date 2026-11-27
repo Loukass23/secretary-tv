@@ -327,6 +327,9 @@ last 8 turns in memory with no server call:
   its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`
   unasked. The key ships inside the package: restrict it to the Generative Language API. Without `NEST_GEMINI_API_KEY` or
   `NEST_GROQ_API_KEY`, voice and auto-listen are off and Settings › Home screen explains why.
+- **Eval set** (`packages/assistant/test/fixtures/eval-prompts.ts`, `eval.test.ts`): 60+ prompts and near misses checked
+  offline by `pnpm test`. To measure a real Gemini model's latency and 140-character / plain-text compliance on the
+  free-text prompts, run `NEST_GEMINI_API_KEY=... pnpm --filter @secretary/assistant eval` (`test/eval-live.ts`).
 
 ## Weather
 
