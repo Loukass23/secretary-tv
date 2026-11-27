@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { localBrain, localReminders, mergeTurns, NestError } from "../src/brain.ts";
+import { localBrain, localReminders, NestError } from "../src/brain.ts";
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -24,7 +24,44 @@ test("reminders on the TV: add, toggle, survive a reload", () => {
   assert.deepEqual(localReminders(store).list(), []);
 });
 
-test("the TV answers with no server and keeps the turns", async () => {
+test("due reminders fire once against a fake clock, survive reload, and skip completed items", async () => {
+  const store = memory();
+  let nowMs = new Date(2026, 10, 27, 14, 0, 0, 0).getTime();
+  const rem = localReminders(store);
+  const brain = localBrain({
+    reminders: rem,
+    lights: async () => undefined,
+    now: () => new Date(nowMs),
+  });
+
+  await brain.ask("Remind me to check the oven in 20 minutes");
+  nowMs += 1_000;
+  await brain.ask("Remind me to call mum tomorrow at 8");
+  nowMs += 1_000;
+  await brain.ask("Remind me to water the plants in 10 minutes");
+
+  // Mark "water the plants" completed before its due time: it must never fire.
+  const plants = rem.list().find((r) => r.text === "water the plants")!;
+  rem.toggle(plants.id);
+
+  // 15 minutes in: nothing open is due yet, and nextDueAt points to the 20-minute oven reminder.
+  const base = new Date(2026, 10, 27, 14, 0, 0, 0).getTime();
+  assert.equal(rem.nextDueAt(), base + 20 * 60_000);
+  assert.deepEqual(rem.fireDue(base + 15 * 60_000), []);
+
+  // 20 minutes in: the oven reminder fires once, and survives a reload without firing a second time.
+  const fired = rem.fireDue(base + 20 * 60_000);
+  assert.deepEqual(fired.map((r) => r.text), ["check the oven"]);
+  assert.deepEqual(localReminders(store).fireDue(base + 25 * 60_000), []);
+
+  // Next morning at 08:00: tomorrow's reminder fires.
+  const morning = new Date(2026, 10, 28, 8, 0, 0, 0).getTime();
+  assert.equal(localReminders(store).nextDueAt(), morning);
+  assert.deepEqual(localReminders(store).fireDue(morning).map((r) => r.text), ["call mum"]);
+  assert.equal(localReminders(store).nextDueAt(), null);
+});
+
+test("the TV answers directly and gives each new turn a higher positive id", async () => {
   const rem = localReminders(memory());
   const brain = localBrain({
     reminders: rem,
@@ -41,16 +78,59 @@ test("the TV answers with no server and keeps the turns", async () => {
   // The catalogs are unreachable: the watch answer says so instead of failing.
   assert.equal((await brain.ask("show me a comedy")).reply, "I couldn't find anything for comedy films and series.");
   const st = brain.state();
-  assert.equal(st.turns.length, 3);
-  assert.ok(st.turns.every((t) => t.id < 0 && t.source === "tv"));
-  assert.equal(brain.note("couch light off", "Turning off Couch.", "domotics_updated").id, -4);
+  assert.deepEqual(
+    st.turns.map((t) => t.id),
+    [1, 2, 3],
+  );
+  assert.ok(st.turns.every((t) => t.source === "tv"));
+  assert.equal(brain.note("couch light off", "Turning off Couch.", "domotics_updated").id, 4);
 });
 
-test("server and TV turns merge in time order", () => {
-  const turn = (id: number, at: number) => ({ id, prompt: "", reply: "", action: "briefing", source: "tv" as const, at });
-  const server = { rev: 2, pending: null, turns: [turn(1, 10), turn(2, 30)] };
-  const local = { rev: 1, pending: null, turns: [turn(-1, 20)] };
-  assert.deepEqual(mergeTurns(server, local).turns.map((t) => t.id), [1, -1, 2]);
-  assert.equal(mergeTurns(null, local), local);
-  assert.equal(mergeTurns(server, { rev: 0, pending: null, turns: [] }), server);
+test("localBrain threads recent turns into route() so ordinal and comparative follow-ups resolve in context", async () => {
+  const rem = localReminders(memory());
+  const requestedUrls: string[] = [];
+  const fakeFetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url.includes("genre=Comedy")) {
+      return new Response(
+        JSON.stringify({
+          metas: [{ id: "tt4468740", name: "Paddington 2", releaseInfo: "2017", imdbRating: "7.8" }],
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        metas: [
+          { id: "tt3397884", name: "Sicario", releaseInfo: "2015", imdbRating: "7.7" },
+          { id: "tt1392214", name: "Prisoners", releaseInfo: "2013", imdbRating: "8.2" },
+        ],
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  const brain = localBrain({
+    reminders: rem,
+    lights: async () => undefined,
+    fetch: fakeFetch,
+  });
+
+  const t1 = await brain.ask("show me a thriller movie");
+  assert.equal(t1.action, "watch");
+  assert.deepEqual(t1.results?.map((r) => r.title.name), ["Sicario", "Prisoners"]);
+
+  // "the second one" resolves from t1.results without hitting the network again.
+  const callsBeforeOrdinal = requestedUrls.length;
+  const t2 = await brain.ask("the second one");
+  assert.equal(requestedUrls.length, callsBeforeOrdinal);
+  assert.equal(t2.action, "watch");
+  assert.deepEqual(t2.results?.map((r) => r.title.name), ["Prisoners"]);
+
+  // "something lighter" shifts the prior movie turn to Comedy films.
+  const t3 = await brain.ask("something lighter");
+  assert.equal(t3.action, "watch");
+  assert.equal(t3.query, "comedy films");
+  assert.deepEqual(t3.results?.map((r) => r.title.name), ["Paddington 2"]);
 });

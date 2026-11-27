@@ -58,6 +58,22 @@ export function weatherGlyph(code: number, isDay: boolean): WeatherGlyph {
   return "cloud";
 }
 
+const GLYPH_WORDS: Record<WeatherGlyph, string> = {
+  clear: "clear",
+  "clear-night": "clear",
+  partly: "partly cloudy",
+  "partly-night": "partly cloudy",
+  cloud: "cloudy",
+  fog: "foggy",
+  rain: "rain",
+  snow: "snow",
+  storm: "thunderstorms",
+};
+
+export const glyphLabel = (g: WeatherGlyph): string => GLYPH_WORDS[g];
+
+export const isWetGlyph = (g: WeatherGlyph | undefined): boolean => g === "rain" || g === "snow" || g === "storm";
+
 /** Reads WEATHER_LAT / WEATHER_LON or WEATHER_CITY; undefined when neither is set. */
 export function weatherPlaceFromEnv(env: Record<string, string | undefined>): WeatherPlace | undefined {
   const lat = Number(env.WEATHER_LAT);

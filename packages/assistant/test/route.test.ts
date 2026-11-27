@@ -53,19 +53,97 @@ test("lights: scenes and levels", async () => {
 
 test("music mode is its own scene, apart from cinema", async () => {
   const { fx, lights } = effects();
-  const a = await route("Music mode", fx);
-  assert.equal(a.action, "domotics_updated");
+  assert.equal((await route("Music mode", fx)).action, "domotics_updated");
   await route("cinema mode", fx);
   assert.deepEqual(lights, [{ scene: "music" }, { scene: "cinema" }]);
 });
 
+test("routines run scene, reminders and weather or film picks together, surviving missing effects", async () => {
+  const w = {
+    tempC: 18,
+    label: "Clear",
+    icon: "☀️",
+    place: "Berlin",
+    days: [
+      { date: "2026-11-01", minC: 9, maxC: 21, glyph: "clear" as const },
+      { date: "2026-11-02", minC: 5, maxC: 11, glyph: "rain" as const },
+    ],
+  };
+  const { fx, lights } = effects({
+    weather: async () => w,
+    find: async (i) => (i.kind === "movie" ? [{ type: "movie", title: { id: "tt1", name: "Dune", year: "2021", rating: "8.0" } }] : []),
+  });
+
+  const gn = await route("Goodnight", fx);
+  assert.equal(gn.action, "domotics_updated");
+  assert.match(gn.reply, /Lights off/);
+  assert.match(gn.reply, /Tomorrow in Berlin: rain, 11° at the warmest and 5° at night/);
+  assert.match(gn.reply, /1 reminder open: “water the plants”/);
+
+  const mn = await route("Movie night!", fx);
+  assert.equal(mn.action, "watch");
+  assert.equal(mn.results?.length, 1);
+  assert.match(mn.reply, /Cinema lights set/);
+  assert.deepEqual(lights, [{ scene: "off" }, { scene: "cinema" }]);
+
+  // Without SmartThings (`lights` rejects), goodnight still summarizes tomorrow's weather and reminders.
+  const noSt = effects({
+    lights: async () => {
+      throw new Error("no SmartThings");
+    },
+    weather: async () => w,
+  });
+  const partial = await route("going to bed", noSt.fx);
+  assert.equal(partial.action, "weather");
+  assert.match(partial.reply, /Tomorrow in Berlin/);
+
+  // Near misses stay on their own handlers.
+  assert.equal((await route("play Goodnight Mommy", fx)).action, "watch");
+  assert.equal((await route("remind me about movie night", fx)).action, "reminder_added");
+});
+
 test("the weather comes from the forecast, without Gemini", async () => {
-  const w = { tempC: 18, label: "Partly cloudy", icon: "⛅", place: "Berlin", days: [{ date: "2026-11-01", minC: 9, maxC: 21, glyph: "partly" as const }] };
+  const w = {
+    tempC: 18,
+    label: "Partly cloudy",
+    icon: "⛅",
+    glyph: "partly" as const,
+    place: "Berlin",
+    hours: [
+      { hour: "19", tempC: 16, glyph: "partly-night" as const },
+      { hour: "20", tempC: 14, glyph: "rain" as const },
+      { hour: "21", tempC: 12, glyph: "cloud" as const },
+    ],
+    days: [
+      { date: "2026-11-01", minC: 9, maxC: 21, glyph: "partly" as const },
+      { date: "2026-11-02", minC: 6, maxC: 13, glyph: "rain" as const },
+    ],
+  };
   const { fx } = effects({ weather: async () => w, geminiKey: "k", fetch: () => Promise.reject(new Error("no network")) });
   const a = await route("what's the weather", fx);
   assert.deepEqual(a, { reply: "It's 18° and partly cloudy in Berlin, 21° at the warmest and 9° at night.", action: "weather" });
-  // "warm lights" is the lights, not the weather.
+  assert.equal(
+    (await route("what's the weather tomorrow?", fx)).reply,
+    "Tomorrow in Berlin: rain, 13° at the warmest and 6° at night.",
+  );
+  assert.equal(
+    (await route("do I need an umbrella?", fx)).reply,
+    "Take an umbrella: rain expected around 20:00 in Berlin (14°).",
+  );
+  assert.equal(
+    (await route("is it cold tonight?", fx)).reply,
+    "Tonight in Berlin: rain, down to 12° over the next few hours.",
+  );
+  // Dry hours say no umbrella is needed.
+  const dry = { ...w, hours: [{ hour: "19", tempC: 16, glyph: "clear-night" as const }] };
+  const dryFx = effects({ weather: async () => dry });
+  assert.match((await route("do I need an umbrella?", dryFx.fx)).reply, /^No umbrella needed:/);
+  // "warm lights" is the lights, not the weather; "The Lighthouse" and "Brighton" are not the lights.
   assert.equal((await route("warm lights", fx)).action, "domotics_updated");
+  const { fx: chatFx, lights } = effects();
+  assert.equal((await route("Is The Lighthouse scary?", chatFx)).action, "briefing");
+  assert.equal((await route("Tell me about Brighton", chatFx)).action, "briefing");
+  assert.equal(lights.length, 0);
   assert.equal(sayWeather({ tempC: 3, label: "Snow", icon: "" }), "It's 3° and snow.");
 });
 
@@ -73,7 +151,9 @@ test("Gemini answers the rest; without it, the canned briefing", async () => {
   let asked = "";
   const gemini = (async (_url: string, init: RequestInit) => {
     asked = String(init.body);
-    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "Indeed." }] } }] }));
+    return new Response(
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ intent: "chat", reply: "Indeed." }) }] } }] }),
+    );
   }) as unknown as typeof fetch;
   const { fx } = effects({ geminiKey: "k", fetch: gemini });
   assert.deepEqual(await route("Briefing", fx), { reply: "Indeed.", action: "briefing" });

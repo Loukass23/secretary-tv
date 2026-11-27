@@ -801,3 +801,20 @@ export async function toggleReminderForMode(
     return loadLocalReminders();
   }
 }
+
+/**
+ * When a TV build has no transcription or speech key, Settings › Home screen turns those voice switches off and says
+ * why; null when the build has the key (or off the TV, where `voice` is omitted).
+ */
+export function voiceSettingNote(
+  id: string,
+  voice?: { listen: boolean; speak: boolean },
+): { sub: string; value: string } | null {
+  if (id === "home.listenOnFocus" && voice?.listen === false) {
+    return { sub: "Voice is off: add NEST_GEMINI_API_KEY or NEST_GROQ_API_KEY in .env.tizen", value: "Needs a key" };
+  }
+  if (id === "home.spokenReplies" && voice?.speak === false) {
+    return { sub: "Spoken replies are off: add NEST_GEMINI_API_KEY in .env.tizen", value: "Needs a key" };
+  }
+  return null;
+}
