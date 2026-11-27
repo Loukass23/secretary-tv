@@ -125,9 +125,10 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, findCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, parseReminder, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
+const REMINDER_TOAST_MS = 6000;
 const THEME_KEY = "nest.theme";
 const VOICE_KEYS = { listen: Boolean(GEMINI_KEY || GROQ_KEY), speak: Boolean(GEMINI_KEY) };
 /** Open-Meteo updates every 15 min; the header has no need to be fresher than half an hour. */
@@ -444,10 +445,10 @@ export function App() {
   );
   const [talk, setTalk] = useState(() => brain.state());
 
-  const flash = (msg: string) => {
+  const flash = (msg: string, ms = EXIT_WINDOW_MS) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), EXIT_WINDOW_MS);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
   };
 
   /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog; with no query, on the last one typed. */
@@ -469,7 +470,8 @@ export function App() {
         const text = val.trim();
         if (!text) return;
         if (!SERVER_URL) {
-          setLocalItems(localRem.add(text));
+          const parsed = parseReminder(`remind me to ${text}`);
+          setLocalItems(parsed ? localRem.add(parsed.text, parsed.due, Date.now(), parsed.dueAt) : localRem.add(text));
           return flash("Reminder added");
         }
         addReminder(SERVER_URL, text).then(
@@ -852,6 +854,33 @@ export function App() {
       clearTimeout(t);
     };
   }, [theme]);
+
+  // Due reminders kept on the TV: one timer to the next upcoming `dueAt`, deferred while AVPlay owns the video plane.
+  useEffect(() => {
+    if (!prefs.reminders) return;
+    const checkDue = () => {
+      if (!prefsRef.current.reminders || document.visibilityState === "hidden") return;
+      if (document.documentElement.classList.contains("avplay")) return;
+      const fired = localRem.fireDue();
+      if (!fired.length) return;
+      setLocalItems(localRem.list());
+      const line = `⏰ Reminder: ${fired.map((r) => r.text).join(" · ")}`;
+      flash(line, REMINDER_TOAST_MS);
+      const at = Date.now();
+      setAlerts((prev) => [...fired.map((r) => ({ text: `⏰ ${r.text}`, at })), ...prev].slice(0, MAX_RECENT));
+    };
+    checkDue();
+    const nextAt = localRem.nextDueAt();
+    const timer = nextAt !== null ? setTimeout(checkDue, Math.max(0, Math.min(nextAt - Date.now(), 60 * 60_000))) : undefined;
+    const onWake = () => {
+      if (document.visibilityState !== "hidden") checkDue();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onWake);
+    };
+  }, [localItems, prefs.reminders, view]);
 
   // Weather straight from the TV (the SmartThings home, else the build's place); the server's only as a last resort.
   useEffect(() => {

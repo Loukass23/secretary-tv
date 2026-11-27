@@ -42,9 +42,19 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
     expectedReminder: ["check the oven", "8pm"],
   },
   {
-    prompt: "Add reminder to feed the cat",
+    prompt: "Add reminder feed the cat",
     expectedAction: "reminder_added",
     expectedReminder: ["feed the cat", undefined],
+  },
+  {
+    prompt: "Remind me to check the oven in 20 minutes",
+    expectedAction: "reminder_added",
+    expectedReminder: ["check the oven", "in 20 minutes"],
+  },
+  {
+    prompt: "Remind me to call mum tomorrow at 8",
+    expectedAction: "reminder_added",
+    expectedReminder: ["call mum", "tomorrow at 8"],
   },
   {
     prompt: "Reminder: renew passport by tomorrow",

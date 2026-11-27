@@ -318,7 +318,8 @@ The answers live in `packages/assistant` (`route()`), and Nest runs them directl
 last 8 turns in memory with no server call:
 
 - **Reminders** added through the assistant are kept on the TV (`localStorage["nest.reminders"]`, source "local", shown as
-  "Added on the TV").
+  "Added on the TV"). Due phrases ("in 20 minutes", "tomorrow at 8", "at 18:00", "tonight") resolve to a timestamp and
+  show a 6 s toast (plus a Recent entry) when due, waiting until playback ends if AVPlay is open.
 - **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
 - **Watch prompts and the search** ask the catalogs straight from the TV.

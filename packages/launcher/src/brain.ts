@@ -20,7 +20,7 @@ export interface KeyValue {
   setItem(k: string, v: string): void;
 }
 
-/** Reminders kept on this TV (source "local"), next to the server's while row 3 remains. */
+/** Reminders kept on this TV (source "local"), with due timestamps so they toast when due. */
 export function localReminders(store: KeyValue) {
   const load = (): Reminder[] => {
     try {
@@ -40,12 +40,41 @@ export function localReminders(store: KeyValue) {
   };
   return {
     list: load,
-    add(text: string, due?: string, now = Date.now()): Reminder[] {
-      const r: Reminder = { id: `local-${now.toString(36)}`, text, completed: false, source: "local", ...(due ? { due } : {}) };
+    add(text: string, due?: string, now = Date.now(), dueAt?: number): Reminder[] {
+      const r: Reminder = {
+        id: `local-${now.toString(36)}`,
+        text,
+        completed: false,
+        source: "local",
+        ...(due ? { due } : {}),
+        ...(typeof dueAt === "number" && Number.isFinite(dueAt) ? { dueAt } : {}),
+      };
       return save([r, ...load()]);
     },
     toggle(id: string): Reminder[] {
       return save(load().map((r) => (r.id === id ? { ...r, completed: !r.completed } : r)));
+    },
+    /**
+     * Marks open unfired reminders whose `dueAt` has arrived (`<= now`) as fired so each toasts once across reloads,
+     * returning the ones that just fired (earliest due first).
+     */
+    fireDue(now = Date.now()): Reminder[] {
+      const items = load();
+      const fired = items.filter((r) => !r.completed && !r.firedAt && typeof r.dueAt === "number" && r.dueAt <= now);
+      if (!fired.length) return [];
+      const ids = new Set(fired.map((r) => r.id));
+      save(items.map((r) => (ids.has(r.id) ? { ...r, firedAt: now } : r)));
+      return [...fired].sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+    },
+    /** Earliest upcoming `dueAt` among open unfired reminders, or null when none is waiting. */
+    nextDueAt(): number | null {
+      let soonest: number | null = null;
+      for (const r of load()) {
+        if (!r.completed && !r.firedAt && typeof r.dueAt === "number") {
+          if (soonest === null || r.dueAt < soonest) soonest = r.dueAt;
+        }
+      }
+      return soonest;
     },
     owns: (id: string) => id.startsWith("local-"),
   };
@@ -58,6 +87,7 @@ export interface LocalBrainOptions {
   /** Runs a lights command on SmartThings; throws when this TV has no SmartThings. */
   lights(cmd: LightsCommand): Promise<unknown>;
   weather?(): Promise<Weather | null>;
+  now?(): Date;
   geminiKey?: string;
   fetch?: typeof fetch;
 }
@@ -75,9 +105,10 @@ export function localBrain(opts: LocalBrainOptions) {
   let rev = 0;
   // Positive and increasing, so `lastAnswer.id > since` shows each new turn after the assistant is entered.
   let nextId = 1;
+  const clock = () => opts.now?.() ?? new Date();
 
   const note = (prompt: string, reply: string, action: string, extra: Partial<AssistantTurn> = {}): AssistantTurn => {
-    const turn: AssistantTurn = { id: nextId++, prompt, reply, action, source: "tv", at: Date.now(), ...extra };
+    const turn: AssistantTurn = { id: nextId++, prompt, reply, action, source: "tv", at: clock().getTime(), ...extra };
     turns.push(turn);
     if (turns.length > MAX_TURNS) turns.shift();
     rev++;
@@ -90,11 +121,12 @@ export function localBrain(opts: LocalBrainOptions) {
     async ask(prompt: string): Promise<AssistantTurn> {
       try {
         const a = await route(prompt, {
-          addReminder: (text, due) => opts.reminders.add(text, due),
+          addReminder: (text, due, dueAt) => opts.reminders.add(text, due, clock().getTime(), dueAt),
           openReminders: () => opts.reminders.list().filter((r) => !r.completed).map((r) => r.text),
           lights: opts.lights,
           find: find(f),
           weather: opts.weather,
+          now: opts.now,
           geminiKey: opts.geminiKey,
           fetch: f,
         });

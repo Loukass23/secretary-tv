@@ -3,6 +3,7 @@
 // TV (local reminders, SmartThings straight from the TV) answer the same way.
 import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
+import { parseReminder } from "./reminder.ts";
 import type { SearchResult } from "./types.ts";
 import { glyphLabel, isWetGlyph, type Weather } from "./weather.ts";
 
@@ -11,7 +12,7 @@ export type AskAction = "reminder_added" | "domotics_updated" | "briefing" | "wa
 export type LightsCommand = { scene: "cinema" | "warm" | "off" | "music" } | { level: number };
 
 export interface Effects {
-  addReminder(text: string, due?: string): unknown;
+  addReminder(text: string, due?: string, dueAt?: number): unknown;
   /** Open reminders' text, for the briefing. */
   openReminders(): string[];
   lights(cmd: LightsCommand): Promise<unknown>;
@@ -21,6 +22,8 @@ export interface Effects {
   find?(intent: WatchIntent): Promise<SearchResult[]>;
   /** The forecast here; without it weather prompts go to Gemini like any other. */
   weather?(): Promise<Weather | null>;
+  /** Clock for relative due times ("in 20 minutes", "tomorrow at 8"); defaults to `new Date()`. */
+  now?(): Date;
   geminiKey?: string;
   fetch?: typeof fetch;
 }
@@ -103,18 +106,14 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
   const clean = prompt.trim();
   const lower = clean.toLowerCase();
 
-  // 1. Check for reminder intent: "remind me to <task> [at <time>]" or "add reminder <task>"
-  const remMatch = clean.match(/^(?:remind\s+me\s+to|add\s+(?:a\s+)?reminder\s+to|remind\s+me|reminder:?)\s+(.+)$/i);
-  if (remMatch) {
-    let taskText = remMatch[1].trim();
-    let due: string | undefined;
-    const timeMatch = taskText.match(/\s+(?:at|by|on)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?|tomorrow|tonight|today)$/i);
-    if (timeMatch) {
-      due = timeMatch[1];
-      taskText = taskText.slice(0, timeMatch.index).trim();
-    }
-    await fx.addReminder(taskText, due);
-    return { reply: `Added to your Secretary Nest reminders: “${taskText}”${due ? ` (${due})` : ""}.`, action: "reminder_added" };
+  // 1. Check for reminder intent: "remind me to <task> [in 20 minutes | tomorrow at 8 | at 18:00]" or "add reminder <task>"
+  const rem = parseReminder(clean, fx.now ? fx.now() : new Date());
+  if (rem) {
+    await fx.addReminder(rem.text, rem.due, rem.dueAt);
+    return {
+      reply: `Added to your Secretary Nest reminders: “${rem.text}”${rem.due ? ` (${rem.due})` : ""}.`,
+      action: "reminder_added",
+    };
   }
 
   // 2. Something to watch: "show me a comedy", "play dune", "something for tonight".
