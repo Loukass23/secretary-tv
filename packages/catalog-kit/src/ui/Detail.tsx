@@ -797,7 +797,7 @@ export function Detail({
     } else if (id === "timeline") {
       if (sagaCol) onOpenTimeline(sagaCol, meta.id);
     } else if (id === "watched") {
-      const now = toggleTitleWatched(meta.id);
+      const now = toggleTitleWatched(meta.id, type);
       setWatched(now);
       // A whole series marked (or cleared) marks every aired episode with it.
       if (series) {

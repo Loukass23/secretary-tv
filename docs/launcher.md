@@ -264,6 +264,8 @@ the next category, Down goes into its lines, and only the lines around focus are
 | Home screen | Secretary's feature switches (below) |
 | Apps | One line per app the Apps card could show; OK hides or shows it |
 | Appearance | Accent colour, clock, boot animation, poster colour and the collection looks |
+| SmartThings (Secretary's, when set up) | Light effects, routines and lights (`launcher/src/smartthings-settings.tsx`) |
+| Accounts (Secretary's) | Simkl: connect with a code, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`) |
 | Advanced | The autoplay patterns and "Restore default settings" (a second OK confirms) |
 
 Secretary's own preferences are the `home` section of the same settings (`sectv:settings:v1`), read by the launcher
