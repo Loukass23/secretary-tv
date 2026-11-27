@@ -236,6 +236,9 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Dim the lights to 20%", expectedAction: "domotics_updated", expectedLights: { level: 20 } },
   { prompt: "Set living room lamp to 65%", expectedAction: "domotics_updated", expectedLights: { level: 65 } },
   { prompt: "Bright lights please", expectedAction: "domotics_updated", expectedLights: { scene: "warm" } },
+  { prompt: "Goodnight", expectedAction: "domotics_updated", expectedLights: { scene: "off" } },
+  { prompt: "Movie night", expectedAction: "watch", expectedWatch: { kind: "movie" }, expectedQuery: "top films", expectedLights: { scene: "cinema" } },
+  { prompt: "Good morning", expectedAction: "weather", expectedLights: { scene: "warm" } },
 
   // 6. Free-text / briefing prompts (8)
   { prompt: "Briefing", expectedAction: "briefing", freeText: true },
@@ -258,5 +261,6 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Warm lights", expectedAction: "domotics_updated", expectedLights: { scene: "warm" }, nearMiss: true },
   { prompt: "Is The Lighthouse scary?", expectedAction: "briefing", freeText: true, nearMiss: true },
   { prompt: "What's on my plate today?", expectedAction: "briefing", freeText: true, nearMiss: true },
+  { prompt: "Play Goodnight Mommy", expectedAction: "watch", expectedWatch: { term: "goodnight mommy" }, nearMiss: true },
   { prompt: "Play", expectedAction: "briefing", nearMiss: true },
 ];

@@ -4,6 +4,7 @@
 import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
 import { parseReminder } from "./reminder.ts";
+import { parseRoutine, runRoutine } from "./routine.ts";
 import type { SearchResult } from "./types.ts";
 import { glyphLabel, isWetGlyph, type Weather } from "./weather.ts";
 
@@ -115,6 +116,10 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
       action: "reminder_added",
     };
   }
+
+  // 1b. Multi-effect routines: "goodnight", "movie night", "good morning".
+  const routine = parseRoutine(clean);
+  if (routine) return runRoutine(routine, fx);
 
   // 2. Something to watch: "show me a comedy", "play dune", "something for tonight".
   const watch = fx.find ? parseWatchIntent(clean) : null;

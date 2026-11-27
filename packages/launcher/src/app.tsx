@@ -125,7 +125,7 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, findCatalogs, parseReminder, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const REMINDER_TOAST_MS = 6000;
@@ -538,8 +538,8 @@ export function App() {
       flash(rippleStyle === "launch" ? "✨ Launch ripple" : "✨ Open ripple");
       return void playRippleTest(rippleStyle).catch(() => flash("SmartThings didn't take that; try again"));
     }
-    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no Gemini.
-    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes, independentLights()) : null;
+    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, unless it is a multi-step routine.
+    const act = !parseRoutine(prompt) && (devices.length || scenes.length) ? homeAction(prompt, devices, scenes, independentLights()) : null;
     if (act) {
       flash(act.reply);
       if (act.picture) {

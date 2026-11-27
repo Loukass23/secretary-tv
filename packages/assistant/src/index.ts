@@ -4,6 +4,7 @@ export * from "./groq.ts";
 export * from "./intent.ts";
 export * from "./reminder.ts";
 export * from "./route.ts";
+export * from "./routine.ts";
 export * from "./search.ts";
 export * from "./types.ts";
 export * from "./weather.ts";

@@ -322,6 +322,8 @@ last 8 turns in memory with no server call:
   show a 6 s toast (plus a Recent entry) when due, waiting until playback ends if AVPlay is open.
 - **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
+- **Routines** ("goodnight", "movie night", "good morning") combine effects in one answer: "goodnight" turns the lights
+  off, reads tomorrow's forecast and counts open reminders; "movie night" sets Cinema lights and opens tonight's films.
 - **Watch prompts and the search** ask the catalogs straight from the TV.
 - **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
   answered from the forecast (now, the next hours and tomorrow), with no Gemini call.

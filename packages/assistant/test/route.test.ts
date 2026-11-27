@@ -53,10 +53,53 @@ test("lights: scenes and levels", async () => {
 
 test("music mode is its own scene, apart from cinema", async () => {
   const { fx, lights } = effects();
-  const a = await route("Music mode", fx);
-  assert.equal(a.action, "domotics_updated");
+  assert.equal((await route("Music mode", fx)).action, "domotics_updated");
   await route("cinema mode", fx);
   assert.deepEqual(lights, [{ scene: "music" }, { scene: "cinema" }]);
+});
+
+test("routines run scene, reminders and weather or film picks together, surviving missing effects", async () => {
+  const w = {
+    tempC: 18,
+    label: "Clear",
+    icon: "☀️",
+    place: "Berlin",
+    days: [
+      { date: "2026-11-01", minC: 9, maxC: 21, glyph: "clear" as const },
+      { date: "2026-11-02", minC: 5, maxC: 11, glyph: "rain" as const },
+    ],
+  };
+  const { fx, lights } = effects({
+    weather: async () => w,
+    find: async (i) => (i.kind === "movie" ? [{ type: "movie", title: { id: "tt1", name: "Dune", year: "2021", rating: "8.0" } }] : []),
+  });
+
+  const gn = await route("Goodnight", fx);
+  assert.equal(gn.action, "domotics_updated");
+  assert.match(gn.reply, /Lights off/);
+  assert.match(gn.reply, /Tomorrow in Berlin: rain, 11° at the warmest and 5° at night/);
+  assert.match(gn.reply, /1 reminder open: “water the plants”/);
+
+  const mn = await route("Movie night!", fx);
+  assert.equal(mn.action, "watch");
+  assert.equal(mn.results?.length, 1);
+  assert.match(mn.reply, /Cinema lights set/);
+  assert.deepEqual(lights, [{ scene: "off" }, { scene: "cinema" }]);
+
+  // Without SmartThings (`lights` rejects), goodnight still summarizes tomorrow's weather and reminders.
+  const noSt = effects({
+    lights: async () => {
+      throw new Error("no SmartThings");
+    },
+    weather: async () => w,
+  });
+  const partial = await route("going to bed", noSt.fx);
+  assert.equal(partial.action, "weather");
+  assert.match(partial.reply, /Tomorrow in Berlin/);
+
+  // Near misses stay on their own handlers.
+  assert.equal((await route("play Goodnight Mommy", fx)).action, "watch");
+  assert.equal((await route("remind me about movie night", fx)).action, "reminder_added");
 });
 
 test("the weather comes from the forecast, without Gemini", async () => {
