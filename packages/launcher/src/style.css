@@ -406,6 +406,13 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .lfx-chip { padding: 10px 26px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--sg-line); font-size: var(--sg-t-s); font-weight: 600; color: var(--sg-ink-dim); }
 /* The state set: lit in the accent. */
 .lfx-chip.is-on { background: var(--sg-accent); color: var(--sg-accent-ink); box-shadow: none; }
+/* Settings › Accounts: the Simkl code beside its QR (accounts-settings.tsx). */
+.acc-pin { display: flex; gap: 28px; align-items: center; }
+.acc-pin .nest-qr { flex: none; border-radius: 12px; }
+.acc-pin > div { display: flex; flex-direction: column; min-width: 0; }
+.acc-kicker { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
+.acc-url { font-size: var(--sg-t-m); font-weight: 600; margin: 4px 0 16px; overflow-wrap: anywhere; }
+.acc-code { font-family: var(--sg-font-num, var(--sg-font-display)); font-size: var(--sg-t-xxl); font-weight: 600; letter-spacing: 0.12em; color: var(--sg-accent); }
 /* The effects list keeps PreviewList's compact lines over the home's own card sizes (.nest .sg-card-row). */
 .nest .sg-plist .sg-plist-line .sg-card-row { font-size: var(--sg-t-m); }
 .nest .sg-plist .sg-plist-line .sg-card-meta { font-size: var(--sg-t-s); }

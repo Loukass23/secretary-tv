@@ -45,4 +45,12 @@ export interface HostSettingsTab {
   /** The line under "Settings" while the category is shown. */
   blurb: string;
   rows(): readonly HostSettingRow[];
+  /** Calls `redraw` when the rows change on their own (a sign-in finishing on the phone); returns the unsubscribe. */
+  subscribe?(redraw: () => void): () => void;
+}
+
+/** Whether this TV build has keys for voice input (`listen`) and spoken replies (`speak`), shown in Settings › Home screen. */
+export interface HostVoice {
+  listen: boolean;
+  speak: boolean;
 }

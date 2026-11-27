@@ -30,11 +30,7 @@ import {
 } from "./apps.ts";
 import {
   artProxy,
-  askNest,
-  type AssistantState,
   type AssistantTurn,
-  CHIPS,
-  fetchAssistant,
   fetchWeather,
   THEME_PREFS,
   type ThemePref,
@@ -42,14 +38,13 @@ import {
   flipTheme,
   ripplePrompt,
   themePrompt,
-  transcribeClip,
   VoiceError,
   WAVE_STATUS,
   briefing,
   waveState,
   type Weather,
 } from "./assistant.ts";
-import { localBrain, localReminders, mergeTurns, NestError } from "./brain.ts";
+import { localBrain, localReminders, NestError } from "./brain.ts";
 import { cloud, cloudEnabled, signInSkipped, skipSignIn } from "./cloud.ts";
 import { GEMINI_KEY, GROQ_KEY, HIDE, PINS, SERVER_URL, WEATHER_ENV, YOUTUBE_API_KEY, YOUTUBE_APP_ID } from "./config.ts";
 import { alertsShown, mayListen, remindersShown, speaksReply } from "./features.ts";
@@ -116,13 +111,17 @@ import {
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
 import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalog-kit/src/lib/animeguard.ts";
-import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { isTitleWatched, loadWatchedIds, removeResume, toggleTitleWatched, watchedEpisodes } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { fetchMeta } from "@secretary/catalog-kit/src/lib/cinemeta.ts";
+import { defaultEpisode, episodesOf, nextEpisode, seasonsOf } from "@secretary/catalog-kit/src/lib/episodes.ts";
+import { episodeTag, isSpoiler } from "@secretary/catalog-kit/src/lib/titlepage.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light-fx.ts";
 import { lightCount, lightsOnLabel } from "./light-count.ts";
 import { MoodPanel } from "./mood.tsx";
 import { activeMood, allMoods, mainMoods, type Mood, setActiveMood } from "./moods.ts";
 import { readTvPicture } from "./picture-mode.ts";
+import { accountsTab, startTrackers } from "./accounts-settings.tsx";
 import { settled, SMARTTHINGS_TAB, smartThingsTab } from "./smartthings-settings.tsx";
 import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
@@ -130,12 +129,12 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, findCatalogs, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, type FocusedTitleContext, type MoodKey, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
+const REMINDER_TOAST_MS = 6000;
 const THEME_KEY = "nest.theme";
-/** How often Nest asks the server what the assistant is doing (prompts from the phone show up this fast). */
-const ASSISTANT_POLL_MS = 2500;
+const VOICE_KEYS = { listen: Boolean(GEMINI_KEY || GROQ_KEY), speak: Boolean(GEMINI_KEY) };
 /** Open-Meteo updates every 15 min; the header has no need to be fresher than half an hour. */
 const WEATHER_POLL_MS = 30 * 60_000;
 /** Answers and home alerts in the Recent row, newest first. */
@@ -298,6 +297,8 @@ export function App() {
   const [prefs, setPrefs] = useState(() => loadSettings().home);
   // The one accent and the type (glass tokens.ts) come from the settings, from the first frame and on every change.
   useMemo(() => applyLook(loadSettings().general), []);
+  // The watch trackers the viewer connected (Settings › Accounts: Simkl), told what plays from the first frame.
+  useMemo(() => startTrackers(), []);
   useEffect(
     () =>
       onSettings((s) => {
@@ -389,7 +390,6 @@ export function App() {
   /** The mood last set (moods.ts activeMood): the header's lights button shows its icon. */
   const [moodKey, setMoodKey] = useState<string | null>(activeMood);
   const [time, setTime] = useState(clock);
-  const [assistant, setAssistant] = useState<AssistantState | null>(null);
   const [asking, setAsking] = useState(false);
   const [listening, setListening] = useState(false);
   const [answered, setAnswered] = useState(false);
@@ -411,8 +411,6 @@ export function App() {
   /** No room microphone (or no transcription): the mic key opens the TV keyboard, as before. */
   const keyboardOnly = useRef(false);
   const [glow, setGlow] = useState<string | undefined>();
-  /** The newest turn already handled; undefined until the first poll, whose turns are history. */
-  const lastTurn = useRef<number>();
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
   const [devices, setDevices] = useState<StDevice[]>([]);
   const [scenes, setScenes] = useState<StScene[]>([]);
@@ -437,25 +435,105 @@ export function App() {
   const scene = useRef(0);
   const lastBack = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
-  /** What the TV's own assistant reads when it answers: the latest devices, scenes and forecast. */
-  const live = useRef({ devices, scenes, weather });
-  live.current = { devices, scenes, weather };
+  /** What the TV's own assistant reads when it answers: the latest devices, scenes, forecast and focused title. */
+  const lastFocusedTarget = useRef<{ type: CatalogKind; title: SlimTitle } | null>(null);
+  const live = useRef({ devices, scenes, weather, continueItems, myList });
+  /** The viewer's mood by key (set below, beside applyMood), for Ask's mood prompts and routines. */
+  const moodBy = useRef<(key: MoodKey) => Promise<unknown>>(() => Promise.resolve());
+  live.current = { devices, scenes, weather, continueItems, myList };
+  const readFocusedTitle = async (): Promise<FocusedTitleContext | null> => {
+    const pick =
+      lastFocusedTarget.current ??
+      (live.current.continueItems[0] ? { type: live.current.continueItems[0].type, title: live.current.continueItems[0].title } : null);
+    if (!pick) return null;
+    const meta = await Promise.race([
+      fetchMeta(pick.type, pick.title.id).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+    ]);
+    const spoilerMode = loadSettings().playback.spoilerProtection;
+    const watched = watchedEpisodes(pick.title.id);
+    const titleWatched = isTitleWatched(pick.title.id);
+    const resume = live.current.continueItems.find((e) => e.title.id === pick.title.id);
+    const videos = meta?.videos ?? [];
+    const ordered = seasonsOf(videos).flatMap((s) => episodesOf(videos, s));
+
+    let lastWatched: FocusedTitleContext["lastWatched"];
+    if (resume?.episode) {
+      const match = videos.find((v) => v.season === resume.episode!.season && v.episode === resume.episode!.episode);
+      lastWatched = {
+        label: episodeTag(resume.episode),
+        name: match?.name ?? resume.episode.name,
+        overview: match?.overview,
+      };
+    } else if (ordered.length && watched.size) {
+      const seen = [...ordered].reverse().find((v) => watched.has(`${v.season}:${v.episode}`));
+      if (seen) lastWatched = { label: episodeTag(seen), name: seen.name, overview: seen.overview };
+    }
+
+    let nextEp: FocusedTitleContext["nextEpisode"];
+    if (pick.type !== "movie" && videos.length) {
+      const candidate = resume?.episode
+        ? (nextEpisode(videos, resume.episode.id) ?? defaultEpisode(videos, resume.episode.id, Date.now(), watched))
+        : defaultEpisode(videos, undefined, Date.now(), watched);
+      if (candidate) {
+        nextEp = {
+          label: episodeTag(candidate),
+          name: candidate.name,
+          overview: candidate.overview,
+          unwatched: isSpoiler(candidate, { mode: "blur", watched, resumeId: resume?.episode?.id, titleWatched }),
+        };
+      }
+    }
+
+    return {
+      id: pick.title.id,
+      kind: pick.type,
+      name: meta?.name ?? pick.title.name,
+      year: meta?.year || pick.title.year || undefined,
+      rating: meta?.rating || pick.title.rating || undefined,
+      runtime: meta?.runtime,
+      genres: meta?.genre,
+      director: meta?.director,
+      cast: meta?.cast,
+      poster: meta?.poster ?? pick.title.poster,
+      background: meta?.background ?? pick.title.background,
+      description: meta?.description ?? pick.title.description,
+      spoilerMode,
+      lastWatched,
+      nextEpisode: nextEp,
+    };
+  };
   const brain = useMemo(
     () =>
       localBrain({
         reminders: localRem,
         lights: (cmd) => runLights(cmd, live.current.devices, live.current.scenes),
+        // Ask's "cinema mode", "movie night" and "goodnight" set the viewer's own moods, as the strip does.
+        mood: (key) => moodBy.current(key),
+        focusedTitle: readFocusedTitle,
+        continueWatching: () => live.current.continueItems.map((e) => ({ type: e.type, title: e.title })),
+        myList: () =>
+          [...live.current.myList]
+            .sort((a, b) => b.addedAt - a.addedAt)
+            .map((l) => ({ type: l.type, title: l.title })),
+        setMyList: (wantSaved) => {
+          const pick = lastFocusedTarget.current;
+          if (!pick) return null;
+          const currently = inLibrary(pick.type, pick.title.id);
+          if (currently !== wantSaved) toggleLibrary(pick.type, pick.title);
+          return { name: pick.title.name, saved: wantSaved, item: { type: pick.type, title: pick.title } };
+        },
         weather: async () => live.current.weather,
         geminiKey: GEMINI_KEY,
       }),
     [],
   );
-  const [localState, setLocalState] = useState(() => brain.state());
+  const [talk, setTalk] = useState(() => brain.state());
 
-  const flash = (msg: string) => {
+  const flash = (msg: string, ms = EXIT_WINDOW_MS) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), EXIT_WINDOW_MS);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
   };
 
   /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog; with no query, on the last one typed. */
@@ -477,7 +555,8 @@ export function App() {
         const text = val.trim();
         if (!text) return;
         if (!SERVER_URL) {
-          setLocalItems(localRem.add(text));
+          const parsed = parseReminder(`remind me to ${text}`);
+          setLocalItems(parsed ? localRem.add(parsed.text, parsed.due, Date.now(), parsed.dueAt) : localRem.add(text));
           return flash("Reminder added");
         }
         addReminder(SERVER_URL, text).then(
@@ -507,12 +586,9 @@ export function App() {
     setAnswered(true);
     clearTimeout(speakTimer.current);
     speakTimer.current = setTimeout(() => setAnswered(false), SPEAK_MS);
-    // What was asked moves the view to the card concerned, unless the chat has the whole screen or the phone asked.
-    showTurn(turn, turn.source !== "companion" && focusRef.current.area !== "chat");
-    if (turn.action === "reminder_added") {
-      setLocalItems(localRem.list());
-      if (SERVER_URL) fetchReminders(SERVER_URL).then(applyReminders, () => {});
-    }
+    // What was asked moves the view to the card concerned, unless the chat has the whole screen.
+    showTurn(turn, focusRef.current.area !== "chat");
+    if (turn.action === "reminder_added") setLocalItems(localRem.list());
   };
 
   /** What an answer is about: films it recommends open the Cinema card (or Shows, Anime), the weather opens its card, and so on. */
@@ -526,29 +602,26 @@ export function App() {
         if (good.length && good.length < items.length) setFound((f) => (f && f.prompt === turn.prompt && f.reply === turn.reply ? { ...f, items: good } : f));
       });
       if (m && here) setGoto({ key: m.key, inside: true });
+    } else if (here && turn.action === "resume" && turn.results?.[0]) {
+      const hit = turn.results[0];
+      const inProgress = live.current.continueItems.find((e) => e.title.id === hit.title.id);
+      if (inProgress) resume(inProgress);
+      else openHit(hit);
+    } else if (here && (turn.action === "title_info" || turn.action === "mylist_updated") && turn.results?.[0]) {
+      const m = MEDIA.find((k) => k.kind === turn.results![0].type);
+      if (m && focusRef.current.area !== "row") setGoto({ key: m.key, inside: false });
     } else if (here && turn.action === "weather") setGoto({ key: "weather", inside: true });
     else if (here && turn.action === "domotics_updated") setGoto({ key: "home", inside: false });
     else if (here && turn.action === "reminder_added") setGoto({ key: "reminders", inside: true });
   }
 
-  /** An answer from the TV's own assistant. */
+  /** An answer from the TV's assistant. */
   const showLocal = (turn: AssistantTurn) => {
-    setLocalState(brain.state());
+    setTalk(brain.state());
     onNewTurn(turn);
   };
 
-  const applyAssistant = (st: AssistantState) => {
-    setAssistant((prev) => (prev && prev.rev === st.rev ? prev : st));
-    const last = st.turns[st.turns.length - 1];
-    if (lastTurn.current === undefined) {
-      lastTurn.current = last?.id ?? 0;
-    } else if (last && last.id > lastTurn.current) {
-      lastTurn.current = last.id;
-      onNewTurn(last);
-    }
-  };
-
-  /** Asks the server; `spoken` prompts get their answer read aloud too, unless replies are muted. */
+  /** Asks the assistant on the TV; `spoken` prompts get their answer read aloud too, unless replies are muted. */
   const send = async (prompt: string, spoken = false) => {
     const pref = themePrompt(prompt);
     if (pref) return pickTheme(pref);
@@ -558,8 +631,8 @@ export function App() {
       flash(rippleStyle === "launch" ? "✨ Launch ripple" : "✨ Open ripple");
       return void playRippleTest(rippleStyle).catch(() => flash("SmartThings didn't take that; try again"));
     }
-    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, no server or Gemini.
-    const act = devices.length || scenes.length ? homeAction(prompt, devices, scenes, independentLights()) : null;
+    // A light, "the lights", a scene or the vacuum by name: straight to SmartThings, unless it is a multi-step routine.
+    const act = !parseRoutine(prompt) && (devices.length || scenes.length) ? homeAction(prompt, devices, scenes, independentLights()) : null;
     if (act) {
       flash(act.reply);
       showLocal(brain.note(prompt, act.reply, "domotics_updated"));
@@ -581,28 +654,12 @@ export function App() {
       return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
     }
     setAsking(true);
-    const wantSpeech = speaksReply(prefs, spoken);
-    let speech: string | Uint8Array | null | undefined;
+    const wantSpeech = speaksReply(prefs, spoken, VOICE_KEYS.speak);
+    let speech: Uint8Array | null | undefined;
     try {
-      // The server first when it is up (the phone shares its turns and reminders), else the TV answers itself.
-      let reply: string | undefined;
-      if (SERVER_URL && serverOnline) {
-        try {
-          ({ reply, speech } = await askNest(SERVER_URL, prompt, fetch, wantSpeech));
-          applyAssistant(await fetchAssistant(SERVER_URL));
-        } catch {
-          reply = undefined;
-        }
-      }
-      if (reply === undefined) {
-        const turn = await brain.ask(prompt);
-        reply = turn.reply;
-        showLocal(turn);
-      }
-      if (wantSpeech && !speech && GEMINI_KEY) {
-        const wav = await speakGemini(reply, GEMINI_KEY);
-        speech = wav;
-      }
+      const turn = await brain.ask(prompt);
+      showLocal(turn);
+      if (wantSpeech) speech = await speakGemini(turn.reply, GEMINI_KEY);
     } finally {
       setAsking(false);
     }
@@ -617,10 +674,10 @@ export function App() {
 
   /**
    * The mic key: a clip from the room microphone (docs/launcher.md, "Room microphone"), the key again to stop early.
-   * Falls back to the TV keyboard's dictation when the TV gives the app no microphone or the server cannot transcribe.
+   * Without a transcription key, or when the TV gives the app no microphone, it opens the TV keyboard instead.
    */
   const listen = async (auto = false) => {
-    if (!SERVER_URL && !GEMINI_KEY && !GROQ_KEY) return auto ? undefined : openAsk();
+    if (!mayListen(prefsRef.current, auto, VOICE_KEYS.listen)) return auto ? undefined : openAsk();
     if (recording.current) return recording.current.stop();
     if (opening.current) return;
     if (keyboardOnly.current) return auto ? undefined : openAsk();
@@ -645,13 +702,10 @@ export function App() {
     setAsking(true);
     let words = "";
     try {
-      words = GEMINI_KEY || GROQ_KEY ? await transcribeOnTv(clip) : await transcribeClip(SERVER_URL, clip);
+      words = await transcribeOnTv(clip);
     } catch (e) {
       const reason = e instanceof VoiceError ? e.reason : "failed";
-      if (reason === "unavailable") {
-        keyboardOnly.current = true;
-        flash("Voice needs a Gemini key on the server or in this build");
-      } else if (reason === "no-assistant") {
+      if (reason === "no-assistant") {
         flash("No assistant connected: check the API key");
       } else {
         flash(reason === "no-speech" ? "Couldn't hear anything" : "Couldn't reach the assistant");
@@ -688,6 +742,7 @@ export function App() {
   };
 
   const toggleSpeech = () => {
+    if (!VOICE_KEYS.speak) return flash("Spoken replies need NEST_GEMINI_API_KEY in this build");
     const next = !speakReplies;
     // A setting now (Settings › Home screen); saving also keeps the old nest.speak key in step.
     saveHome({ spokenReplies: next });
@@ -707,7 +762,7 @@ export function App() {
     if (!opened) {
       setListening(false);
       flash(SERVER_URL ? `No TV keyboard here: ask from your phone at ${SERVER_URL}/companion` : "No TV keyboard here");
-    } else {
+    } else if (VOICE_KEYS.listen) {
       flash("🎤 Listening");
     }
   };
@@ -910,17 +965,32 @@ export function App() {
     };
   }, [theme]);
 
-  // What the assistant is doing, while the home screen is up: prompts from the phone show here too.
+  // Due reminders kept on the TV: one timer to the next upcoming `dueAt`, deferred while AVPlay owns the video plane.
   useEffect(() => {
-    if (view !== "home" || !SERVER_URL) return;
-    const poll = () => {
-      if (document.visibilityState === "hidden") return;
-      fetchAssistant(SERVER_URL).then(applyAssistant, () => {});
+    if (!prefs.reminders) return;
+    const checkDue = () => {
+      if (!prefsRef.current.reminders || document.visibilityState === "hidden") return;
+      if (document.documentElement.classList.contains("avplay")) return;
+      const fired = localRem.fireDue();
+      if (!fired.length) return;
+      setLocalItems(localRem.list());
+      const line = `⏰ Reminder: ${fired.map((r) => r.text).join(" · ")}`;
+      flash(line, REMINDER_TOAST_MS);
+      const at = Date.now();
+      setAlerts((prev) => [...fired.map((r) => ({ text: `⏰ ${r.text}`, at })), ...prev].slice(0, MAX_RECENT));
     };
-    poll();
-    const t = setInterval(poll, ASSISTANT_POLL_MS);
-    return () => clearInterval(t);
-  }, [view]);
+    checkDue();
+    const nextAt = localRem.nextDueAt();
+    const timer = nextAt !== null ? setTimeout(checkDue, Math.max(0, Math.min(nextAt - Date.now(), 60 * 60_000))) : undefined;
+    const onWake = () => {
+      if (document.visibilityState !== "hidden") checkDue();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onWake);
+    };
+  }, [localItems, prefs.reminders, view]);
 
   // Weather straight from the TV (the SmartThings home, else the build's place); the server's only as a last resort.
   useEffect(() => {
@@ -1025,8 +1095,6 @@ export function App() {
     };
   }, []);
 
-  // The glow takes the focused tile's artwork colour, read through the server (the art hosts send no CORS headers).
-  const talk = mergeTurns(assistant, localState);
   // Recent: the assistant's latest answers and the home's latest news, newest first, then Continue Watching.
   // The same prompt asked again shows once, as its newest answer.
   const recentTurns = talk.turns
@@ -1051,7 +1119,7 @@ export function App() {
   // answer rises in the Ask panel on its own (docs/performance.md, "Voice").
   const [recent, setRecent] = useState<RecentCard[]>(latest);
   const latestKey = latest.map((c) => c.key).join();
-  const idle = !listening && !asking && !answered && !talk.pending;
+  const idle = !listening && !asking && !answered;
   useEffect(() => {
     if (idle) setRecent(latest);
   }, [latestKey, idle]);
@@ -1081,11 +1149,41 @@ export function App() {
   // Settings › Playback › Resume from Continue watching: play at once, or open the title's page first.
   const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title, loadSettings().playback.resumeAtOnce);
   const openHit = (r: SearchResult) => browse({ type: r.type, open: { type: r.type, title: r.title } });
-  /** "Recommend me" on a media card's end bar: the assistant's picks of its kind become a row on the card (recommend.ts). */
+  /** "Recommend me" on a media card's end bar: taste-aware picks of its kind become a row on the card (recommend.ts). */
   const askRecommend = (key: string, kind: CatalogKind, shown: ReadonlySet<string>) => {
     const n = recs[key]?.n ?? 0;
+    const byId = new Map<string, string[]>();
+    for (const d of DISCOVER) {
+      for (const r of discover[d.key] ?? []) {
+        const list = byId.get(r.title.id);
+        if (list) {
+          if (!list.includes(d.genre)) list.push(d.genre);
+        } else {
+          byId.set(r.title.id, [d.genre]);
+        }
+      }
+    }
+    const taste = {
+      watching: continueItems.map((e) => ({
+        id: e.title.id,
+        name: e.title.name,
+        kind: e.type,
+        genres: byId.get(e.title.id),
+        description: e.title.description,
+      })),
+      saved: [...myList]
+        .sort((a, b) => b.addedAt - a.addedAt)
+        .map((l) => ({
+          id: l.title.id,
+          name: l.title.name,
+          kind: l.type,
+          genres: byId.get(l.title.id),
+          description: l.title.description,
+        })),
+    };
+    const excluded = new Set([...shown, ...dismissed, ...loadWatchedIds()]);
     setRecs((r) => ({ ...r, [key]: { state: { status: "loading" }, n } }));
-    void recommend(kind, n, shown, (intent) => discoverCatalog(intent.kind, intent.genre)).then((state) => {
+    void recommend(kind, n, excluded, (intent) => discoverCatalog(intent.kind, intent.genre), taste).then((state) => {
       setRecs((r) => ({ ...r, [key]: { state, n: n + 1 } }));
       if (state.status === "ready") setRecFocus(key);
     });
@@ -1142,9 +1240,14 @@ export function App() {
     onExit: leaveCatalog,
     onSearch: searchFromCatalog,
     // Settings › SmartThings: the effects, routines and lights the Mood panel's moods are built from.
-    settingsTabs: homeConfigured()
-      ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
-      : [],
+    // Settings › Accounts: the watch trackers (Simkl).
+    settingsTabs: [
+      ...(homeConfigured()
+        ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
+        : []),
+      accountsTab(),
+    ],
+    voice: VOICE_KEYS,
     // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
     apps: appsOnCard(apps, [], OWN_PLACES).map((a) => ({
       id: a.id,
@@ -1468,6 +1571,10 @@ export function App() {
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   mediaFocused.current = columns[colAt]?.kind === "media";
+  if (columns[colAt]?.kind === "media") {
+    const focusedTile = targetAt(columns[colAt], focus.inside ? Math.max(0, focus.i) : 0);
+    if (focusedTile) lastFocusedTarget.current = { type: focusedTile.type, title: focusedTile.title };
+  }
   // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
   const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
@@ -1524,7 +1631,7 @@ export function App() {
       ...g.__sectv,
       continueItems,
       reminders,
-      assistant,
+      assistant: talk,
       // spoken: the reply is read aloud as after a voice prompt (Gemini speech, envelope, playback).
       ask: (q: string, spoken = false) => send(q, spoken),
       // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
@@ -1534,7 +1641,7 @@ export function App() {
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => openSearch(q),
     };
-  }, [continueItems, reminders, assistant]);
+  }, [continueItems, reminders, talk]);
 
 
   // The strip's moods: the four and the routines shown, as the viewer set them (read while it is open).
@@ -1543,7 +1650,7 @@ export function App() {
     cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
     "TV settings",
     THEME_LABEL[themePref],
-    speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off",
+    ...(VOICE_KEYS.speak ? [speakReplies ? "🔊 Spoken replies: on" : "🔇 Spoken replies: off"] : []),
   ];
   // A media card is open while the remote is inside it: its row of titles takes the width.
   const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
@@ -1566,7 +1673,7 @@ export function App() {
   useEffect(() => {
     if (!talking || view !== "home") return;
     setSince(talk.turns[talk.turns.length - 1]?.id ?? 0);
-    if (mayListen(prefs, true) && !recording.current && !keyboardOnly.current && (SERVER_URL || GEMINI_KEY || GROQ_KEY)) void listen(true);
+    if (mayListen(prefs, true, VOICE_KEYS.listen) && !recording.current && !keyboardOnly.current) void listen(true);
     return () => recording.current?.cancel();
   }, [talking, view, prefs.listenOnFocus]);
 
@@ -1619,7 +1726,8 @@ export function App() {
     if (card.kind === "alert") return homeConfigured() ? void setView("lights") : undefined;
     const turn = talk.turns.find((t) => `t${t.id}` === card.key);
     if (!turn) return;
-    if (turn.action === "watch" || turn.action === "weather") return showTurn(turn, true);
+    if (turn.action === "watch" || turn.action === "weather" || turn.action === "resume") return showTurn(turn, true);
+    if ((turn.action === "title_info" || turn.action === "mylist_updated") && turn.results?.[0]) return openHit(turn.results[0]);
     if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
     if (turn.action === "reminder_added") return focusReminders(reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text)));
     void send(turn.prompt);
@@ -1655,6 +1763,10 @@ export function App() {
     else if (SERVER_URL) toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
   }
 
+  moodBy.current = (key) => {
+    const m = mainMoods(scenes).find((x) => x.key === key);
+    return m ? applyMood(m) : Promise.reject(new NestError(`No ${key} mood`));
+  };
   /**
    * A mood (moods.ts, with the viewer's changes): its effects, then together its lights (a show, a level or a routine,
    * unless it leaves them), the TV's picture mode and the sound system, each only when the mood sets it.
@@ -1858,7 +1970,7 @@ export function App() {
     }
     if (id === "details") return openHit({ type: t.type, title: t.title });
     if (id === "play") return playTitle(t.type, t.title);
-    if (id === "watched") return flash(toggleTitleWatched(t.title.id) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);
+    if (id === "watched") return flash(toggleTitleWatched(t.title.id, t.type) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);
     if (id === "mylist") return flash(toggleLibrary(t.type, t.title) ? `${t.title.name} added to My List` : `${t.title.name} removed from My List`);
   };
 
@@ -1990,15 +2102,14 @@ export function App() {
   ];
 
   const lastAnswer = talk.turns[talk.turns.length - 1];
-  const pending = talk.pending;
-  const wave = waveState({ listening, asking, pending: Boolean(pending), answered });
+  const wave = waveState({ listening, asking, answered });
   // An answer from before the assistant was entered is not shown again in it.
-  const stale = !pending && (lastAnswer?.id ?? 0) <= since;
+  const stale = (lastAnswer?.id ?? 0) <= since;
   const askView = {
     wave,
-    status: WAVE_STATUS[wave] || (lastAnswer?.source === "companion" ? "From your phone" : ""),
-    prompt: listening || stale ? undefined : (pending?.prompt ?? lastAnswer?.prompt),
-    reply: pending || stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
+    status: WAVE_STATUS[wave],
+    prompt: listening || stale ? undefined : lastAnswer?.prompt,
+    reply: stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
     turnId: lastAnswer?.id ?? 0,
     focused: focus.area === "ask",
     full: focus.area === "chat",

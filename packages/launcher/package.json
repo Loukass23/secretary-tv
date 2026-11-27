@@ -13,6 +13,7 @@
     "@secretary/catalog-kit": "workspace:*",
     "@secretary/nuvio": "workspace:*",
     "@secretary/party": "workspace:*",
+    "@secretary/simkl": "workspace:*",
     "@secretary/smartthings": "workspace:*",
     "@secretary/tv-kit": "workspace:*",
     "preact": "^10.24.0",

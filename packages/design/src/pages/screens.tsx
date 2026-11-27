@@ -19,6 +19,7 @@ import { HEADER_ITEMS, headerButtons, Home as NestHome } from "@secretary/launch
 import { MoodPanel } from "@secretary/launcher/src/mood.tsx";
 import { activeMood, allMoods, setActiveMood } from "@secretary/launcher/src/moods.ts";
 import { setLightFx } from "@secretary/launcher/src/light-fx.ts";
+import { accountsTab } from "@secretary/launcher/src/accounts-settings.tsx";
 import { smartThingsTab } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
 import { enter, type Focus, HEADER_LIGHTS, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
@@ -277,7 +278,7 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab | "SmartThings"; 
       }}
       header={HEADER}
       apps={SETTINGS_APPS}
-      hostTabs={[st]}
+      hostTabs={[st, accountsTab()]}
       initialTab={tab}
       onSearch={noop}
       onOpenNest={noop}

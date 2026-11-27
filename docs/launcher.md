@@ -250,6 +250,8 @@ the next category, Down goes into its lines, and only the lines around focus are
 | Home screen | Secretary's feature switches (below) |
 | Apps | One line per app the Apps card could show; OK hides or shows it |
 | Appearance | Accent colour, clock, boot animation, poster colour and the collection looks |
+| SmartThings (Secretary's, when set up) | Light effects, routines and lights (`launcher/src/smartthings-settings.tsx`) |
+| Accounts (Secretary's) | Simkl: connect with a code, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`) |
 | Advanced | The autoplay patterns and "Restore default settings" (a second OK confirms) |
 
 Secretary's own preferences are the `home` section of the same settings (`sectv:settings:v1`), read by the launcher
@@ -257,9 +259,11 @@ through `launcher/src/features.ts` and kept in step with `onSettings`:
 
 - **Reminders**: off hides the Reminders card, the bell's count and reminders in the assistant's greeting. Nothing is deleted.
 - **Home notifications**: off, SmartThings changes are neither toasted nor kept in the Recent card.
-- **Spoken replies**: as Blue on the home screen. Settings saved before this kept it in `nest.speak` ("0" off); that key is
+- **Spoken replies**: as Blue on the home screen. Needs `NEST_GEMINI_API_KEY` in `.env.tizen`; without it Settings says why
+  and the profile menu leaves the toggle out. Settings saved before this kept it in `nest.speak` ("0" off); that key is
   still read until the setting is saved, and still written, so an older build agrees.
-- **Listen when the assistant is focused**: off, the microphone waits for OK or the mic key.
+- **Listen when the assistant is focused**: off, the microphone waits for OK or the mic key. Needs `NEST_GEMINI_API_KEY` or
+  `NEST_GROQ_API_KEY` in `.env.tizen`; without either key, voice is off and Settings says why.
 - **Apps**: only the ids hidden are stored (`home.hiddenApps`), so an app installed later shows on the Apps card.
 
 "Resume from Continue watching" decides whether OK on a title in progress plays it at once or opens its page first; the
@@ -297,9 +301,6 @@ out of scope, and so are its small grey text, large soft shadows and all-white s
 - **Answers take the stage**: titles from a watch prompt replace the apps and reminders on the right, four posters
   across, until Back. Every answer also becomes a card in **Recent** (bottom left, before Continue Watching), with home
   alerts from SmartThings ("the vacuum finished"): Watch, Reminder, Lights, Weather, Briefing and Home cards.
-- Prompts go to the server's `POST /ai/ask` with `source: "tv"` when a server is configured and up. Nest polls
-  `GET /ai/state` every 2.5 s while the home screen is up, so prompts typed on the phone companion show on the TV too
-  ("From your phone"). The server keeps the last 8 turns in memory only.
 - **Watch prompts** (`packages/assistant/src/intent.ts`): "play dune", "show me a comedy", "something for tonight",
   "find me scary anime". A named title is searched; a kind or genre alone browses Cinemeta's top catalogs (Kitsu's
   trending or popular for anime).
@@ -313,19 +314,40 @@ out of scope, and so are its small grey text, large soft shadows and all-white s
 
 ## Ask Nest on the TV
 
-The answers live in `packages/assistant` (`route()`), which the server and Nest share. Nest runs it itself
-(`src/brain.ts`) when it has no server or the server is down, so the server is optional:
+The answers live in `packages/assistant` (`route()`), and Nest runs them directly on the TV (`src/brain.ts`), keeping the
+last 8 turns in memory with no server call:
 
-- **Reminders** are kept on the TV (`localStorage["nest.reminders"]`, source "local", shown as "Added on the TV") next to
-  the server's.
+- **Reminders** added through the assistant are kept on the TV (`localStorage["nest.reminders"]`, source "local", shown as
+  "Added on the TV"). Due phrases ("in 20 minutes", "tomorrow at 8", "at 18:00", "tonight") resolve to a timestamp and
+  show a 6 s toast (plus a Recent entry) when due, waiting until playback ends if AVPlay is open.
 - **Lights** go to SmartThings from the TV (`runLights()` in `src/home-control.ts`): the movie scene picked in Lights or
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
-- **Watch prompts and the search** ask the catalogs straight from the TV.
-- **The weather** ("what's the weather", "do I need an umbrella") is answered from the forecast, with no Gemini call.
-- **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has
-  its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`
-  unasked. The key ships inside the package: restrict it to the Generative Language API. With it, Nest transcribes and
-  speaks on the TV even when a server is up (one hop less); without it, voice still goes through the server.
+- **Routines** ("goodnight", "movie night", "good morning") combine effects in one answer: "goodnight" turns the lights
+  off, reads tomorrow's forecast and counts open reminders; "movie night" sets Cinema lights and opens tonight's films.
+- **Watch prompts and the search** ask the catalogs straight from the TV; "what was I watching?", "resume Severance",
+  "show my list" and "add this to My List" act on Continue Watching and My List directly without a model call. Pressing
+  **Recommend me** on an opened media card's end bar (`src/recommend.ts`) scores genres from Continue Watching and My
+  List first (leaving out watched and dismissed titles) and writes a one-line reason beside the orb ("Because you watched
+  Severance · Sci-Fi").
+- **Title questions** ("what's this about?", "is it any good?", "who's in this?", "catch me up", "what's the next
+  episode about?") answer about the focused card or tile from catalog metadata (`packages/assistant/src/title-qa.ts`),
+  even without Gemini, and strip unwatched episode synopses beforehand whenever Settings › Watching › Spoiler protection
+  is Blur or Hide.
+- **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
+  answered from the forecast (now, the next hours and tomorrow), with no Gemini call.
+- **Follow-ups** (`packages/assistant/src/followup.ts`, `src/brain.ts`): `localBrain` passes the last four turns (including
+  any titles shown) to `route()`. Ordinal selections ("the second one", "play the first one") resolve locally from the
+  latest watch turn with no model call; comparative and pronoun follow-ups ("something lighter", "who's in it?", "is it any
+  good?") use multi-turn Gemini context when a key is set and fall back offline when it is not.
+- **Gemini** (structured intent routing when no local rule matches, free questions, the briefing, voice and spoken
+  replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. Unmatched phrasings ("I'm in the mood for Miyazaki", "don't let
+  me forget the laundry") ask Gemini for a validated JSON intent (`responseSchema` in `packages/assistant/src/schema.ts`)
+  before falling back to the canned briefing. It has its own name because `tizen.mjs` also reads `.env`, and the server's `GEMINI_API_KEY` must not end up in a `.wgt`
+  unasked. The key ships inside the package: restrict it to the Generative Language API. Without `NEST_GEMINI_API_KEY` or
+  `NEST_GROQ_API_KEY`, voice and auto-listen are off and Settings › Home screen explains why.
+- **Eval set** (`packages/assistant/test/fixtures/eval-prompts.ts`, `eval.test.ts`): 60+ prompts and near misses checked
+  offline by `pnpm test`. To measure a real Gemini model's latency and 140-character / plain-text compliance on the
+  free-text prompts, run `NEST_GEMINI_API_KEY=... pnpm --filter @secretary/assistant eval` (`test/eval-live.ts`).
 
 ## Weather
 
@@ -346,24 +368,21 @@ in the cloud, and only ever sees the recorded clip. Over Bluetooth the reference
 no product name and `ROOM_DEVICE` also matches "bluetooth". Pair it in the TV's Bluetooth speaker list; the voice
 profile is what makes the microphone appear.
 
-- **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or the Ask chip) records from the first input
+- **Flow** (`src/voice.ts`, `listen()` in `app.tsx`): the microphone key (or OK on the assistant) records from the first input
   whose name looks like a speakerphone ("Jabra", "Speakerphone", "Conference"), else the default input. The clip ends after
   1.2 s of quiet following speech, after 6 s with no speech, at 15 s, or on the key again. Nest encodes it as 16 kHz WAV
-  with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and sends it to Gemini, from the TV with
-  `NEST_GEMINI_API_KEY` or through the server's `POST /ai/transcribe`, which returns only the words. With
-  `NEST_GROQ_API_KEY` as well, the TV sends the clip to Groq's Whisper first (`transcribeGroq`, about 0.4 s against
-  Gemini's 1.9 s on 2026-11-20) and falls back to Gemini when Groq refuses; answers and spoken replies stay on Gemini. Noise never becomes a question:
+  with Web Audio (Gemini does not list WebM, and MediaRecorder varies on TVs) and transcribes it straight from the TV: with
+  `NEST_GROQ_API_KEY` it sends the clip to Groq's Whisper first (`transcribeGroq`, about 0.4 s against Gemini's 1.9 s on
+  2026-11-20) and falls back to Gemini (`NEST_GEMINI_API_KEY`) when Groq refuses; answers and spoken replies stay on Gemini. Noise never becomes a question:
   a clip needs 250 ms of voice-level sound to be sent at all (`MIN_SPEECH_MS`), and Groq's segments with a
   `no_speech_prob` of 0.6 or more are dropped (Whisper otherwise invents "Thank you." from silence). Either way Nest says
-  "Couldn't hear anything" and nothing reaches the assistant. Entering the assistant hides earlier exchanges from it. Nest then sends them through `/ai/ask` like a typed prompt, so "dark mode" stays on the
-  TV and never reaches the lights.
-- **Spoken replies**: voice prompts ask `/ai/ask` with `speak: true`, and the server adds the reply as WAV from a Gemini
-  speech model (`GEMINI_TTS_MODEL` puts another model first). Nest plays it on
+  "Couldn't hear anything" and nothing reaches the assistant. Entering the assistant hides earlier exchanges from it. Nest then answers on the TV like a typed prompt (`send()`).
+- **Spoken replies**: voice prompts with `NEST_GEMINI_API_KEY` synthesize the reply on the TV as WAV from a Gemini speech
+  model (`speak()` in `packages/assistant`). Nest plays it on
   the speakerphone's own output when it has one (`setSinkId`; the TV would otherwise keep its own speakers), and the
   wave speaks until it ends. Blue mutes or unmutes this, as does Settings › Home screen ("Spoken replies").
-- **Fallbacks**: if the TV gives the app no microphone, or the server has no `GEMINI_API_KEY`, the key opens the TV
-  keyboard as before for the rest of the session. Secretary Desk has a "Hold" button that records on the phone (a
-  speakerphone paired to the phone over Bluetooth works there); phones only open the microphone on https or localhost.
+- **Fallbacks**: without `NEST_GEMINI_API_KEY` or `NEST_GROQ_API_KEY`, or if the TV gives the app no microphone, auto-listen
+  is off and OK or the mic key opens the TV keyboard instead.
 - **Privilege**: `http://tizen.org/privilege/mediacapture` in `tizen/config.xml.tpl`.
 
 ### Checking a TV

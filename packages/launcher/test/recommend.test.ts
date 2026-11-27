@@ -1,16 +1,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { SearchResult, WatchIntent } from "@secretary/assistant";
-import { REC_MAX, recLine, recommend, recommendPrompt } from "../src/recommend.ts";
+import { REC_MAX, recLine, recommend, recommendPrompt, type TasteInput, tasteChoices } from "../src/recommend.ts";
 
-const hit = (type: SearchResult["type"], id: string): SearchResult => ({ type, title: { id, name: `Title ${id}`, year: "2024", rating: "7.1" } });
+const hit = (type: SearchResult["type"], id: string): SearchResult => ({
+  type,
+  title: { id, name: `Title ${id}`, year: "2024", rating: "7.1" },
+});
 
-test("the prompt names the card's kind, then a genre on each press after the first", () => {
+test("cold start: the prompt names the card's kind, then a genre on each press after the first", () => {
   assert.equal(recommendPrompt("movie"), "Recommend me some films");
   assert.equal(recommendPrompt("series"), "Recommend me some shows");
   assert.equal(recommendPrompt("anime"), "Recommend me some anime");
   assert.equal(recommendPrompt("movie", 1), "Recommend me some comedy films");
   assert.notEqual(recommendPrompt("series", 2), recommendPrompt("series", 1));
+});
+
+test("taste-aware picks rank Continue Watching and My List genres first and say why in one line", async () => {
+  const taste: TasteInput = {
+    watching: [
+      { id: "tt10", name: "Severance", kind: "series", description: "Office workers undergo a dystopian sci-fi procedure." },
+    ],
+    saved: [
+      { id: "tt11", name: "Fargo", kind: "series", genres: ["Crime", "Thriller"] },
+    ],
+  };
+
+  const choices = tasteChoices("series", taste);
+  assert.equal(choices[0].genre, "Sci-Fi");
+  assert.equal(choices[0].why, "Because you watched Severance · Sci-Fi");
+  assert.equal(choices[1].genre, "Crime");
+  assert.equal(choices[1].why, "From Fargo on My List · Crime");
+
+  const asked: WatchIntent[] = [];
+  const r0 = await recommend("series", 0, new Set(["tt10"]), async (i) => (asked.push(i), [hit("series", "tt20")]), taste);
+  assert.equal(asked[0].genre, "Sci-Fi");
+  assert.equal(r0.status, "ready");
+  if (r0.status === "ready") {
+    assert.equal(r0.why, "Because you watched Severance · Sci-Fi");
+    const line = recLine(r0, "shows");
+    assert.equal(line.sub, "Because you watched Severance · Sci-Fi");
+    assert.doesNotMatch(`${line.title} ${line.sub}`, /Picked for you/);
+  }
+
+  // Pressing Recommend me a second time advances to the next affinity (Crime from My List).
+  const r1 = await recommend("series", 1, new Set(["tt10"]), async (i) => (asked.push(i), [hit("series", "tt21")]), taste);
+  assert.equal(asked[1].genre, "Crime");
+  assert.equal(r1.status === "ready" && r1.why, "From Fargo on My List · Crime");
 });
 
 test("route() browses the card's kind and the picks leave out what the card already shows", async () => {
@@ -55,7 +91,8 @@ test("the end bar says what is going on", () => {
   assert.equal(recLine(undefined, "films").title, "Ask Assistant");
   assert.equal(recLine(undefined, "films").sub, "");
   assert.equal(recLine({ status: "loading" }, "films").title, "Asking the assistant…");
-  const ready = recLine({ status: "ready", items: [hit("movie", "tt01")], reply: "" }, "films");
+  const ready = recLine({ status: "ready", items: [hit("movie", "tt01")], reply: "", why: "Because you watched Dune · Sci-Fi" }, "films");
+  assert.equal(ready.sub, "Because you watched Dune · Sci-Fi");
   assert.doesNotMatch(`${ready.title} ${ready.sub}`, /Picked for you/, "the row already says it");
   assert.equal(recLine({ status: "empty", reply: "" }, "films").title, "No new picks this time");
   assert.equal(recLine({ status: "error" }, "films").title, "Couldn't reach the assistant");
