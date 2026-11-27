@@ -11,8 +11,8 @@ export interface WatchIntent {
 }
 
 const LEAD =
-  /^(?:(?:can|could|would) you\s+|please\s+|hey\s+nest,?\s+|nest,?\s+)*(?:show(?: me)?|find(?: me)?|search(?: for)?|look(?:ing)? for|play|watch|put on|i (?:want|wanna|would like|'d like) to (?:watch|see)|recommend(?: me)?|suggest(?: me)?|give me|any|anything|something)\b\s*(.*)$/;
-const BROWSE = /^(?:what should i watch|what(?:'s| is) (?:good|on|popular|trending)|something to watch|anything to watch)\b(.*)$/;
+  /^(?:(?:can|could|would) you\s+|please\s+|hey\s+nest,?\s+|nest,?\s+)*(?:show(?: me)?|find(?: me)?|search(?: for)?|look(?:ing)? for|play|watch|put on|i(?:\s+(?:want|wanna|would like)|'d like) to (?:watch|see)|recommend(?: me)?|suggest(?: me)?|give me|any|anything|something)\b\s*(.*)$/;
+const BROWSE = /^(?:what should i watch|what(?:'s| is) (?:good|popular|trending)|what(?:'s| is) on(?=\s+(?:tv|tonight|today|now)\b|$)|something to watch|anything to watch)\b(.*)$/;
 
 const GENRES: readonly [RegExp, string][] = [
   [/\b(?:comed(?:y|ies)|funny)\b/, "Comedy"],
@@ -74,8 +74,19 @@ export function parseWatchIntent(prompt: string): WatchIntent | null {
   }
   const term = rest.replace(FILLER, " ").replace(/\s+/g, " ").trim();
   // A bare verb ("play", "show me") with nothing else is not a request to browse.
-  if (!term && !kind && !genre && !m[0].match(/something|anything|what should|watch|tonight/)) return null;
+  if (!term && !kind && !genre && !m[0].match(/something|anything|what should|what(?:'s| is)|watch|tonight/)) return null;
   if (!term) return { kind, genre };
+  // Comparative follow-ups ("something lighter", "something less violent", "something like that") need turn history, not a literal title search.
+  if (
+    !kind &&
+    !genre &&
+    /^(?:any|anything|something)\b/.test(m[0]) &&
+    /^(?:lighter|darker|funnier|scarier|spookier|tenser|grittier|shorter|longer|older|newer|calmer|cozier|faster|slower|better|different|else|similar|like\s+(?:that|it|this)|(?:more|less)\s+.+)$/.test(
+      term,
+    )
+  ) {
+    return null;
+  }
   // Searches keep the words as typed, minus "the movie" / "the series".
   const asked = m[1]
     .trim()

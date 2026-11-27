@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_SETTINGS } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { DEFAULT_SETTINGS, voiceSettingNote } from "@secretary/catalog-kit/src/lib/settings.ts";
 import { appsOnCard } from "../src/apps.ts";
 import { alertsShown, mayListen, remindersShown, speaksReply } from "../src/features.ts";
 
@@ -22,16 +22,28 @@ test("features: home notifications off, nothing is toasted or kept", () => {
   assert.deepEqual(alertsShown({ homeAlerts: false }, news), []);
 });
 
-test("features: spoken replies follow a voice question only while on", () => {
+test("features: spoken replies follow a voice question only while on and with a speech key", () => {
   assert.equal(speaksReply(on, true), true);
   assert.equal(speaksReply(on, false), false);
   assert.equal(speaksReply({ spokenReplies: false }, true), false);
+  assert.equal(speaksReply(on, true, false), false);
 });
 
-test("features: listening on focus off, the microphone waits for OK or the mic key", () => {
+test("features: listening on focus off waits for OK or mic; without a voice key, voice is off altogether", () => {
   assert.equal(mayListen(on, true), true);
   assert.equal(mayListen({ listenOnFocus: false }, true), false);
   assert.equal(mayListen({ listenOnFocus: false }, false), true);
+  assert.equal(mayListen(on, true, false), false);
+  assert.equal(mayListen(on, false, false), false);
+});
+
+test("Settings › Home screen says why voice or spoken replies are off without a key", () => {
+  assert.equal(voiceSettingNote("home.listenOnFocus"), null);
+  assert.equal(voiceSettingNote("home.listenOnFocus", { listen: true, speak: false }), null);
+  assert.match(voiceSettingNote("home.listenOnFocus", { listen: false, speak: false })?.sub ?? "", /NEST_GEMINI_API_KEY|NEST_GROQ_API_KEY/);
+  assert.equal(voiceSettingNote("home.listenOnFocus", { listen: false, speak: false })?.value, "Needs a key");
+  assert.match(voiceSettingNote("home.spokenReplies", { listen: true, speak: false })?.sub ?? "", /NEST_GEMINI_API_KEY/);
+  assert.equal(voiceSettingNote("home.reminders", { listen: false, speak: false }), null);
 });
 
 test("apps card: hidden apps and Secretary's own places are left out, a new app shows", () => {

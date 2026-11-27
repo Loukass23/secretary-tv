@@ -1,15 +1,14 @@
-// Ask Nest: the assistant panel's data (docs/launcher.md). Talks to @secretary/server's /ai/ask and
-// /ai/state, which the phone companion uses too, so prompts from either show on the TV.
+// Ask Nest on the TV: types, wave status, greeting and theme/ripple helpers (docs/launcher.md).
 import type { Weather } from "@secretary/assistant";
 import type { WaveState } from "@secretary/tv-kit/src/glass/index.ts";
-import type { Reminder, SearchResult } from "./apps.ts";
+import type { SearchResult } from "./apps.ts";
 
 export interface AssistantTurn {
   id: number;
   prompt: string;
   reply: string;
   action: string;
-  source: "tv" | "companion";
+  source: "tv";
   at: number;
   query?: string;
   results?: SearchResult[];
@@ -17,75 +16,17 @@ export interface AssistantTurn {
 
 export interface AssistantState {
   rev: number;
-  pending: { prompt: string; source: "tv" | "companion"; at: number } | null;
   turns: AssistantTurn[];
 }
 
-export interface AskReply {
-  reply: string;
-  action: string;
-  reminders?: Reminder[];
-  turn?: AssistantTurn;
-  /** The reply read aloud (a data: URL), when asked for and the server has a speech model. */
-  speech?: string | null;
-}
-
-/** The chips under the wave: the first opens the keyboard (and its voice input), the rest are prompts. */
-export const CHIPS = [
-  { label: "🎤 Ask", prompt: "" },
-  { label: "Something for tonight", prompt: "Something for tonight" },
-  { label: "Cinema lights", prompt: "Cinema mode" },
-  { label: "Briefing", prompt: "Briefing" },
-] as const;
-
-export const askNest = async (
-  serverUrl: string,
-  prompt: string,
-  f: typeof fetch = fetch,
-  speak = false,
-): Promise<AskReply> => {
-  const res = await f(`${serverUrl}/ai/ask`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, source: "tv", ...(speak ? { speak } : {}) }),
-  });
-  if (!res.ok) throw new Error(String(res.status));
-  return (await res.json()) as AskReply;
-};
-
-/** Why a clip gave no words: the server has no Gemini key, nobody spoke, or it failed. */
+/** Why a clip gave no words: no assistant connected, nobody spoke, or transcription failed. */
 export class VoiceError extends Error {
-  readonly reason: "unavailable" | "no-assistant" | "no-speech" | "failed";
+  readonly reason: "no-assistant" | "no-speech" | "failed";
   constructor(reason: VoiceError["reason"]) {
     super(reason);
     this.reason = reason;
   }
 }
-
-/** The words in a recorded clip (WAV), from the server's /ai/transcribe. */
-export const transcribeClip = async (serverUrl: string, wav: Uint8Array<ArrayBuffer>, f: typeof fetch = fetch): Promise<string> => {
-  let res: Response;
-  try {
-    res = await f(`${serverUrl}/ai/transcribe`, {
-      method: "POST",
-      headers: { "content-type": "audio/wav" },
-      body: wav,
-    });
-  } catch {
-    throw new VoiceError("failed");
-  }
-  if (res.status === 503) throw new VoiceError("unavailable");
-  if (res.status === 502) throw new VoiceError("no-assistant");
-  if (res.status === 422) throw new VoiceError("no-speech");
-  if (!res.ok) throw new VoiceError("failed");
-  return ((await res.json()) as { transcript: string }).transcript;
-};
-
-export const fetchAssistant = async (serverUrl: string, f: typeof fetch = fetch): Promise<AssistantState> => {
-  const res = await f(`${serverUrl}/ai/state`);
-  if (!res.ok) throw new Error(String(res.status));
-  return (await res.json()) as AssistantState;
-};
 
 export type { Weather } from "@secretary/assistant";
 
@@ -103,19 +44,17 @@ export const fetchWeather = async (serverUrl: string, f: typeof fetch = fetch): 
 export const artProxy = (serverUrl: string, src: string) => `${serverUrl}/art?u=${encodeURIComponent(src)}`;
 
 export interface WaveInputs {
-  /** The TV keyboard is open for a prompt. */
+  /** The microphone or TV keyboard is open for a prompt. */
   listening: boolean;
   /** A prompt from this TV is waiting for its answer. */
   asking: boolean;
-  /** The server reports a prompt in progress (from the phone, say). */
-  pending: boolean;
-  /** An answer arrived in the last few seconds. */
+  /** An answer arrived in the last few seconds (or is being read aloud). */
   answered: boolean;
 }
 
-export function waveState({ listening, asking, pending, answered }: WaveInputs): WaveState {
+export function waveState({ listening, asking, answered }: WaveInputs): WaveState {
   if (listening) return "listening";
-  if (asking || pending) return "thinking";
+  if (asking) return "thinking";
   return answered ? "speaking" : "idle";
 }
 
@@ -175,7 +114,7 @@ export function flipTheme(pref: ThemePref, hour: number, lux: number | null = nu
   return themeFor("auto", hour, lux) === next ? "auto" : next;
 }
 
-/** Theme prompts Nest answers itself, without the server: "light theme", "dark mode", "auto theme". */
+/** Theme prompts Nest answers itself: "light theme", "dark mode", "auto theme". */
 export function themePrompt(prompt: string): ThemePref | null {
   const p = prompt.trim().toLowerCase();
   if (!/\b(?:theme|mode|look)\b/.test(p) && !/^(?:daylight|night ?mode)$/.test(p)) return null;

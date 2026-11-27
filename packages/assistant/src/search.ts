@@ -58,11 +58,13 @@ function groupAnimeSearch(metas: readonly RawSearchMeta[]): SlimTitle[] {
 function toSlimTitle(m: RawSearchMeta): SlimTitle | null {
   const id = m.imdb_id ?? m.id;
   if (!id || !m.name || !id.startsWith("tt")) return null;
+  const desc = about(m.description);
   return {
     id,
     name: m.name,
     year: m.year ?? m.releaseInfo?.slice(0, 4) ?? "",
     rating: m.imdbRating ?? "",
+    ...(desc ? { description: desc } : {}),
   };
 }
 
