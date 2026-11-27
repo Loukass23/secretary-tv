@@ -1,6 +1,7 @@
 // The workbench shell: a toolbar, the 1920x1080 stage scaled into the window, and a side panel with the
 // linter and the remote. Its own chrome is desktop UI; only what is on the stage is TV code.
-import { applyLook, type AccentTheme } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { ACCENT_THEMES, applyLook, type AccentTheme } from "@secretary/catalog-kit/src/lib/settings.ts";
+import { DISPLAY_FONTS, type DisplayFont } from "@secretary/tv-kit/src/glass/tokens.ts";
 import { type Backdrop, drawBackdrop, type GlassMode, TEXT_SIZES, type TextSize, type Theme, TINTS, type TintName, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/index.ts";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
@@ -22,8 +23,9 @@ const PAGES = ["tokens", "components", "screens"] as const;
 const GROUPS = ["Controls and cards", "Media and motion", "Icons", "Header and panels", "Catalog tiles", "Preview and rank"];
 const MODES: readonly GlassMode[] = ["fake", "flat", "live"];
 const TINT_NAMES = Object.keys(TINTS) as TintName[];
-/** The theme accent (Settings › Appearance), the type styles and the text sizes, as the TV's settings set them. */
-const ACCENTS: readonly AccentTheme[] = ["raptor", "rose", "blue", "gold"];
+/** The theme accent (Settings › Appearance), the display faces, the type styles and the text sizes, as the TV's settings set them. */
+const ACCENT_NAMES = Object.keys(ACCENT_THEMES) as AccentTheme[];
+const FONT_NAMES = Object.keys(DISPLAY_FONTS) as DisplayFont[];
 const TYPE_NAMES = Object.keys(TYPE_STYLES) as TypeStyle[];
 const TEXT_NAMES = Object.keys(TEXT_SIZES) as TextSize[];
 
@@ -36,6 +38,7 @@ interface State {
   accent: AccentTheme;
   type: TypeStyle;
   text: TextSize;
+  font: DisplayFont;
   /** Settings' Reduce motion (no push-in, no open transition). */
   calm: boolean;
   mode: GlassMode;
@@ -54,9 +57,10 @@ const DEFAULTS: State = {
   screen: 0,
   theme: "night",
   tint: "orange",
-  accent: "raptor",
+  accent: "ember",
   type: "studio",
   text: "normal",
+  font: "grotesk",
   calm: false,
   mode: "fake",
   fit: true,
@@ -121,7 +125,7 @@ export function App() {
     void drawBackdrop(TINTS[s.tint], s.theme).then(setBackdrop);
   }, [s.tint, s.theme]);
   // The accent and the type go on the page as the TV's settings put them there (catalog-kit applyLook).
-  useLayoutEffect(() => applyLook({ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, reduceMotion: s.calm }), [s.accent, s.type, s.text, s.calm]);
+  useLayoutEffect(() => applyLook({ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, displayFont: s.font, reduceMotion: s.calm }), [s.accent, s.type, s.text, s.font, s.calm]);
 
   // The stage: 1920x1080, scaled to fit the room the chrome leaves.
   const room = useRef<HTMLDivElement>(null);
@@ -165,8 +169,8 @@ export function App() {
       {...props}
       art={art}
       screen={s.screen}
-      look={{ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, reduceMotion: s.calm }}
-      onLook={(g) => set({ accent: g.accentTheme, type: g.typeStyle, text: g.textSize, calm: g.reduceMotion })}
+      look={{ accentTheme: s.accent, typeStyle: s.type, textSize: s.text, displayFont: s.font, reduceMotion: s.calm }}
+      onLook={(g) => set({ accent: g.accentTheme, type: g.typeStyle, text: g.textSize, font: g.displayFont, calm: g.reduceMotion })}
     />
   );
 
@@ -182,7 +186,8 @@ export function App() {
         <span class="dz-sep" />
         <Choice items={["night", "day"] as Theme[]} value={s.theme} label={(t) => (t === "day" ? "Daylight" : "Night")} onPick={(theme) => set({ theme })} />
         <Choice items={TINT_NAMES} value={s.tint} onPick={(tint) => set({ tint })} />
-        <Choice items={ACCENTS} value={s.accent} label={(a) => `● ${a}`} onPick={(accent) => set({ accent })} />
+        <Choice items={ACCENT_NAMES} value={s.accent} label={(a) => `● ${ACCENT_THEMES[a].label}`} onPick={(accent) => set({ accent })} />
+        <Choice items={FONT_NAMES} value={s.font} label={(f) => DISPLAY_FONTS[f].label} onPick={(font) => set({ font })} />
         <Choice items={TYPE_NAMES} value={s.type} label={(t) => TYPE_STYLES[t].label} onPick={(type) => set({ type })} />
         <Choice items={TEXT_NAMES} value={s.text} label={(t) => TEXT_SIZES[t].label} onPick={(text) => set({ text })} />
         <Choice items={MODES} value={s.mode} onPick={(mode) => set({ mode })} />

@@ -18,7 +18,9 @@
 /* The value set: lit in the accent. */
 .set-chip.is-on { background: var(--sg-accent); color: var(--sg-accent-ink); box-shadow: none; }
 .set-value { font-size: var(--sg-t-m); font-weight: 600; color: var(--sg-ink); }
-.set-stage em { position: absolute; left: 0; right: 0; bottom: 22px; font-size: var(--sg-t-xs); font-style: normal; text-align: center; color: var(--sg-ink-dim); }
+/* The stage's caption sits in its own band at the foot (--set-cap tall); a mock that fills the stage stops above it. */
+.set-stage { --set-cap: calc(var(--sg-t-xs) * 1.3 + 36px); }
+.set-stage em { position: absolute; left: 0; right: 0; bottom: 18px; font-size: var(--sg-t-xs); line-height: 1.3; font-style: normal; text-align: center; color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 24px; }
 
 /* Flat stills: sky, sun, hill, in four tones. */
 .set-still { position: relative; display: block; overflow: hidden; border-radius: 14px; background: #2d4a6b; }
@@ -50,20 +52,29 @@
 .set-col { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; padding: 22px 22px 16px; border-radius: 18px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1.5px var(--sg-line); overflow: hidden; }
 .set-col.is-on { box-shadow: inset 0 0 0 3px var(--sg-accent); }
 /* The style's name under its caption, at the column's foot. */
-.set-stage .set-col > em { position: static; margin-top: auto; padding-top: 8px; font-size: var(--sg-t-s); font-weight: 600; text-align: left; }
+.set-stage .set-col > em { position: static; flex: none; margin-top: auto; padding: 8px 0 0; font-size: var(--sg-t-s); font-weight: 600; text-align: left; }
 .set-stage .set-col.is-on > em { color: var(--sg-accent); }
 .set-cap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .set-cap-kicker { font-family: var(--sg-font-label); font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sg-accent); }
 .set-cap-aa { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); font-size: var(--sg-t-xxl); line-height: 1; margin-bottom: 4px; }
 .set-cap-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); font-size: var(--sg-t-xl); line-height: 1.1; }
+/* In a column, the name keeps to two lines and the caption clips at its foot, so the column's label under it always
+   has its room (Large text). */
+.set-col .set-cap { flex: 1 1 auto; min-height: 0; max-width: 100%; overflow: hidden; }
+.set-col .set-cap > * { flex: none; max-width: 100%; }
+.set-col .set-cap-title { line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .set-cap-num { font-family: var(--sg-font-num); font-size: var(--sg-t-s); color: var(--sg-ink-dim); }
 .set-cap-btn { margin-top: 6px; padding: 6px 24px; border-radius: 999px; background: var(--sg-raised); font-family: var(--sg-font-label); font-size: var(--sg-t-s); font-weight: 600; }
 .set-cap-btn.is-lit { background: var(--sg-accent); color: var(--sg-accent-ink); }
 
-/* Reduce motion: four cards with focus walking along them, each pushing in as focus reaches it. */
+/* Reduce motion: four cards with the home's focus walking along them: the focused one pushes in about 4% (as
+   .nest-col.is-picked), the others step back by opacity, and a glow slides under the focused one. Transform and
+   opacity only, each on its own layer. */
 .set-row { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 30px; padding-bottom: 40px; }
 .set-card { position: relative; display: block; width: 150px; height: 225px; border-radius: 16px; }
-.set-row .set-card { animation: set-push 4.8s var(--sg-ease) infinite; will-change: transform; }
+.set-row .set-card { opacity: 0.72; animation: set-push 4.8s var(--sg-ease) infinite; will-change: transform, opacity; }
+/* The glow: a flat disc of the accent, behind the first card (4 cards of 150 px, 30 px apart, centred), moved by transform. */
+.set-row-glow { position: absolute; left: calc(50% - 405px); top: calc(50% - 155px); width: 270px; height: 270px; border-radius: 50%; background: var(--sg-accent); opacity: 0.22; animation: set-glow 4.8s var(--sg-ease) infinite; will-change: transform; }
 .set-row .set-card::after {
   content: "";
   position: absolute;
@@ -76,17 +87,29 @@
   will-change: opacity;
 }
 .set-row.is-calm .set-card,
-.set-row.is-calm .set-card::after { animation: none; }
-.set-row.is-calm .set-card:nth-child(2)::after { opacity: 1; }
-@keyframes set-push { 0%, 25%, 100% { transform: scale(1); } 5%, 20% { transform: scale(1.14); } }
+.set-row.is-calm .set-card::after,
+.set-row.is-calm .set-row-glow { animation: none; }
+.set-row.is-calm .set-card { opacity: 1; }
+.set-row.is-calm .set-row-glow { transform: translate3d(180px, 0, 0); }
+.set-row.is-calm .set-card:nth-child(3)::after { opacity: 1; }
+@keyframes set-push { 0%, 25%, 100% { transform: scale(1); opacity: 0.72; } 4%, 21% { transform: scale(1.04); opacity: 1; } }
+@keyframes set-glow {
+  0%, 21% { transform: translate3d(0, 0, 0); }
+  25%, 46% { transform: translate3d(180px, 0, 0); }
+  50%, 71% { transform: translate3d(360px, 0, 0); }
+  75%, 96% { transform: translate3d(540px, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
 @keyframes set-ring { 0%, 25%, 100% { opacity: 0; } 2%, 23% { opacity: 1; } }
 
 /* Spoiler protection: three episode tiles. */
-.set-eps { position: absolute; inset: 28px 24px 0; display: flex; gap: 20px; }
+.set-eps { position: absolute; inset: 28px 24px var(--set-cap); display: flex; gap: 20px; }
+/* The caption belongs to the stage's foot band, under the tiles, not to the tiles' box. */
+.set-stage .set-eps > em { left: -24px; right: -24px; bottom: calc(18px - var(--set-cap)); }
 .set-ep { flex: 1; min-width: 0; }
 .set-ep .set-still { height: 160px; }
 .set-ep b { display: block; margin-top: 12px; font-size: var(--sg-t-s); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.set-ep small { display: block; margin-top: 6px; font-size: var(--sg-t-xs); line-height: 1.3; }
+.set-ep small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 6px; font-size: var(--sg-t-xs); line-height: 1.3; }
 .set-ep-bars i { display: block; height: 14px; margin-top: 8px; border-radius: 7px; background: rgba(255, 255, 255, 0.14); }
 .set-ep-bars i + i { width: 70%; }
 
@@ -95,15 +118,18 @@
 .set-bar { display: block; width: 420px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.16); }
 .set-bar i { display: block; width: 62%; height: 100%; border-radius: inherit; background: var(--sg-accent); }
 .set-badge { padding: 4px 12px; border-radius: 8px; background: var(--sg-accent); color: var(--sg-accent-ink); font-size: var(--sg-t-xs); font-weight: 700; }
-.set-swatches { display: flex; gap: 22px; }
+/* The four plumage colours, each with its name; the one set is full and ringed, its name in the ink. */
+.set-swatches { display: flex; gap: 26px; }
+.set-swatches span { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 130px; font-size: var(--sg-t-xs); font-weight: 600; text-align: center; color: var(--sg-ink-dim); }
 .set-swatches i { display: block; width: 44px; height: 44px; border-radius: 50%; opacity: 0.5; }
-.set-swatches i.is-on { opacity: 1; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.85); }
+.set-swatches .is-on { color: var(--sg-ink); }
+.set-swatches .is-on i { opacity: 1; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.85); }
 
 .set-clock,
 .set-plain { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 40px; text-align: center; }
 .set-clock b { font-family: var(--sg-font-num); font-size: var(--sg-t-hero); font-weight: 600; }
 .set-plain b { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); font-size: var(--sg-t-xxl); line-height: 1.15; }
-.set-stage .set-plain em { position: static; font-size: var(--sg-t-l); font-weight: 600; }
+.set-stage .set-plain em { position: static; padding: 0; white-space: normal; font-size: var(--sg-t-l); font-weight: 600; }
 .set-stage .set-plain em.is-lit { color: var(--sg-accent); }
 
 /* Boot animation: the word rising in, fading in, or nothing. */
