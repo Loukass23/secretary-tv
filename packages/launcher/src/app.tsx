@@ -1520,7 +1520,8 @@ export function App() {
     return () => clearTimeout(t);
   }, [homeArtKey, view]);
   // A collection card picked or opened: its folders' titles load (once a visit) for the rows under its folders, through
-  // catalog-kit lib/folder-titles.ts, imported only now so the addon client stays out of the first bundle.
+  // catalog-kit lib/folder-titles.ts, in the catalog chunk, imported only now so the addon client stays out of the
+  // first bundle.
   const pickedCollection = colAt >= 0 && isCollectionKey(columns[colAt]?.key ?? "") ? columns[colAt].key : null;
   const foldersAsked = useRef(new Set<string>());
   useEffect(() => {
@@ -1530,7 +1531,7 @@ export function App() {
     const todo = c.folders.filter((f) => f.sources?.length && !foldersAsked.current.has(folderTitlesKey(c.id, f.id)));
     if (!todo.length) return;
     for (const f of todo) foldersAsked.current.add(folderTitlesKey(c.id, f.id));
-    void import("@secretary/catalog-kit/src/lib/folder-titles.ts").then(async ({ folderTitles: load }) => {
+    void import("@secretary/catalog-kit").then(async ({ folderTitles: load }) => {
       const got = await Promise.all(
         todo.map(async (f) => {
           const list = await load(f.sources ?? [], f.kind, FOLDER_TITLES).catch(() => []);
