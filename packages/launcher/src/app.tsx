@@ -111,7 +111,7 @@ import {
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
 import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalog-kit/src/lib/animeguard.ts";
-import { isTitleWatched, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { isTitleWatched, loadWatchedIds, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light-fx.ts";
 import { lightCount, lightsOnLabel } from "./light-count.ts";
@@ -1039,11 +1039,41 @@ export function App() {
   // Settings › Playback › Resume from Continue watching: play at once, or open the title's page first.
   const resume = (e: UnifiedResumeEntry) => playTitle(e.type, e.title, loadSettings().playback.resumeAtOnce);
   const openHit = (r: SearchResult) => browse({ type: r.type, open: { type: r.type, title: r.title } });
-  /** "Recommend me" on a media card's end bar: the assistant's picks of its kind become a row on the card (recommend.ts). */
+  /** "Recommend me" on a media card's end bar: taste-aware picks of its kind become a row on the card (recommend.ts). */
   const askRecommend = (key: string, kind: CatalogKind, shown: ReadonlySet<string>) => {
     const n = recs[key]?.n ?? 0;
+    const byId = new Map<string, string[]>();
+    for (const d of DISCOVER) {
+      for (const r of discover[d.key] ?? []) {
+        const list = byId.get(r.title.id);
+        if (list) {
+          if (!list.includes(d.genre)) list.push(d.genre);
+        } else {
+          byId.set(r.title.id, [d.genre]);
+        }
+      }
+    }
+    const taste = {
+      watching: continueItems.map((e) => ({
+        id: e.title.id,
+        name: e.title.name,
+        kind: e.type,
+        genres: byId.get(e.title.id),
+        description: e.title.description,
+      })),
+      saved: [...myList]
+        .sort((a, b) => b.addedAt - a.addedAt)
+        .map((l) => ({
+          id: l.title.id,
+          name: l.title.name,
+          kind: l.type,
+          genres: byId.get(l.title.id),
+          description: l.title.description,
+        })),
+    };
+    const excluded = new Set([...shown, ...dismissed, ...loadWatchedIds()]);
     setRecs((r) => ({ ...r, [key]: { state: { status: "loading" }, n } }));
-    void recommend(kind, n, shown, (intent) => discoverCatalog(intent.kind, intent.genre)).then((state) => {
+    void recommend(kind, n, excluded, (intent) => discoverCatalog(intent.kind, intent.genre), taste).then((state) => {
       setRecs((r) => ({ ...r, [key]: { state, n: n + 1 } }));
       if (state.status === "ready") setRecFocus(key);
     });

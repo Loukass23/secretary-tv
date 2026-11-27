@@ -324,7 +324,9 @@ last 8 turns in memory with no server call:
   a scene with a fitting name ("cinema", "warm", "off"), else every light at 15 %, 70 % or off.
 - **Routines** ("goodnight", "movie night", "good morning") combine effects in one answer: "goodnight" turns the lights
   off, reads tomorrow's forecast and counts open reminders; "movie night" sets Cinema lights and opens tonight's films.
-- **Watch prompts and the search** ask the catalogs straight from the TV.
+- **Watch prompts and the search** ask the catalogs straight from the TV. Pressing **Recommend me** on an opened media
+  card's end bar (`src/recommend.ts`) scores genres from Continue Watching and My List first (leaving out watched and
+  dismissed titles) and writes a one-line reason beside the orb ("Because you watched Severance · Sci-Fi").
 - **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
   answered from the forecast (now, the next hours and tomorrow), with no Gemini call.
 - **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has
