@@ -32,6 +32,7 @@ import {
 } from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
 import { effective, lightFx } from "./light-fx.ts";
+import { currentPicture, parsePictureSet, type PictureSet, readTvPicture, setTvPicture } from "./picture-mode.ts";
 import { MOOD_TIMING, ST_CLIENT_ID, ST_CLIENT_SECRET, ST_TOKEN } from "./config.ts";
 
 /** Where the setup script (tv-kit/scripts/smartthings.mjs authorize) writes the first token pair. */
@@ -131,24 +132,39 @@ export function picturePair(): readonly [string, string] {
 
 const PICTURE_LAST_KEY = "nest.pictureLast";
 
-/** The picture mode Nest last set. SmartThings' own picture-mode status is stale on this TV (it never updates), so the toggle and the icon go by this. */
-export function lastPictureMode(): string | undefined {
+/** The picture mode Secretary last set and when: SmartThings' own status for it is stale on this TV (it never updates). */
+export function lastPicture(): PictureSet | undefined {
   try {
-    return localStorage.getItem(PICTURE_LAST_KEY) || undefined;
+    return parsePictureSet(localStorage.getItem(PICTURE_LAST_KEY));
   } catch {
     return undefined;
   }
 }
 
+/** The picture mode Secretary last set. */
+export const lastPictureMode = (): string | undefined => lastPicture()?.mode;
+
 /**
- * Flips the TV's picture mode between the two favourites and returns the mode it asked for. It runs the scene named for
+ * The picture mode the TV is in now: its own reading (picture-mode.ts readTvPicture) when there is one, else the newer of
+ * SmartThings' report and Secretary's last set.
+ */
+export function pictureNow(devices: readonly StDevice[], onDevice: string | undefined): string | undefined {
+  const tv = pictureTv(devices);
+  return currentPicture(onDevice, lastPicture(), tv && { mode: tv.pictureMode, at: tv.pictureAt });
+}
+
+/**
+ * Sets the TV's picture mode: on the TV itself when it has the settings API (picture-mode.ts), else the scene named for
  * the mode ("TV Eco", made in the SmartThings app), because this TV ignores the picture-mode command from the cloud API
  * but obeys a scene; without one it sends the command anyway.
  */
-export async function togglePictureMode(devices: readonly StDevice[], scenes: readonly StScene[]): Promise<string> {
+export async function setPictureMode(mode: string, devices: readonly StDevice[], scenes: readonly StScene[]): Promise<string> {
+  if (setTvPicture(mode)) {
+    rememberPictureMode(mode);
+    return mode;
+  }
   if (!homeConfigured()) throw new NestError("Picture mode needs SmartThings on this TV.");
   const tv = pictureTv(devices);
-  const mode = nextPictureMode(lastPictureMode() ?? tv?.pictureMode, picturePair(), tv?.pictureModes);
   const scene = pictureScene(mode, scenes);
   if (scene) await home.runScene(scene.id);
   else if (tv) await home.command(tv.id, pictureModeCommands(mode, tv.pictureCap));
@@ -157,10 +173,20 @@ export async function togglePictureMode(devices: readonly StDevice[], scenes: re
   return mode;
 }
 
-/** Keeps the mode Nest just set, by the button or by a prompt. */
-export function rememberPictureMode(mode: string) {
+/**
+ * Flips the TV's picture mode between the two favourites and returns the mode it asked for. It starts from the mode the
+ * TV is in now (read on the TV at the press), so the first press after the remote changed it always switches.
+ */
+export async function togglePictureMode(devices: readonly StDevice[], scenes: readonly StScene[]): Promise<string> {
+  const tv = pictureTv(devices);
+  const mode = nextPictureMode(pictureNow(devices, readTvPicture()), picturePair(), tv?.pictureModes);
+  return setPictureMode(mode, devices, scenes);
+}
+
+/** Keeps the mode Secretary just set, by the button, a mood or a prompt, and when. */
+export function rememberPictureMode(mode: string, now = Date.now()) {
   try {
-    localStorage.setItem(PICTURE_LAST_KEY, mode);
+    localStorage.setItem(PICTURE_LAST_KEY, JSON.stringify({ mode, at: now } satisfies PictureSet));
   } catch {
     // The toggle then starts from SmartThings' status again after a restart.
   }

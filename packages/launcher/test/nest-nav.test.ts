@@ -192,3 +192,16 @@ test("with Watch together hidden, the header skips it and Up from the row lands 
   assert.deepEqual(step(card(2), "Up", len), { area: "header", i: HEADER_SEARCH });
   assert.deepEqual(headerItems(true).length, HEADER_LENGTH);
 });
+
+test("the mood strip: Left and Right along its stops, and closed it gives the lights button back", async () => {
+  const { HEADER_LIGHTS } = await import("../src/nest-nav.ts");
+  const open: Layout = { ...full, moods: 5 };
+  const at = { area: "moods" as const, i: 0 };
+  assert.deepEqual(step(at, "Left", open), at);
+  assert.deepEqual(step(at, "Right", open), { area: "moods", i: 1 });
+  assert.deepEqual(step({ area: "moods", i: 4 }, "Right", open), { area: "moods", i: 4 }, "\"more\" is the last stop");
+  // Up, Down and Back close it (app.tsx); the step leaves them alone.
+  assert.deepEqual(step(at, "Down", open), at);
+  assert.deepEqual(clamp({ area: "moods", i: 7 }, open), { area: "moods", i: 4 });
+  assert.deepEqual(clamp({ area: "moods", i: 2 }, full), { area: "header", i: HEADER_LIGHTS });
+});

@@ -218,6 +218,8 @@ export interface PreviewListItem {
   meta?: string;
   /** A dot before the title. */
   color?: string;
+  /** A line icon before the title, in place of the dot. */
+  icon?: IconName;
   /** Switched on (a light effect, a setting that is On): the dot, the value and the line under the title take the accent, so the state reads at a glance. */
   lit?: boolean;
 }
@@ -285,6 +287,7 @@ export function PreviewList({ x, y, w, h, items, focusIndex, shown, side = "left
                   sub={it.sub}
                   meta={it.meta}
                   color={it.color}
+                  icon={it.icon}
                 />
               );
             })}

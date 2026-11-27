@@ -329,6 +329,11 @@ html, body {
 .nest-party-text { position: absolute; left: 60px; top: 60px; right: 60px; bottom: 170px; display: flex; flex-direction: column; }
 .nest-party-text p { max-width: 900px; }
 
+/* --- the mood strip (mood-strip.tsx): icons under the header's lights button, the focused mood named under them --- */
+.nest-moodstrip-line { position: absolute; white-space: nowrap; overflow: hidden; }
+.nest-moodstrip-line b { display: block; font-size: var(--sg-t-l); font-weight: 650; }
+.nest-moodstrip-line small { margin-top: 2px; font-size: var(--sg-t-s); overflow: hidden; text-overflow: ellipsis; }
+
 /* --- lights (lights.tsx): the effects as a list beside their preview, then routines and lights by room --- */
 .nest-lights-head { position: absolute; }
 .nest-lights-head h1 { margin: 6px 0 0; font-size: var(--sg-t-title); font-weight: 700; letter-spacing: -0.01em; }

@@ -31,6 +31,8 @@ export interface StDevice {
   pictureModes?: string[];
   /** The capability that carries it, which a command has to name. */
   pictureCap?: string;
+  /** When SmartThings last saw the picture mode change (epoch ms). It never moves on the reference TV (docs/smartthings.md). */
+  pictureAt?: number;
   /** Takes colour or colour temperature commands. */
   colour?: boolean;
   /** Colour as the light reports it (0-100 each), and its white temperature in kelvin. */
@@ -83,7 +85,7 @@ export interface StCommand {
 
 interface RawCapability {
   id?: string;
-  status?: Record<string, { value?: unknown }>;
+  status?: Record<string, { value?: unknown; timestamp?: string }>;
 }
 
 export interface RawDevice {
@@ -161,6 +163,8 @@ export function toDevice(raw: RawDevice): StDevice | null {
     if (typeof mode !== "string") continue;
     d.pictureMode = mode;
     d.pictureCap = cap;
+    const at = Date.parse(caps.get(cap)?.pictureMode?.timestamp ?? "");
+    if (Number.isFinite(at)) d.pictureAt = at;
     const modes = value(cap, "supportedPictureModes");
     if (Array.isArray(modes)) d.pictureModes = modes.filter((m): m is string => typeof m === "string");
     break;
