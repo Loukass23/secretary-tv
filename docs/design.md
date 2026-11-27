@@ -25,8 +25,10 @@ same screen.
   "Preview and rank" shows `PreviewList`, the compact list beside a preview of its focused line that Settings and Lights
   build on (OK steps the line), and `RankNumber`, the one Top 10 numeral.
 - **Screens**: Secretary, as on the TV. Its home (`launcher/src/home.tsx`) with its own navigation (`nest-nav.ts`), the
-  home showing an answer and the full chat, the Mood panel (`launcher/src/mood.tsx`: Cinema, Music, Dining, Off and the routines chosen to show, as a list beside a
-  preview of what the focused one does, the active one marked); the one search
+  home showing an answer and the full chat, the home with the mood strip open under the lights button (`launcher/src/mood-strip.tsx`; OK on the lights button opens
+  it on the other home screens too), the Mood panel (`launcher/src/mood.tsx`: Cinema, Music, Dining, Off and the routines
+  chosen to show, as a list of their icons beside a preview of what the focused one does, the active one marked), and
+  the mood editor in Settings › SmartThings; the one search
   (`launcher/src/search.tsx`), empty on its recent searches, with results and with no catalog answering (its error state), on fixture titles that answer after a
   short wait (type with the panel's keys); then the catalog pages Secretary opens inside itself: the catalog home
   (`catalog-kit/src/ui/Home.tsx`) for Cinema, Shows and Anime, a film page (with its cast) and a show page
