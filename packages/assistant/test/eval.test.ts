@@ -33,8 +33,12 @@ test("every eval prompt routes offline to its expected action and payload", asyn
     const bodies: string[] = [];
 
     const fakeFetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
-      bodies.push(String(init?.body ?? ""));
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "At your service." }] } }] }), {
+      const raw = String(init?.body ?? "");
+      bodies.push(raw);
+      const text = raw.includes('"responseMimeType":"application/json"')
+        ? JSON.stringify({ intent: "chat", reply: "At your service." })
+        : "At your service.";
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), {
         status: 200,
       });
     }) as typeof fetch;
@@ -131,10 +135,16 @@ test("runLiveEval and formatEvalReport measure latency, reply length, Markdown a
   const fakeFetch = (async () => {
     call++;
     if (call === 1) {
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "Crisp one-liner." }] } }] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ intent: "chat", reply: "Crisp one-liner." }) }] } }] }),
+        { status: 200 },
+      );
     }
     if (call === 2) {
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: `**Bold** ${longText}` }] } }] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ intent: "chat", reply: `**Bold** ${longText}` }) }] } }] }),
+        { status: 200 },
+      );
     }
     return new Response("{}", { status: 503 });
   }) as typeof fetch;

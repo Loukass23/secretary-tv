@@ -4,8 +4,9 @@
 import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
 import { type LibraryEffects, parseLibraryIntent, runLibraryIntent } from "./library-intent.ts";
-import { parseReminder } from "./reminder.ts";
+import { parseDueTime, parseReminder } from "./reminder.ts";
 import { parseRoutine, runRoutine } from "./routine.ts";
+import { INTENT_RESPONSE_SCHEMA, validateStructuredIntent } from "./schema.ts";
 import { answerTitleQuestion, type FocusedTitleContext, parseTitleQuestion } from "./title-qa.ts";
 import type { SearchResult } from "./types.ts";
 import { glyphLabel, isWetGlyph, type Weather } from "./weather.ts";
@@ -215,11 +216,13 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
     return { reply, action: "domotics_updated" };
   }
 
-  // 5. Optional Gemini REST API call for general assistant queries / briefings when a key is present.
+  // 5. Structured Gemini intent routing (JSON + responseSchema) when no local rule matched, before any free-text call.
   const open = fx.openReminders();
   if (fx.geminiKey) {
+    const f = fx.fetch ?? fetch;
     const w = fx.weather ? await fx.weather().catch(() => null) : null;
-    const part = await firstPart(
+    const persona = `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${open.join("; ") || "none"}.${w ? ` Weather: ${sayWeather(w)}` : ""}`;
+    const structuredPart = await firstPart(
       GEMINI_FALLBACK_MODELS,
       fx.geminiKey,
       {
@@ -227,16 +230,80 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
           {
             parts: [
               {
-                text: `You are the Secretary Bird (Sagittarius serpentarius), an aristocratic, razor-sharp, slightly bad-tempered avian butler presiding over the user's Secretary TV. Active reminders: ${open.join("; ") || "none"}.${w ? ` Weather: ${sayWeather(w)}` : ""} Reply in 1 witty, imperious sentence (under 140 chars) for a TV screen: ${clean}`,
+                text: `${persona}\nClassify this viewer request as JSON (intent: watch, reminder, lights, weather, or chat). Include a 1-sentence plain-text reply (under 140 chars, no Markdown) in \`reply\`. Request: ${clean}`,
               },
             ],
           },
         ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: INTENT_RESPONSE_SCHEMA,
+        },
       },
-      fx.fetch ?? fetch,
+      f,
     );
-    const text = part?.text?.trim();
-    if (text) return { reply: text, action: "briefing" };
+
+    const parsed = validateStructuredIntent(structuredPart?.text);
+    if (parsed) {
+      if (parsed.intent === "watch" && fx.find) {
+        const watch: WatchIntent = { term: parsed.term, kind: parsed.kind, genre: parsed.genre };
+        const query = describeIntent(watch);
+        const results = await fx.find(watch).catch(() => [] as SearchResult[]);
+        const reply = results.length
+          ? parsed.reply || (watch.term ? `Here is what I found for ${query}.` : `Here are ${query} worth a look.`)
+          : `I couldn't find anything for ${query}.`;
+        return { reply, action: "watch", query, results };
+      }
+      if (parsed.intent === "reminder") {
+        const nowDate = fx.now ? fx.now() : new Date();
+        const dueAt = parsed.due ? parseDueTime(parsed.due, nowDate) : undefined;
+        await fx.addReminder(parsed.reminderText, parsed.due, dueAt);
+        return {
+          reply:
+            parsed.reply ||
+            `Added to your Secretary Nest reminders: “${parsed.reminderText}”${parsed.due ? ` (${parsed.due})` : ""}.`,
+          action: "reminder_added",
+        };
+      }
+      if (parsed.intent === "lights") {
+        await fx.lights(parsed.command);
+        const fallbackReply =
+          "level" in parsed.command
+            ? `Adjusted lights to ${parsed.command.level}%.`
+            : parsed.command.scene === "cinema"
+              ? "🦅 Cinema mode: the lights go down and the glare is eliminated."
+              : parsed.command.scene === "off"
+                ? "🦅 All territory lights extinguished."
+                : parsed.command.scene === "music"
+                  ? "🎵 Music mode: the sound system is on and the room is warm."
+                  : "Set SmartThings lights to Warm 70%.";
+        return { reply: parsed.reply || fallbackReply, action: "domotics_updated" };
+      }
+      if (parsed.intent === "weather" && w) {
+        return { reply: sayWeatherForPrompt(w, lower), action: "weather" };
+      }
+      if (parsed.intent === "chat") {
+        if (parsed.reply) return { reply: parsed.reply, action: "briefing" };
+        const freePart = await firstPart(
+          GEMINI_FALLBACK_MODELS,
+          fx.geminiKey,
+          {
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `${persona} Reply in 1 witty, imperious sentence (under 140 chars, no Markdown) for a TV screen: ${clean}`,
+                  },
+                ],
+              },
+            ],
+          },
+          f,
+        );
+        const freeText = freePart?.text?.trim();
+        if (freeText) return { reply: freeText, action: "briefing" };
+      }
+    }
   }
 
   const pendingCount = open.length;

@@ -151,7 +151,9 @@ test("Gemini answers the rest; without it, the canned briefing", async () => {
   let asked = "";
   const gemini = (async (_url: string, init: RequestInit) => {
     asked = String(init.body);
-    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "Indeed." }] } }] }));
+    return new Response(
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ intent: "chat", reply: "Indeed." }) }] } }] }),
+    );
   }) as unknown as typeof fetch;
   const { fx } = effects({ geminiKey: "k", fetch: gemini });
   assert.deepEqual(await route("Briefing", fx), { reply: "Indeed.", action: "briefing" });
