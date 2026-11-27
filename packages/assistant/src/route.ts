@@ -5,10 +5,11 @@ import { firstPart, GEMINI_FALLBACK_MODELS } from "./gemini.ts";
 import { parseWatchIntent, type WatchIntent } from "./intent.ts";
 import { parseReminder } from "./reminder.ts";
 import { parseRoutine, runRoutine } from "./routine.ts";
+import { answerTitleQuestion, type FocusedTitleContext, parseTitleQuestion } from "./title-qa.ts";
 import type { SearchResult } from "./types.ts";
 import { glyphLabel, isWetGlyph, type Weather } from "./weather.ts";
 
-export type AskAction = "reminder_added" | "domotics_updated" | "briefing" | "watch" | "weather";
+export type AskAction = "reminder_added" | "domotics_updated" | "briefing" | "watch" | "weather" | "title_info";
 
 export type LightsCommand = { scene: "cinema" | "warm" | "off" | "music" } | { level: number };
 
@@ -21,6 +22,8 @@ export interface Effects {
   lightsOn?(): number;
   /** Finds titles for a watch prompt (search or browse); without it such prompts fall through to the briefing. */
   find?(intent: WatchIntent): Promise<SearchResult[]>;
+  /** The title currently focused on screen (or last focused before opening the assistant), with spoiler state. */
+  focusedTitle?(): Promise<FocusedTitleContext | null>;
   /** The forecast here; without it weather prompts go to Gemini like any other. */
   weather?(): Promise<Weather | null>;
   /** Clock for relative due times ("in 20 minutes", "tomorrow at 8"); defaults to `new Date()`. */
@@ -120,6 +123,19 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
   // 1b. Multi-effect routines: "goodnight", "movie night", "good morning".
   const routine = parseRoutine(clean);
   if (routine) return runRoutine(routine, fx);
+
+  // 1c. Questions about the focused title: "what's this about?", "is it any good?", "catch me up".
+  const titleQ = fx.focusedTitle ? parseTitleQuestion(clean) : null;
+  if (titleQ && fx.focusedTitle) {
+    const ctx = await fx.focusedTitle().catch(() => null);
+    if (!ctx) {
+      return {
+        reply: "Highlight a film or show on the home row first, then ask me about it.",
+        action: "title_info",
+      };
+    }
+    return answerTitleQuestion(titleQ, ctx, { geminiKey: fx.geminiKey, fetch: fx.fetch });
+  }
 
   // 2. Something to watch: "show me a comedy", "play dune", "something for tonight".
   const watch = fx.find ? parseWatchIntent(clean) : null;

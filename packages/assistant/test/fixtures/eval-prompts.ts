@@ -239,6 +239,10 @@ export const EVAL_PROMPTS: readonly EvalCase[] = [
   { prompt: "Goodnight", expectedAction: "domotics_updated", expectedLights: { scene: "off" } },
   { prompt: "Movie night", expectedAction: "watch", expectedWatch: { kind: "movie" }, expectedQuery: "top films", expectedLights: { scene: "cinema" } },
   { prompt: "Good morning", expectedAction: "weather", expectedLights: { scene: "warm" } },
+  { prompt: "What's this about?", expectedAction: "title_info" },
+  { prompt: "Is it any good?", expectedAction: "title_info" },
+  { prompt: "Catch me up", expectedAction: "title_info" },
+  { prompt: "What's the next episode about?", expectedAction: "title_info" },
 
   // 6. Free-text / briefing prompts (8)
   { prompt: "Briefing", expectedAction: "briefing", freeText: true },

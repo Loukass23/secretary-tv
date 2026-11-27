@@ -19,7 +19,7 @@ test("eval fixture covers 50+ prompts across every AskAction and near misses", (
   const actions = new Set<AskAction>(EVAL_PROMPTS.map((c) => c.expectedAction));
   assert.deepEqual(
     [...actions].sort(),
-    ["briefing", "domotics_updated", "reminder_added", "watch", "weather"],
+    ["briefing", "domotics_updated", "reminder_added", "title_info", "watch", "weather"],
   );
   assert.ok(EVAL_PROMPTS.filter((c) => c.nearMiss).length >= 5);
   assert.ok(EVAL_PROMPTS.filter((c) => c.freeText).length >= 8);
@@ -47,6 +47,16 @@ test("every eval prompt routes offline to its expected action and payload", asyn
         watches.push(intent);
         return [{ type: intent.kind ?? "movie", title: { id: "tt0000001", name: "Sample", year: "2024", rating: "8.0" } }];
       },
+      focusedTitle: async () => ({
+        id: "tt11280740",
+        kind: "series",
+        name: "Severance",
+        year: "2022",
+        rating: "8.7",
+        description: "Office memories divided between work and home.",
+        spoilerMode: "blur",
+        nextEpisode: { label: "S1 · E2", name: "Half Loop", overview: "Secret plot.", unwatched: true },
+      }),
       weather: async () => FORECAST,
       geminiKey: "k-test",
       fetch: fakeFetch,
@@ -55,9 +65,9 @@ test("every eval prompt routes offline to its expected action and payload", asyn
     const a = await route(c.prompt, fx);
     assert.equal(a.action, c.expectedAction, `prompt "${c.prompt}" routed to ${a.action}`);
 
-    if (c.expectedAction !== "briefing") {
+    if (c.expectedAction !== "briefing" && c.expectedAction !== "title_info") {
       assert.equal(bodies.length, 0, `local prompt "${c.prompt}" should not call Gemini`);
-    } else {
+    } else if (c.expectedAction === "briefing") {
       assert.equal(bodies.length, 1, `briefing prompt "${c.prompt}" should call Gemini once`);
       assert.match(bodies[0], /water the plants/);
       assert.match(bodies[0], /Berlin/);

@@ -2,6 +2,7 @@
 // reminders kept on the TV and the lights through SmartThings from the TV.
 import {
   discoverCatalog,
+  type FocusedTitleContext,
   type LightsCommand,
   route,
   searchCatalogs,
@@ -86,6 +87,7 @@ export interface LocalBrainOptions {
   reminders: LocalReminders;
   /** Runs a lights command on SmartThings; throws when this TV has no SmartThings. */
   lights(cmd: LightsCommand): Promise<unknown>;
+  focusedTitle?(): Promise<FocusedTitleContext | null>;
   weather?(): Promise<Weather | null>;
   now?(): Date;
   geminiKey?: string;
@@ -125,6 +127,7 @@ export function localBrain(opts: LocalBrainOptions) {
           openReminders: () => opts.reminders.list().filter((r) => !r.completed).map((r) => r.text),
           lights: opts.lights,
           find: find(f),
+          focusedTitle: opts.focusedTitle,
           weather: opts.weather,
           now: opts.now,
           geminiKey: opts.geminiKey,

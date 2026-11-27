@@ -6,5 +6,6 @@ export * from "./reminder.ts";
 export * from "./route.ts";
 export * from "./routine.ts";
 export * from "./search.ts";
+export * from "./title-qa.ts";
 export * from "./types.ts";
 export * from "./weather.ts";

@@ -327,6 +327,10 @@ last 8 turns in memory with no server call:
 - **Watch prompts and the search** ask the catalogs straight from the TV. Pressing **Recommend me** on an opened media
   card's end bar (`src/recommend.ts`) scores genres from Continue Watching and My List first (leaving out watched and
   dismissed titles) and writes a one-line reason beside the orb ("Because you watched Severance · Sci-Fi").
+- **Title questions** ("what's this about?", "is it any good?", "who's in this?", "catch me up", "what's the next
+  episode about?") answer about the focused card or tile from catalog metadata (`packages/assistant/src/title-qa.ts`),
+  even without Gemini, and strip unwatched episode synopses beforehand whenever Settings › Watching › Spoiler protection
+  is Blur or Hide.
 - **The weather** ("what's the weather", "what's the weather tomorrow", "is it cold tonight", "do I need an umbrella") is
   answered from the forecast (now, the next hours and tomorrow), with no Gemini call.
 - **Gemini** (free questions, the briefing, voice and spoken replies) needs `NEST_GEMINI_API_KEY` in `.env.tizen`. It has

@@ -111,7 +111,10 @@ import {
 import { saveHomeGrant } from "@secretary/catalog-kit/src/lib/home.ts";
 import { inLibrary, toggleLibrary } from "@secretary/catalog-kit/src/lib/library.ts";
 import { animeImdbIds, knownAnime, noteAnime, onlyKind } from "@secretary/catalog-kit/src/lib/animeguard.ts";
-import { isTitleWatched, loadWatchedIds, removeResume, toggleTitleWatched } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { isTitleWatched, loadWatchedIds, removeResume, toggleTitleWatched, watchedEpisodes } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { fetchMeta } from "@secretary/catalog-kit/src/lib/cinemeta.ts";
+import { defaultEpisode, episodesOf, nextEpisode, seasonsOf } from "@secretary/catalog-kit/src/lib/episodes.ts";
+import { episodeTag, isSpoiler } from "@secretary/catalog-kit/src/lib/titlepage.ts";
 import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titlemenu.ts";
 import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light-fx.ts";
 import { lightCount, lightsOnLabel } from "./light-count.ts";
@@ -125,7 +128,7 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, findCatalogs, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, type FocusedTitleContext, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const REMINDER_TOAST_MS = 6000;
@@ -430,14 +433,78 @@ export function App() {
   const scene = useRef(0);
   const lastBack = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
-  /** What the TV's own assistant reads when it answers: the latest devices, scenes and forecast. */
-  const live = useRef({ devices, scenes, weather });
-  live.current = { devices, scenes, weather };
+  /** What the TV's own assistant reads when it answers: the latest devices, scenes, forecast and focused title. */
+  const lastFocusedTarget = useRef<{ type: CatalogKind; title: SlimTitle } | null>(null);
+  const live = useRef({ devices, scenes, weather, continueItems });
+  live.current = { devices, scenes, weather, continueItems };
+  const readFocusedTitle = async (): Promise<FocusedTitleContext | null> => {
+    const pick =
+      lastFocusedTarget.current ??
+      (live.current.continueItems[0] ? { type: live.current.continueItems[0].type, title: live.current.continueItems[0].title } : null);
+    if (!pick) return null;
+    const meta = await Promise.race([
+      fetchMeta(pick.type, pick.title.id).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+    ]);
+    const spoilerMode = loadSettings().playback.spoilerProtection;
+    const watched = watchedEpisodes(pick.title.id);
+    const titleWatched = isTitleWatched(pick.title.id);
+    const resume = live.current.continueItems.find((e) => e.title.id === pick.title.id);
+    const videos = meta?.videos ?? [];
+    const ordered = seasonsOf(videos).flatMap((s) => episodesOf(videos, s));
+
+    let lastWatched: FocusedTitleContext["lastWatched"];
+    if (resume?.episode) {
+      const match = videos.find((v) => v.season === resume.episode!.season && v.episode === resume.episode!.episode);
+      lastWatched = {
+        label: episodeTag(resume.episode),
+        name: match?.name ?? resume.episode.name,
+        overview: match?.overview,
+      };
+    } else if (ordered.length && watched.size) {
+      const seen = [...ordered].reverse().find((v) => watched.has(`${v.season}:${v.episode}`));
+      if (seen) lastWatched = { label: episodeTag(seen), name: seen.name, overview: seen.overview };
+    }
+
+    let nextEp: FocusedTitleContext["nextEpisode"];
+    if (pick.type !== "movie" && videos.length) {
+      const candidate = resume?.episode
+        ? (nextEpisode(videos, resume.episode.id) ?? defaultEpisode(videos, resume.episode.id, Date.now(), watched))
+        : defaultEpisode(videos, undefined, Date.now(), watched);
+      if (candidate) {
+        nextEp = {
+          label: episodeTag(candidate),
+          name: candidate.name,
+          overview: candidate.overview,
+          unwatched: isSpoiler(candidate, { mode: "blur", watched, resumeId: resume?.episode?.id, titleWatched }),
+        };
+      }
+    }
+
+    return {
+      id: pick.title.id,
+      kind: pick.type,
+      name: meta?.name ?? pick.title.name,
+      year: meta?.year || pick.title.year || undefined,
+      rating: meta?.rating || pick.title.rating || undefined,
+      runtime: meta?.runtime,
+      genres: meta?.genre,
+      director: meta?.director,
+      cast: meta?.cast,
+      poster: meta?.poster ?? pick.title.poster,
+      background: meta?.background ?? pick.title.background,
+      description: meta?.description ?? pick.title.description,
+      spoilerMode,
+      lastWatched,
+      nextEpisode: nextEp,
+    };
+  };
   const brain = useMemo(
     () =>
       localBrain({
         reminders: localRem,
         lights: (cmd) => runLights(cmd, live.current.devices, live.current.scenes),
+        focusedTitle: readFocusedTitle,
         weather: async () => live.current.weather,
         geminiKey: GEMINI_KEY,
       }),
@@ -517,6 +584,9 @@ export function App() {
         if (good.length && good.length < items.length) setFound((f) => (f && f.prompt === turn.prompt && f.reply === turn.reply ? { ...f, items: good } : f));
       });
       if (m && here) setGoto({ key: m.key, inside: true });
+    } else if (here && turn.action === "title_info" && turn.results?.[0]) {
+      const m = MEDIA.find((k) => k.kind === turn.results![0].type);
+      if (m && focusRef.current.area !== "row") setGoto({ key: m.key, inside: false });
     } else if (here && turn.action === "weather") setGoto({ key: "weather", inside: true });
     else if (here && turn.action === "domotics_updated") setGoto({ key: "home", inside: false });
     else if (here && turn.action === "reminder_added") setGoto({ key: "reminders", inside: true });
@@ -1461,6 +1531,10 @@ export function App() {
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   mediaFocused.current = columns[colAt]?.kind === "media";
+  if (columns[colAt]?.kind === "media") {
+    const focusedTile = targetAt(columns[colAt], focus.inside ? Math.max(0, focus.i) : 0);
+    if (focusedTile) lastFocusedTarget.current = { type: focusedTile.type, title: focusedTile.title };
+  }
   // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
   const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
   const focusedArt: { src: string; type: CatalogKind } | null =
@@ -1610,6 +1684,7 @@ export function App() {
     const turn = talk.turns.find((t) => `t${t.id}` === card.key);
     if (!turn) return;
     if (turn.action === "watch" || turn.action === "weather") return showTurn(turn, true);
+    if (turn.action === "title_info" && turn.results?.[0]) return openHit(turn.results[0]);
     if (turn.action === "domotics_updated") return homeConfigured() ? void setView("lights") : nextScene();
     if (turn.action === "reminder_added") return focusReminders(reminders.findIndex((r) => !r.completed && turn.reply.includes(r.text)));
     void send(turn.prompt);
