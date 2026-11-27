@@ -4,7 +4,7 @@
 import { getTvInputBridge, useKeys } from "@secretary/tv-kit";
 import { Glass, GlassRoot, Header, HEADER, PreviewList, type PreviewListItem, Tabs } from "@secretary/tv-kit/src/glass/index.ts";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { HostApp, HostHeader, HostSettingsTab } from "../host.ts";
+import type { HostApp, HostHeader, HostSettingsTab, HostVoice } from "../host.ts";
 import { addonStore, loadDebrid, pluginStore, saveDebrid } from "../lib/plugins.ts";
 import {
   type DashboardSettings,
@@ -15,6 +15,7 @@ import {
   SETTING_TABS,
   type SettingTab,
   toggleApp,
+  voiceSettingNote,
 } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import { useBase } from "./art.tsx";
@@ -50,6 +51,8 @@ interface Props {
   apps?: readonly HostApp[];
   /** Categories Secretary adds (SmartThings), placed after Home screen. */
   hostTabs?: readonly HostSettingsTab[];
+  /** Whether this TV build has keys for voice input and spoken replies (Home screen tab). */
+  voice?: HostVoice;
   /** The category Settings opens on (the design workbench's screens, the header's SmartThings entry). */
   initialTab?: SettingTab | string;
   /** The search keys: Secretary's one search. */
@@ -63,7 +66,7 @@ function formatClock(fmt: "24h" | "12h"): string {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: fmt === "12h" });
 }
 
-export function HubOverlay({ active, activeType = "movie", settings, onUpdateSettings, header, apps = [], hostTabs = [], initialTab, onSearch, onOpenNest, onClose }: Props) {
+export function HubOverlay({ active, activeType = "movie", settings, onUpdateSettings, header, apps = [], hostTabs = [], voice, initialTab, onSearch, onOpenNest, onClose }: Props) {
   // Settings' own categories, with the host's after Home screen.
   const at = SETTING_TABS.indexOf("Home screen") + 1;
   const tabNames: readonly string[] = [...SETTING_TABS.slice(0, at), ...hostTabs.map((t) => t.name), ...SETTING_TABS.slice(at)];
@@ -190,24 +193,28 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
 
   // The shown category's lines: its settings, then what only that category has (sources, apps, the reset).
   const rows: Row[] = [
-    ...SETTING_ITEMS.filter((it) => it.section === tab).map((item): Row => ({
-      key: item.id,
-      title: item.label,
-      sub: item.description,
-      value: item.getValue(settings),
-      on: item.on?.(settings),
-      choices: item.choices?.(settings),
-      act: (key) => {
-        // A typed setting: OK opens the TV keyboard with its text, Left clears it.
-        const text = item.text;
-        if (text) {
-          if (key === "Enter") return askText(text.get(settings), (v) => apply(text.set(settings, v)));
-          if (key === "Left") return apply(item.cycle(settings, -1));
-          return;
-        }
-        apply(item.cycle(settings, key === "Left" ? -1 : 1));
-      },
-    })),
+    ...SETTING_ITEMS.filter((it) => it.section === tab).map((item): Row => {
+      const locked = voiceSettingNote(item.id, voice);
+      if (locked) return { key: item.id, title: item.label, sub: locked.sub, value: locked.value };
+      return {
+        key: item.id,
+        title: item.label,
+        sub: item.description,
+        value: item.getValue(settings),
+        on: item.on?.(settings),
+        choices: item.choices?.(settings),
+        act: (key) => {
+          // A typed setting: OK opens the TV keyboard with its text, Left clears it.
+          const text = item.text;
+          if (text) {
+            if (key === "Enter") return askText(text.get(settings), (v) => apply(text.set(settings, v)));
+            if (key === "Left") return apply(item.cycle(settings, -1));
+            return;
+          }
+          apply(item.cycle(settings, key === "Left" ? -1 : 1));
+        },
+      };
+    }),
     ...sources.map((row): Row => ({ key: row.key, title: row.title, sub: row.sub, value: row.meta, act: (key) => runSource(row, key) })),
   ];
   if (hostTab) {

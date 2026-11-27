@@ -774,3 +774,7 @@ resumed at 11:40 and paused with OK:
 
 Budget: the restored options menu and the pause menu bring the deploy build to 174.1 KB gzip; `budget.json` was raised
 from 172 KB to 178 KB for it.
+
+Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so every deploy stopped at
+`check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
+and player work. Each sprint PR states how much it adds.

@@ -96,6 +96,8 @@ export interface EmbeddedHost {
   apps?: readonly import("./host.ts").HostApp[];
   /** Categories Secretary adds to Settings (SmartThings), after Home screen. */
   settingsTabs?: readonly import("./host.ts").HostSettingsTab[];
+  /** Whether this TV build has keys for voice input and spoken replies (Settings › Home screen). */
+  voice?: import("./host.ts").HostVoice;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -663,6 +665,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         header={embedded.header}
         apps={embedded.apps}
         hostTabs={embedded.settingsTabs}
+        voice={embedded.voice}
         initialTab={hub?.category}
         onSearch={() => embedded.onSearch?.()}
         onOpenNest={openNest}
