@@ -43,15 +43,17 @@ function setWatchedLocal(id: string, watched: boolean): void {
   writeJson(WATCHED_KEY, [...current]);
 }
 
-export function markTitleWatched(id: string, watched = true): boolean {
+export function markTitleWatched(id: string, watched = true, type?: CatalogType): boolean {
   if (!id) return false;
   setWatchedLocal(id, watched);
   void remote?.watched(id, watched);
+  for (const t of trackers) void t.watched(id, watched, type).catch(() => {});
   return watched;
 }
 
-export function toggleTitleWatched(id: string): boolean {
-  return markTitleWatched(id, !isTitleWatched(id));
+/** `type` lets trackers that file movies and shows apart (Simkl) send it to the right list. */
+export function toggleTitleWatched(id: string, type?: CatalogType): boolean {
+  return markTitleWatched(id, !isTitleWatched(id), type);
 }
 
 export const episodeKey = (v: Pick<Video, "season" | "episode">): string => `${v.season}:${v.episode}`;
@@ -226,6 +228,52 @@ export interface WatchedPull {
   episodes: Record<string, string[]>;
 }
 
+/**
+ * A watch tracker beside the sync backend (Simkl): told what plays and what was watched, and read for watched
+ * history on each sync. It never holds Continue Watching. Every call fails soft.
+ */
+export interface ResumeTracker {
+  /** Where playback is: playing (sent every save), paused, or stopped when the player closes. */
+  progress(type: CatalogType, title: Title, episode: Pick<Video, "season" | "episode"> | undefined, posSec: number, durSec: number, state: "playing" | "paused" | "stopped"): void;
+  finished(type: CatalogType, title: Title, episode?: Pick<Video, "season" | "episode">): Promise<void>;
+  watched(id: string, watched: boolean, type?: CatalogType): Promise<void>;
+  pullWatched(): Promise<WatchedPull | null>;
+}
+
+let trackers: readonly ResumeTracker[] = [];
+
+export function setResumeTrackers(list: readonly ResumeTracker[]): void {
+  trackers = list;
+}
+
+/** The player reports where it is; trackers decide what to send. */
+export function reportPlayback(
+  type: CatalogType,
+  title: Title,
+  episode: Pick<Video, "season" | "episode"> | undefined,
+  posSec: number,
+  durSec: number,
+  state: "playing" | "paused" | "stopped",
+): void {
+  for (const t of trackers) {
+    try {
+      t.progress(type, title, episode, posSec, durSec, state);
+    } catch {
+      // A tracker never stops playback.
+    }
+  }
+}
+
+/** Pulls every tracker's watched history into this TV's watched lists. */
+async function pullTrackers(): Promise<void> {
+  for (const t of trackers) {
+    const w = await t.pullWatched().catch(() => null);
+    if (!w) continue;
+    writeJson(WATCHED_KEY, [...new Set([...loadWatchedIds(), ...w.titles])]);
+    writeJson(EPISODES_KEY, mergeEpisodeMaps(loadEpisodeMap(), w.episodes));
+  }
+}
+
 let remote: ResumeRemote | null = null;
 const LAST_SYNC = "sectv.resume.lastSync";
 
@@ -317,6 +365,7 @@ export async function syncAllResume(
   base = serverBase,
   f: typeof fetch = fetch,
 ): Promise<UnifiedResumeEntry[]> {
+  await pullTrackers();
   if (remote) return syncWithRemote(remote);
   if (!base) return loadAllResume();
   try {
@@ -423,6 +472,7 @@ export function saveProgress(
   }
   const nextList = upsert(list, entry, drop);
   writeJson(keyFor(type), nextList);
+  if (finished) for (const t of trackers) void t.finished(type, slim(title), episode).catch(() => {});
   if (!remote) return void pushResume(type, nextList);
   // The next episode first, so the title never drops out of Continue Watching on other devices.
   const r = remote;
