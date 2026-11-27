@@ -122,6 +122,7 @@ import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light
 import { lightCount, lightsOnLabel } from "./light-count.ts";
 import { MoodPanel } from "./mood.tsx";
 import { type Mood, MOODS, setActiveMood } from "./moods.ts";
+import { accountsTab, startTrackers } from "./accounts-settings.tsx";
 import { settled, SMARTTHINGS_TAB, smartThingsTab } from "./smartthings-settings.tsx";
 import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
@@ -304,6 +305,8 @@ export function App() {
   const [prefs, setPrefs] = useState(() => loadSettings().home);
   // The one accent and the type (glass tokens.ts) come from the settings, from the first frame and on every change.
   useMemo(() => applyLook(loadSettings().general), []);
+  // The watch trackers the viewer connected (Settings › Accounts: Simkl), told what plays from the first frame.
+  useMemo(() => startTrackers(), []);
   useEffect(
     () =>
       onSettings((s) => {
@@ -1123,9 +1126,13 @@ export function App() {
     onExit: leaveCatalog,
     onSearch: searchFromCatalog,
     // Settings › SmartThings: the effects, routines and lights the Mood panel's moods are built from.
-    settingsTabs: homeConfigured()
-      ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
-      : [],
+    // Settings › Accounts: the watch trackers (Simkl).
+    settingsTabs: [
+      ...(homeConfigured()
+        ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
+        : []),
+      accountsTab(),
+    ],
     // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
     apps: appsOnCard(apps, [], OWN_PLACES).map((a) => ({
       id: a.id,
@@ -1795,7 +1802,7 @@ export function App() {
     }
     if (id === "details") return openHit({ type: t.type, title: t.title });
     if (id === "play") return playTitle(t.type, t.title);
-    if (id === "watched") return flash(toggleTitleWatched(t.title.id) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);
+    if (id === "watched") return flash(toggleTitleWatched(t.title.id, t.type) ? `${t.title.name} marked watched` : `${t.title.name} marked not watched`);
     if (id === "mylist") return flash(toggleLibrary(t.type, t.title) ? `${t.title.name} added to My List` : `${t.title.name} removed from My List`);
   };
 

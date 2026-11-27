@@ -6,7 +6,7 @@ import { SkipSource, tryInOrder } from "../lib/autopick.ts";
 import { backgroundUrl } from "../lib/cinemeta.ts";
 import { episodeLabel } from "../lib/episodes.ts";
 import { addons, loadDebrid, playable } from "../lib/plugins.ts";
-import { saveProgress } from "../lib/resume.ts";
+import { reportPlayback, saveProgress } from "../lib/resume.ts";
 import { logoUrl, pauseFacts, pausePanelShown } from "../lib/pausepanel.ts";
 import { setNowPlaying } from "./ControlCentre.tsx";
 import { creditsStart, pillAt, type Segment, segmentKey } from "../lib/skip.ts";
@@ -210,10 +210,24 @@ export function PlayerView({
     controlsTimer.current = setTimeout(() => setControls(false), CONTROLS_MS);
   };
 
+  // Where playback last was, for the watch trackers (Simkl) when the player closes.
+  const lastPlayed = useRef<{ pos: number; dur: number } | null>(null);
   const persist = () => {
     const p = player.current;
-    if (p && started) saveProgress(type, title, episode, p.position(), p.duration(), next);
+    if (!p || !started) return;
+    const pos = p.position();
+    const dur = p.duration();
+    saveProgress(type, title, episode, pos, dur, next);
+    lastPlayed.current = { pos, dur };
+    reportPlayback(type, title, episode, pos, dur, p.isPlaying() ? "playing" : "paused");
   };
+  useEffect(
+    () => () => {
+      const l = lastPlayed.current;
+      if (l) reportPlayback(type, title, episode, l.pos, l.dur, "stopped");
+    },
+    [],
+  );
 
   useEffect(() => {
     cancelled.current = false;
