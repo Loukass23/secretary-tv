@@ -31,9 +31,15 @@ export function stripBox(stops: number, buttons = HEADER_ORDER.length): { x: num
   return { x, y: HEADER.bottom + 14, w, h: PAD * 2 + STRIP_ITEM.h + LINE };
 }
 
+/** The step from one icon to the next: the icons spread over the whole strip, which is wider than they need for the hint. */
+export function stripStep(stops: number, w: number): number {
+  return stops > 1 ? Math.max(STRIP_ITEM.w + GAP, Math.floor((w - PAD * 2 - STRIP_ITEM.w) / (stops - 1))) : 0;
+}
+
 export function MoodStrip({ moods, active, at }: MoodStripView) {
   const stops = moods.length + 1;
   const box = stripBox(stops);
+  const step = stripStep(stops, box.w);
   const focused = moods[at];
   return (
     <>
@@ -41,7 +47,7 @@ export function MoodStrip({ moods, active, at }: MoodStripView) {
       {moods.map((m, i) => (
         <IconButton
           key={m.key}
-          x={box.x + PAD + i * (STRIP_ITEM.w + GAP)}
+          x={box.x + PAD + i * step}
           y={box.y + PAD}
           {...STRIP_ITEM}
           frost={false}
@@ -53,7 +59,7 @@ export function MoodStrip({ moods, active, at }: MoodStripView) {
       ))}
       <IconButton
         key="more"
-        x={box.x + PAD + moods.length * (STRIP_ITEM.w + GAP)}
+        x={box.x + PAD + moods.length * step}
         y={box.y + PAD}
         {...STRIP_ITEM}
         frost={false}
