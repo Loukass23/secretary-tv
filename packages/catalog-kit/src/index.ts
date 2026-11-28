@@ -1,4 +1,5 @@
 export { CatalogApp, type CatalogConfig, type EmbeddedHost } from "./app.tsx";
+export { folderTitles } from "./lib/folder-titles.ts";
 export { type ArtSize, ART_MAX, cachedTitleArt, clearArtCache, setFanartKeys, type TitleArt, titleArt } from "./lib/fanart.ts";
 export {
   clearRecentSearches,

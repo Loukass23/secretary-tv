@@ -193,6 +193,17 @@ test("with Watch together hidden, the header skips it and Up from the row lands 
   assert.deepEqual(headerItems(true).length, HEADER_LENGTH);
 });
 
+test("a collection card's end bar has Open collection and Back to top only", () => {
+  // A collection opened: its 4 folders, then two folders' titles (6 and 3).
+  const cols: Column[] = [{ count: 13, across: 4, rows: [4, 6, 3], ends: [END_ALL, END_TOP] }];
+  const len: Layout = { ask: 1, cols, menu: 0 };
+  assert.deepEqual(step(inside(0, 11), "Down", len), inside(0, END_ALL), "Down from the last row reaches Open collection");
+  assert.deepEqual(step(inside(0, END_ALL), "Left", len), inside(0, END_ALL), "no Recommend me to its left");
+  assert.deepEqual(step(inside(0, END_ALL), "Right", len), inside(0, END_TOP));
+  assert.deepEqual(step(inside(0, END_TOP), "Left", len), inside(0, END_ALL));
+  assert.deepEqual(step(inside(0, END_TOP), "Up", len), inside(0, 10), "Up goes back to the last row");
+  });
+
 test("the mood strip: Left and Right along its stops, and closed it gives the lights button back", async () => {
   const { HEADER_LIGHTS } = await import("../src/nest-nav.ts");
   const open: Layout = { ...full, moods: 5 };

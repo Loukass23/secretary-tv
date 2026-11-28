@@ -222,6 +222,8 @@ interface TileArt {
   /** Times the standard size (a host's size setting). */
   scale?: number;
   class?: string;
+  /** The skeleton while the art loads (MediaTile); on unless said. */
+  skeleton?: boolean;
 }
 
 /** A portrait poster at the home row's size, art only: the title goes in an `InfoPanel`, fixed beside the row. */

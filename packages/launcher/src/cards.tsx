@@ -2,9 +2,10 @@
 // the concept's "Playing Music", "Searching Places" and "Playing Netflix" cards. Layout only; app.tsx builds the columns
 // and runs OK. Built on tv-kit glass, with hairlines and opacity/transform focus (docs/performance.md).
 //
-// A media card (Cinema, Shows, Anime) has a style the viewer picks with a long OK (card-style.ts). OK opens it in place
-// into its rows (card-rows.ts) across the screen; the other cards fade out while it is open. The weather card opens the
-// same way, into its forecast.
+// A media card (Cinema, Shows, Anime, and each Nuvio collection) has a style the viewer picks with a long OK
+// (card-style.ts). OK opens it in place into its rows (card-rows.ts) across the screen; the other cards fade out while it
+// is open. A collection's first row is its folders and each folder's titles are a row under it (collections.ts). The
+// weather card opens the same way, into its forecast.
 import {
   AppChip,
   Button,
@@ -27,7 +28,7 @@ import { stillArt } from "./card-covers.ts";
 import { recLine, type RecState } from "./recommend.ts";
 import { type RowShape, type TileBox, tileBox } from "./row-look.ts";
 import { Component } from "preact";
-import { type Column, END_ALL, END_RECOMMEND, END_TOP, rowAt } from "./nest-nav.ts";
+import { type Column, END_ALL, END_BUTTONS, END_RECOMMEND, END_TOP, rowAt } from "./nest-nav.ts";
 
 export { expandedRows, rowTitle, targetAt };
 
@@ -61,6 +62,8 @@ export interface MediaItem {
   plain?: string;
   /** `still` has the title's logo painted in (a Fanart.tv thumb). */
   stillHasLogo?: boolean;
+  /** Its name is drawn on the art on every tile (a collection's folder: its cover may be only a picture). */
+  named?: boolean;
 }
 
 
@@ -129,6 +132,10 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
       recs?: RecState;
       /** See all on the bar: the catalog home of this kind. */
       seeAll?: () => void;
+      /** The bar's name for See all ("Open collection"). */
+      allLabel?: string;
+      /** What the bar says when the card has no Recommend me (a collection: its name and its folders). */
+      endLine?: { title: string; sub?: string };
     }
   | { kind: "home"; title: string; sub: string; actions: { icon: IconName; label: string }[] }
   // The assistant's own card, first in the row: what it has for the day. OK opens the full chat.
@@ -139,8 +146,6 @@ export type RowColumn = { key: string; label: string; run: (i: number) => void }
   | { kind: "calendar"; date: Date }
   | { kind: "list"; items: ListItem[]; add?: string }
   | { kind: "apps"; apps: { icon?: string; label: string }[] }
-  // A Nuvio collection (collections.ts): its folders as cover tiles, two across.
-  | { kind: "folders"; folders: { title: string; cover?: string }[] }
   // The YouTube card (youtube.ts): what is popular, as wide thumbnails stacked.
   | { kind: "videos"; videos: { title: string; channel: string; thumb: string }[] }
 );
@@ -154,7 +159,6 @@ const LIST = { w: 420, h: 136 };
 const ADD_H = 76;
 const APP = { w: 176, h: 160, gap: 18, across: 2 };
 const VIDEO = { w: 420, h: 166, gap: 18 };
-const FOLDER = { w: 210, h: 250, gap: 20, across: 2 };
 const HOME_W = 380;
 /** The Home card's buttons (Cinema, Warm, Off, Music): four under its title and the bulb. */
 const ACTION_H = 60;
@@ -181,13 +185,16 @@ const firstH = (c: MediaColumn) => lookBox(rowLook(c, 0)).h;
 /** What the folded card shows. */
 const smallItems = (c: MediaColumn): MediaItem[] => c.small ?? c.items;
 
+/** The end bar's buttons, left to right: Recommend me only on a card that can ask for picks. */
+export const endButtons = (c: MediaColumn): readonly number[] => (c.recommend ? END_BUTTONS : [END_ALL, END_TOP]);
+
 /** How wide a column is and how its items run for the remote; an expanded media card is one long row. */
 export function columnShape(c: RowColumn, expanded = false): { w: number } & Column {
   switch (c.kind) {
     case "media": {
       if (expanded) {
         const rows = expandedRows(c);
-        return { w: EXPANDED_W, count: rows.reduce((s, n) => s + n, 0), across: rows[0], rows };
+        return { w: EXPANDED_W, count: rows.reduce((s, n) => s + n, 0), across: rows[0], rows, ...(c.recommend ? {} : { ends: endButtons(c) }) };
       }
       const s = collapsedShape(c.style);
       return { w: s.w, count: Math.min(smallItems(c).length, s.count), across: s.across };
@@ -207,8 +214,6 @@ export function columnShape(c: RowColumn, expanded = false): { w: number } & Col
       return { w: APP.across * APP.w + (APP.across - 1) * APP.gap, count: c.apps.length, across: APP.across };
     case "videos":
       return { w: VIDEO.w, count: c.videos.length, across: 1 };
-    case "folders":
-      return { w: FOLDER.across * FOLDER.w + (FOLDER.across - 1) * FOLDER.gap, count: c.folders.length, across: FOLDER.across };
   }
 }
 
@@ -222,7 +227,7 @@ export function rowLayout(cols: readonly RowColumn[], expanded = -1): { x: numbe
     const s = columnShape(c, k === expanded);
     x.push(at);
     w.push(s.w);
-    nav.push({ count: s.count, across: s.across, ...(s.rows ? { rows: s.rows } : {}), ...(s.hold ? { hold: true } : {}) });
+    nav.push({ count: s.count, across: s.across, ...(s.rows ? { rows: s.rows } : {}), ...(s.hold ? { hold: true } : {}), ...(s.ends ? { ends: s.ends } : {}) });
     at += s.w + GAP;
   });
   return { x, w, nav, width: Math.max(0, at - GAP) };
@@ -242,8 +247,6 @@ export function columnHeight(c: RowColumn): number {
       return Math.ceil(c.apps.length / APP.across) * (APP.h + APP.gap) - APP.gap;
     case "videos":
       return Math.max(1, c.videos.length) * (VIDEO.h + VIDEO.gap) - VIDEO.gap;
-    case "folders":
-      return Math.max(1, Math.ceil(c.folders.length / FOLDER.across)) * (FOLDER.h + FOLDER.gap) - FOLDER.gap;
     default:
       return CARD_H;
   }
@@ -432,7 +435,8 @@ function MediaSmall({ col, out }: { col: MediaColumn; out: boolean }) {
               w={b.w}
               h={b.h}
               src={still ? a.src : it.poster}
-              title={still && !a.painted ? it.title : undefined}
+              title={it.named || (still && !a.painted) ? it.title : undefined}
+              class={it.named ? "nest-named" : undefined}
               logo={still ? a.logo : undefined}
               sub={still ? (it.episode ?? it.sub) : undefined}
               badge={badgeOf(it, small)}
@@ -470,6 +474,7 @@ function Tiles({ items, box: b, scroll, at }: { items: MediaItem[]; box: TileBox
                 w={b.w - b.lead}
                 h={b.h}
                 {...(b.art === "still" ? stillCaption(it, b.w - b.lead, b.h) : { src: it.poster })}
+                {...(it.named ? { title: it.title, class: "nest-named" } : {})}
                 badge={badgeOf(it, false)}
                 progress={it.progress}
                 focused={at === i}
@@ -627,7 +632,9 @@ function MediaRow({ col, focus: flat }: { col: MediaColumn; focus: number }) {
  * offering Recommend me; then See all (the catalog home) and Back to top. Down never leaves the card.
  */
 function EndBar({ col, top, focus }: { col: MediaColumn; top: number; focus: number }) {
-  const line = recLine(col.recs, col.unit);
+  // A card with no picks to ask for (a collection) says what it is, and its See all leads.
+  const asks = !!col.recommend;
+  const line = asks ? recLine(col.recs, col.unit) : (col.endLine ?? { title: col.name });
   const loading = col.recs?.status === "loading";
   return (
     <div class={`nest-end${loading ? " is-loading" : ""}`} style={{ top: `${top}px` }}>
@@ -636,9 +643,9 @@ function EndBar({ col, top, focus }: { col: MediaColumn; top: number; focus: num
         <b>{line.title}</b>
         {line.sub && <small>{line.sub}</small>}
       </div>
-      <Button label={loading ? "Asking…" : "✦ Recommend me"} primary focused={focus === END_RECOMMEND} />
-      <span class="nest-end-gap" />
-      <Button label="See all" focused={focus === END_ALL} />
+      {asks && <Button label={loading ? "Asking…" : "✦ Recommend me"} primary focused={focus === END_RECOMMEND} />}
+      {asks && <span class="nest-end-gap" />}
+      <Button label={col.allLabel ?? "See all"} primary={!asks} focused={focus === END_ALL} />
       <span class="nest-end-top">
         <Button label="↑ Back to top" focused={focus === END_TOP} />
       </span>
@@ -758,19 +765,6 @@ export function RowCard({ col, x, page, picked, focus: inside, dim, away, lifted
         {col.kind === "videos" &&
           col.videos.map((v, i) => (
             <MediaTile key={i} x={0} y={i * (VIDEO.h + VIDEO.gap)} w={VIDEO.w} h={VIDEO.h} src={v.thumb} title={v.title} sub={v.channel} focused={focus === i} />
-          ))}
-        {col.kind === "folders" &&
-          col.folders.map((f, i) => (
-            <MediaTile
-              key={i}
-              x={(i % FOLDER.across) * (FOLDER.w + FOLDER.gap)}
-              y={Math.floor(i / FOLDER.across) * (FOLDER.h + FOLDER.gap)}
-              w={FOLDER.w}
-              h={FOLDER.h}
-              src={f.cover ?? ""}
-              title={f.title}
-              focused={focus === i}
-            />
           ))}
         {col.kind === "apps" &&
           col.apps.map((a, i) => {

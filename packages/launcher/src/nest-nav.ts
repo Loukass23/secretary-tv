@@ -38,6 +38,8 @@ export interface Column {
   rows?: readonly number[];
   /** An opened card that keeps the remote (the weather's detail): Down stays in it rather than going to the assistant. */
   hold?: boolean;
+  /** The end bar's buttons under an opened card's last row, left to right; default `END_BUTTONS`. */
+  ends?: readonly number[];
 }
 
 /** Which row item `i` is on and where in it, for a column with `rows`. */
@@ -176,15 +178,16 @@ export function step(at: Focus, key: string, len: Layout): Focus {
       if (col.rows) {
         // The end bar: its buttons side by side; Up goes back to the start of the last row, Down stays.
         if (atEnd(i)) {
-          const b = END_BUTTONS.indexOf(i as (typeof END_BUTTONS)[number]);
-          if (key === "Left") return b > 0 ? { ...at, i: END_BUTTONS[b - 1] } : at;
-          if (key === "Right") return b < END_BUTTONS.length - 1 ? { ...at, i: END_BUTTONS[b + 1] } : at;
+          const ends: readonly number[] = col.ends ?? END_BUTTONS;
+          const b = ends.indexOf(i);
+          if (key === "Left") return b > 0 ? { ...at, i: ends[b - 1] } : at;
+          if (key === "Right") return b < ends.length - 1 ? { ...at, i: ends[b + 1] } : at;
           if (key === "Up") return { ...at, i: col.rows.slice(0, -1).reduce((s, n) => s + n, 0) };
           return at;
         }
         const { r, x, start } = rowAt(col.rows, i);
         const len = col.rows[r];
-        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : { ...at, i: END_BUTTONS[0] };
+        if (key === "Down") return r + 1 < col.rows.length ? { ...at, i: start + len + Math.min(x, col.rows[r + 1] - 1) } : { ...at, i: (col.ends ?? END_BUTTONS)[0] };
         if (key === "Up") return r > 0 ? { ...at, i: start - col.rows[r - 1] + Math.min(x, col.rows[r - 1] - 1) } : col.launch ? { ...at, i: LAUNCH } : card(c);
         if (key === "Right") return x < len - 1 ? { ...at, i: i + 1 } : at;
         if (key === "Left") return x > 0 ? { ...at, i: i - 1 } : at;

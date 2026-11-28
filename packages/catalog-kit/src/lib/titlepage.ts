@@ -1,6 +1,6 @@
 // What a title page's panel says (ui/Detail.tsx), kept apart from the screen so the rules are tested: on a show, the
-// panel follows the focused episode; with spoiler protection on, an unwatched episode's still and synopsis are blurred
-// (Blur) or left out (Hide).
+// panel follows the focused episode; with spoiler protection on, an unwatched episode's still and synopsis are flat colour
+// bands (Bands, lib/spoilerbands.ts) or left out (Hide).
 import { episodeLabel, hasAired } from "./episodes.ts";
 import type { SpoilerMode } from "./settings.ts";
 import type { Title, Video } from "./types.ts";
@@ -27,7 +27,7 @@ export function isSpoiler(v: Pick<Video, "id" | "season" | "episode">, s: Spoile
   return s.mode !== "off" && !s.titleWatched && v.id !== s.resumeId && !s.watched.has(keyOf(v));
 }
 
-/** How an episode's still and synopsis show: as they are, blurred, or not at all (its number and title only). */
+/** How an episode's still and synopsis show: as they are, as colour bands (`blur`, shown as Bands), or not at all (its number and title only). */
 export type EpisodeLook = "clear" | "blur" | "hide";
 
 export function episodeLook(v: Pick<Video, "id" | "season" | "episode">, s: SpoilerState): EpisodeLook {

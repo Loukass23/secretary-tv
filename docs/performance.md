@@ -779,6 +779,57 @@ Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so e
 `check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
 and player work. Each sprint PR states how much it adds.
 
+## Collection cards, art cache, skeletons and spoiler bands (sprint C, 2026-11-27)
+
+Measured on the Samsung TV inside Secretary, this branch against `main` (`eeaa7c2`) deployed the same way from a
+worktree, one right after the other, 50 s after launch, 250 ms per key, 3 runs each. The home's cards on this TV:
+Assistant, Shows, Anime, Cinema, YouTube, Weather, one Nuvio collection (22 folders), Home, Reminders, Apps.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home cards (`Right,Right,Right,Left,Left,Left` twice, from the Assistant card) | `main` | 33 ms | 83-100 ms | 28, 25, 24 | 4-5 MB |
+| | this branch | 17-33 ms | 83-100 ms | 25, 28, 26 | 6-8 MB |
+| Opened Shows card (`Right,Right,Right,Right,Down,Right,Right,Down,Left,Left,Up,Up,Right,Left`) | `main` | 33-50 ms | 117-167 ms | 44, 39, 37 | 4-6 MB |
+| | this branch | 50 ms | 133-167 ms | 49, 48, 45 | 6-7 MB |
+| | this branch, skeleton pulse off | 33 ms | 117-167 ms | 39, 45, 35 | 10-12 MB |
+| | this branch, pulse on again | 33-50 ms | 117-133 ms | 44, 39, 40 | 10-15 MB |
+| Show page (Shows card, OK on Continue watching; the walk in the sections above) | `main` | 17 ms | 33-50 ms | 8, 3, 3 | 7-12 MB |
+| | this branch | 17 ms | 33-133 ms | 24, 3, 1 | 8-9 MB |
+| Collection card opened (`Enter,Right,Right,Down,Right,Right,Down,Right,Left,Up,Up,Left`) | `main` (OK opens the catalog's folder page: not the same screen) | 33 ms | 100 ms | 25 | 7 MB |
+| | this branch | 33-50 ms | 150-200 ms | 41, 36, 35 | 9-15 MB |
+
+- **Home and the show page**: the same within the run-to-run spread. The show page's first run after launch is the
+  worst on both builds (24 against 8 here); runs 2 and 3 match.
+- **Opened Shows card**: a few more long frames on the first runs (45-49 against 37-44). It is not the skeleton: with
+  its pulse switched off in the page the same walk gave 35-45, and with it back on 39-44, both inside `main`'s spread.
+- **Collection card**: as heavy as an opened media card with landscape art (35-41 long frames). The first time a card
+  is picked in a visit loads the catalog's chunk for the folder titles (`lib/folder-titles.ts`); that run is the worst
+  (41) and holds the heap peak (14.6 MB), the next two settle at 9.5 MB.
+- **First-load image timing** (from navigation to every folded tile's art in, `img.is-ready`, polled at 16 ms): `main`
+  3.3 s at launch, 1.4-2.1 s on reloads; this branch 3.5 s at launch, 1.6-2.0 s on reloads. The same: the folded
+  collection card shows more tiles (a 3×2 grid against 2×2).
+
+### Art cache: measured, not wired in
+
+`tv-kit/src/art-cache.ts` keeps the home's pictures as IndexedDB blobs (LRU 150, unit tested). Wired into Secretary it
+was measured three ways and never beat `main`, because the TV's own HTTP cache already serves the home's pictures on a
+second start:
+
+| Variant | warm read at start | folded tiles from blobs | every folded tile in, reloads | `main`, reloads |
+| --- | --- | --- | --- | --- |
+| Full-size pictures (73 blobs, 5.9 MB), render after the read | 730-1120 ms | 8-13 of 13 | (floor of the poll) | 1.4-2.1 s |
+| Shrunk to 480 px (99 blobs, 2.4 MB), 40 read, render after | 320-350 ms | 2-5 of 13 (the covers turn each start) | 1.9-2.2 s | |
+| The same, 120 read, render after | 700-1150 ms | 9-14 of 14 | 2.3-3.1 s | |
+| 40 read alongside the render, never awaited | 2.0-2.7 s (competes with the render) | 0 | 1.6-3.0 s | |
+
+In the page, once Secretary is idle, IndexedDB is fast (open 3 ms, 80 reads 51 ms), so the cost is reading at start
+while the bundle and the first render run; a timer cap does not help, the main thread is busy (`docs/lessons.md`,
+timer starvation). Secretary therefore does not use it: `MediaTile` loads its art as before. The module stays for a
+host where the HTTP cache does not hold (offline starts, an evicted cache). The Tizen filesystem was not tried: the
+read was not the slow part.
+
+- **Size**: this branch adds 1.5 KB gzip to Secretary's JS (184.1 KB on `main` without keys, 185.6 KB here); the
+  deploy build with keys is 189.6 KB of the 190 KB budget. Wired in, the art cache cost another 1.2 KB.
 ### The mood strip and the picture mode (sprint 27 Nov, D)
 
 OK on the header's lights button now opens a small strip of mood icons under it (`launcher/src/mood-strip.tsx`): one
