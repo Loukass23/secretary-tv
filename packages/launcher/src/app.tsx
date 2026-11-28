@@ -1222,7 +1222,7 @@ export function App() {
       ...(homeConfigured()
         ? [smartThingsTab({ devices, scenes, rooms: stRooms, command: (id, c) => home.command(id, c), onChange: () => pollHomeSoon() })]
         : []),
-      accountsTab(),
+      accountsTab({ desk: SERVER_URL && serverOnline ? SERVER_URL : "" }),
     ],
     voice: VOICE_KEYS,
     // Settings › Apps lists what the Apps card could show; the TV's own settings have their place in the profile menu.
