@@ -162,13 +162,12 @@ function rows(c: SimklClient | null): HostSettingRow[] {
   return list;
 }
 
-/** `desk`: Secretary Desk's address while it answers (AniList's token is pasted through its phone keyboard), else "". */
-export function accountsTab({ desk = "" }: { desk?: string } = {}): HostSettingsTab {
+export function accountsTab(): HostSettingsTab {
   const on = [simkl()?.signedIn() && "Simkl", anilist()?.signedIn() && "AniList"].filter(Boolean);
   return {
     name: ACCOUNTS_TAB,
     blurb: on.length ? `${on.join(" and ")} connected: what you watch is tracked there too.` : "Connect a watch tracker to keep history in step.",
-    rows: () => [...rows(simkl()), ...anilistRows(desk, changed)],
+    rows: () => [...rows(simkl()), ...anilistRows(changed)],
     subscribe(redraw) {
       listeners.add(redraw);
       return () => void listeners.delete(redraw);

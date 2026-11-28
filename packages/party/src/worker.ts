@@ -17,7 +17,10 @@ import {
 import type { Identity, RoomInit, RoomSummary } from "./room.ts";
 import { signTicket, TICKET_TTL_MS, verifyTicket } from "./ticket.ts";
 
+import { PASTE_CODE, pastePage } from "./paste.ts";
+
 export { PartyRoom } from "./do.ts";
+export { PasteBox } from "./paste.ts";
 export { CODE_ALPHABET, CODE_LENGTH, normalizeCode };
 
 export interface Env {
@@ -32,6 +35,8 @@ export interface Env {
   PUBLIC_URL?: string;
   /** Optional rate limiting binding for room creation, keyed by account. */
   CREATE_LIMIT?: RateLimiterLike;
+  /** The phone keyboard's paste boxes (paste.ts), one per code. Absent: /type answers 404. */
+  PASTES?: DurableObjectNamespaceLike;
 }
 
 export interface Deps {
@@ -178,6 +183,22 @@ export function createHandler(deps: Deps) {
         }
         if (parts[2] === "ticket" && req.method === "POST") return await ticketFor(req, env, code);
         if (parts[2] === "ws" && req.method === "GET") return await socket(req, env, code);
+      }
+      // The phone keyboard (paste.ts): the page, and the text the phone sends and the TV reads.
+      if (parts[0] === "type" && parts[1] && env.PASTES && PASTE_CODE.test(parts[1]) && parts.length <= 3) {
+        const box = env.PASTES.get(env.PASTES.idFromName(parts[1]));
+        const open = { "Access-Control-Allow-Origin": "*" };
+        if (parts.length === 2 && req.method === "GET") {
+          return new Response(pastePage(parts[1], url.searchParams.get("for") ?? ""), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+        }
+        if (parts[2] === "text" && req.method === "GET") {
+          const res = await box.fetch("https://paste/get");
+          return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...open } });
+        }
+        if (parts[2] === "text" && req.method === "POST") {
+          const res = await box.fetch(new Request("https://paste/put", { method: "POST", body: await req.text(), headers: { "Content-Type": "application/json" } }));
+          return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+        }
       }
       if (parts[0] === "j" && parts[1]) {
         const code = normalizeCode(parts[1]);

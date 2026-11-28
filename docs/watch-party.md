@@ -339,6 +339,21 @@ Secretary looks a code up on its home screen, and its catalog joins the room.
 The client adds about 12 KB gzip to each catalog app (64.7 to 76.5 KB, half of it the QR encoder) and 1.4 KB to Nest,
 inside the 300 KB and 100 KB budgets.
 
+## Paste boxes (the phone keyboard)
+
+Besides rooms, the Worker relays text from a phone to the TV (`src/paste.ts`). AniList's sign-in uses it to carry its
+token (`docs/anilist.md`). There is one `PasteBox` Durable Object per code (`PASTES` binding, migration `v2`). It uses
+the same paths and answers as Secretary Desk's keyboard, so the TV's `watchPhone` reads either:
+
+| Route | What |
+| --- | --- |
+| `GET /type/<code>?for=<label>` | The phone's page: a box to paste into and a Send button |
+| `POST /type/<code>/text` `{text}` | Stores the text, without control characters, up to 4,096 characters; answers `{text, rev}` |
+| `GET /type/<code>/text` | `{text, rev}` (`rev` 0 when empty), with `Access-Control-Allow-Origin: *` |
+
+The code is the TV's random 16 characters (`[a-z0-9]{12,40}`). A box forgets its text 15 minutes after the last write.
+Paste boxes need no sign-in: the code is the secret, and it is shown only on the TV's screen.
+
 ## Deploying
 
 Nothing here has been run against the maintainer's Cloudflare account; the maintainer runs it.
@@ -352,6 +367,7 @@ Nothing here has been run against the maintainer's Cloudflare account; the maint
      `https://api.nuvio.tv/auth/v1/.well-known/jwks.json` (check it answers with `curl` first), with issuer
      `https://api.nuvio.tv/auth/v1` and audience `authenticated`. No JWKS secret is needed: the keys are public.
    - `[[ratelimits]] namespace_id` must be unique among the account's rate-limit namespaces.
+   - `PASTES` / `PasteBox` and migration `v2` are the paste boxes; nothing to change.
    - `PUBLIC_URL`: leave it out to use the `workers.dev` origin, or set the custom domain if one is routed to the
      Worker. It only shapes `joinUrl` and `wsUrl`.
 4. `pnpm --filter @secretary/party check` (a dry-run bundle, about 11 KB gzip), then

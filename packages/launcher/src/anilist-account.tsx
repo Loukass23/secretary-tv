@@ -1,11 +1,13 @@
 // Settings › Accounts › AniList (docs/anilist.md). AniList has no sign-in made for TVs: the phone opens AniList's
-// sign-in from one QR, which ends on AniList's pin page showing a token, and pastes that token into Secretary Desk's
-// phone keyboard from the second QR (phone-keys.ts). Without Desk, the TV keyboard takes it.
+// sign-in from one QR, which ends on AniList's pin page showing a token, and pastes that token into the watch-party
+// Worker's paste box from the second QR (party/src/paste.ts, read with phone-keys.ts). Without the Worker (no
+// PARTY_URL in this build), the TV keyboard takes it.
 import type { HostSettingRow } from "@secretary/catalog-kit/src/host.ts";
 import { anilistLastSync, anilistPullSoon, anilistSignIn, anilistSignOut } from "@secretary/catalog-kit/src/lib/anilist.ts";
 import { syncAllResume } from "@secretary/catalog-kit/src/lib/resume.ts";
 import { type AniListClient, authorizeUrl, createAniList, tokenFromText } from "@secretary/anilist";
 import { getTvInputBridge, readJson, writeJson } from "@secretary/tv-kit";
+import { PARTY_URL } from "./config.ts";
 import { phoneUrl, typeCode, watchPhone } from "./phone-keys.ts";
 import { QrCode } from "./qr.tsx";
 
@@ -24,7 +26,7 @@ export function anilist(): AniListClient | null {
 
 type Step =
   | { phase: "idle"; note?: string }
-  | { phase: "pasting"; code: string; desk: string }
+  | { phase: "pasting"; code: string; relay: string }
   | { phase: "checking" }
   | { phase: "failed"; why: string };
 
@@ -50,17 +52,17 @@ async function take(c: AniListClient, text: string, changed: () => void): Promis
   finish(name ? { phase: "idle", note: `Connected as ${name}` } : { phase: "failed", why: "AniList refused that token. OK starts again." }, changed);
 }
 
-function connect(c: AniListClient, desk: string, changed: () => void): void {
+function connect(c: AniListClient, relay: string, changed: () => void): void {
   stopWatch?.();
-  if (!desk) {
-    // No Secretary Desk: the TV keyboard, for a token sent to the TV some other way.
+  if (!relay) {
+    // No paste box: the TV keyboard, for a token sent to the TV some other way.
     const opened = getTvInputBridge()?.open("", { onCommit: (v) => void take(c, v, changed) });
-    step = opened ? { phase: "idle" } : { phase: "failed", why: "Pasting the token needs Secretary Desk running (the home server)." };
+    step = opened ? { phase: "idle" } : { phase: "failed", why: "Pasting the token needs the watch-party service (PARTY_URL)." };
     return changed();
   }
   const code = typeCode();
-  step = { phase: "pasting", code, desk };
-  stopWatch = watchPhone(desk, code, (text) => void take(c, text, changed));
+  step = { phase: "pasting", code, relay };
+  stopWatch = watchPhone(relay, code, (text) => void take(c, text, changed));
   changed();
 }
 
@@ -74,8 +76,8 @@ function Preview({ c, signedIn }: { c: AniListClient; signedIn: boolean }) {
             <small class="acc-kicker">1 · Sign in to AniList and copy the token it shows</small>
           </div>
           <div class="acc-step">
-            <QrCode text={phoneUrl(step.desk, step.code)} size={180} />
-            <small class="acc-kicker">2 · Paste it into this phone keyboard</small>
+            <QrCode text={`${phoneUrl(step.relay, step.code)}?for=AniList+token`} size={180} />
+            <small class="acc-kicker">2 · Paste it here and send it to the TV</small>
           </div>
         </div>
         <p class="lfx-about">Secretary checks the token with AniList and connects as soon as it arrives.</p>
@@ -109,8 +111,8 @@ const since = (at: number, now = Date.now()) => {
   return h < 24 ? `Synced ${h} h ago` : `Synced ${Math.round(h / 24)} d ago`;
 };
 
-/** The AniList lines of Settings › Accounts. `desk` is Secretary Desk's address while it answers, else "". */
-export function anilistRows(desk: string, changed: () => void): HostSettingRow[] {
+/** The AniList lines of Settings › Accounts. `relay`: where the phone pastes the token (the party Worker). */
+export function anilistRows(changed: () => void, relay: string = PARTY_URL): HostSettingRow[] {
   const c = anilist();
   if (!c) return [{ key: "anilist", title: "AniList", sub: "This build has no AniList client id", value: "Unavailable" }];
   const signedIn = c.signedIn();
@@ -125,7 +127,7 @@ export function anilistRows(desk: string, changed: () => void): HostSettingRow[]
       act: (key) => {
         if (key !== "Enter" || signedIn) return;
         if (step.phase === "pasting") return finish({ phase: "idle" }, changed);
-        connect(c, desk, changed);
+        connect(c, relay, changed);
       },
     },
   ];

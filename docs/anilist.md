@@ -11,13 +11,15 @@ moves forward. Marking a title watched completes it, and the lists come back as 
    AniList's implicit grant, which hands out the token directly.
 3. On the TV, go to Settings › Accounts › AniList and press OK. The preview shows two QR codes:
    1. The first opens AniList's sign-in. After it, AniList's pin page shows a long token: copy it.
-   2. The second opens Secretary Desk's phone keyboard (`launcher/src/phone-keys.ts`). Paste the token there.
+   2. The second opens a paste page on the watch-party Worker (`party/src/paste.ts`). Paste the token there and send it.
 
    The TV checks the token with AniList (`Viewer`) and keeps it only if AniList accepts it. A whole redirect URL with
    `#access_token=…` works as well.
 
-Pasting needs Secretary Desk (the home server) to answer. Without it, OK opens the TV keyboard, which is only practical
-for a token sent to the TV some other way. AniList tokens last a year; an expired token, or a 401, signs out.
+Pasting needs the watch-party Worker to be deployed and `PARTY_URL` set in the build (`docs/watch-party.md`,
+Deploying). Secretary Desk's keyboard cannot carry a token, since it keeps 120 characters. Without `PARTY_URL`, OK opens
+the TV keyboard, which is only practical for a token sent to the TV some other way. AniList tokens last a year; an
+expired token, or a 401, signs out.
 
 ## What is sent
 
@@ -39,3 +41,4 @@ titles only get a completed mark, because AniList does not know their seasons.
 - `catalog-kit/src/lib/anilist.ts`: `anilistTracker()` implements `ResumeTracker`, plus the id map,
   `anilistSignIn`, `anilistStats` (cached for a day, for the profile page) and `anilistSignOut`.
 - `launcher/src/anilist-account.tsx`: the Accounts lines and the two-QR preview.
+- `party/src/paste.ts`: the paste box the token travels through.
