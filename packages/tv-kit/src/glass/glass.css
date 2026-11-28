@@ -298,6 +298,7 @@
 }
 .sg-card.is-focus { transform: scale(1.025); }
 .sg-card-row { display: flex; align-items: center; gap: 14px; font-size: var(--sg-t-xl); }
+.sg-card-row > .sg-card-icon { font-size: 1.15em; }
 .sg-card-row b { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-card-meta { font-size: var(--sg-t-m); }
 .sg-card small { font-size: var(--sg-t-m); margin: 8px 0 0 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -726,6 +727,8 @@
 .sg-plist-line.is-lit.is-focus .sg-card-meta,
 .sg-plist-line.is-lit.is-focus small { color: var(--sg-focus-ink); }
 .sg-plist-line .sg-dot { width: 14px; height: 14px; }
+/* A line with an icon in place of the dot (a mood): the icon takes the accent when the line is on. */
+.sg-plist-line.is-lit:not(.is-focus) .sg-card-icon { background: var(--sg-accent); }
 
 /* --- type style (tokens.ts TYPE_STYLES): titles, numbers and labels take their face from the style --- */
 .sg-info-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); }

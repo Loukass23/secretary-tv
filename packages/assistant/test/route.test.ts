@@ -193,3 +193,16 @@ test("the forecast: now, the next 6 hours and 4 days", () => {
   assert.equal(weatherGlyph(95, true), "storm");
   assert.equal(weatherGlyph(73, true), "snow");
 });
+
+test("with the viewer's moods, cinema and music mode, movie night and goodnight set the mood, not the bare lights", async () => {
+  const moods: string[] = [];
+  const { fx, lights } = effects({ mood: async (key) => void moods.push(key) });
+  await route("cinema mode", fx);
+  await route("music mode", fx);
+  await route("movie night", fx);
+  await route("goodnight", fx);
+  await route("good morning", fx);
+  assert.deepEqual(moods, ["cinema", "music", "cinema", "off"]);
+  // Morning has no mood: the warm lights, as before.
+  assert.deepEqual(lights, [{ scene: "warm" }]);
+});

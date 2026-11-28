@@ -20,12 +20,12 @@ import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-ord
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { HEADER_ITEMS, headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
 import { MoodPanel } from "@secretary/launcher/src/mood.tsx";
-import { setActiveMood } from "@secretary/launcher/src/moods.ts";
+import { activeMood, allMoods, setActiveMood } from "@secretary/launcher/src/moods.ts";
 import { setLightFx } from "@secretary/launcher/src/light-fx.ts";
 import { accountsTab } from "@secretary/launcher/src/accounts-settings.tsx";
 import { smartThingsTab } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
-import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
+import { enter, type Focus, HEADER_LIGHTS, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
 import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
@@ -39,6 +39,7 @@ export const SCREENS = [
   "Home",
   "Home · assistant",
   "Home · chat",
+  "Home · mood strip",
   "Mood",
   "Cinema",
   "Shows",
@@ -81,10 +82,10 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number; look:
   if (name === "Player · paused") return <PausedPlayer art={props.art} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
-  return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
+  return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : name === "Home · mood strip" ? "moods" : "row"} />;
 }
 
-function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; start: "row" | "ask" | "chat" }) {
+function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; start: "row" | "ask" | "chat" | "moods" }) {
   // The card styles live in this page only: the TV keeps its own (nest.cardStyles).
   const [styles, setStyles] = useState<Record<string, CardStyle>>({});
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
@@ -102,6 +103,10 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   const columns = useMemo(() => applyOrder(base, order), [base, order]);
   const [focus, setFocus] = useState<Focus>(start === "row" ? { area: "row", col: 0, i: 0 } : { area: start, i: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  // The mood strip under the lights button (launcher mood-strip.tsx), on the workbench's routines (LIGHT_SCENES).
+  const [stripOpen, setStripOpen] = useState(start === "moods");
+  const [mood, setMood] = useState<string | null>(activeMood);
+  const moods = useMemo(() => allMoods(LIGHT_SCENES), [stripOpen]);
   const [glow, setGlow] = useState<string | undefined>();
   useEffect(() => void glowImage(TINTS.orange).then(setGlow), []);
 
@@ -113,6 +118,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
     ask: 1,
     cols: rowLayout(columns, openCol).nav,
     menu: menuOpen ? MENU.length : 0,
+    moods: stripOpen ? moods.length + 1 : 0,
     header: HEADER_ITEMS,
   };
 
@@ -154,6 +160,17 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
       return true;
     }
     if (key === "Enter" && ((holdable && columns[focus.col ?? 0]?.kind !== "assistant") || hold.holding())) return true;
+    if (stripOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Enter")) {
+      // OK sets the mood (here: marks it active) or, on "more", stands for opening the Mood panel; either closes the strip.
+      const m = key === "Enter" ? moods[focus.i] : undefined;
+      if (m) {
+        setActiveMood(m.key);
+        setMood(m.key);
+      }
+      setStripOpen(false);
+      setFocus({ area: "header", i: HEADER_LIGHTS });
+      return true;
+    }
     if (key === "Back") {
       if (menuOpen) {
         setMenuOpen(false);
@@ -166,6 +183,9 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
       if (focus.area === "header" && focus.i === HEADER_PROFILE) {
         setMenuOpen(true);
         setFocus({ area: "menu", i: 0 });
+      } else if (focus.area === "header" && focus.i === HEADER_LIGHTS) {
+        setStripOpen(true);
+        setFocus({ area: "moods", i: Math.max(0, moods.findIndex((m) => m.key === mood)) });
       } else if (focus.area === "row" && !focus.inside && columns[focus.col ?? 0]?.kind === "assistant") setFocus({ area: "chat", i: 0 });
       else if (focus.area !== "ask" && focus.area !== "chat") setFocus(enter(focus, layout));
       return true;
@@ -191,6 +211,8 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
         links={[{ icon: "sync" }, { icon: "server", off: true }]}
         menuInfo={["Nuvio · synced as Robin", "Server offline · apps still work"]}
         me={{ name: "Robin", color: "#5b52e6" }}
+        mood={mood}
+        moodStrip={stripOpen ? { moods, active: mood } : null}
       />
     </GlassRoot>
   );

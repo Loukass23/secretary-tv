@@ -94,15 +94,15 @@ import {
   homeConfigured,
   homeGrant,
   independentLights,
-  lastPictureMode,
   noteStatus,
   mediaReleased,
   playFarewell,
   playOpenRipple,
   playRippleTest,
+  pictureNow,
   playSplashRipple,
+  setPictureMode,
   syncMood,
-  rememberPictureMode,
   rippleBeforeLaunch,
   runLights,
   toggleSound,
@@ -119,7 +119,8 @@ import { stepTitleMenu, titleMenu } from "@secretary/catalog-kit/src/lib/titleme
 import { effective, type LightFx, lightFx, onLightFx, setLightFx } from "./light-fx.ts";
 import { lightCount, lightsOnLabel } from "./light-count.ts";
 import { MoodPanel } from "./mood.tsx";
-import { type Mood, MOODS, setActiveMood } from "./moods.ts";
+import { activeMood, allMoods, mainMoods, type Mood, setActiveMood } from "./moods.ts";
+import { readTvPicture } from "./picture-mode.ts";
 import { accountsTab, startTrackers } from "./accounts-settings.tsx";
 import { settled, SMARTTHINGS_TAB, smartThingsTab } from "./smartthings-settings.tsx";
 import type { PanelHeader } from "./panel-header.tsx";
@@ -128,7 +129,7 @@ import { SearchScreen } from "./search.tsx";
 import { play, record, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
-import { AssistantUnavailable, discoverCatalog, findCatalogs, type FocusedTitleContext, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
+import { AssistantUnavailable, discoverCatalog, findCatalogs, type FocusedTitleContext, type MoodKey, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
 
 const EXIT_WINDOW_MS = 2000;
 const REMINDER_TOAST_MS = 6000;
@@ -236,13 +237,6 @@ const CARD_ACTION: Record<Scene, { icon: IconName; label: string }> = {
   off: { icon: "power", label: "Off" },
   music: { icon: "music", label: "Music" },
 };
-/** The same buttons as moods (moods.ts MOODS), in the Mood panel's order. */
-const MOOD_ACTION: Record<string, { icon: IconName; label: string }> = {
-  cinema: { icon: "cinema", label: "Cinema" },
-  music: { icon: "music", label: "Music" },
-  dining: { icon: "warm", label: "Dining" },
-  off: { icon: "power", label: "Off" },
-};
 
 /** localStorage, or memory when the TV refuses it: the TV's reminders then last until Nest restarts. */
 const memory = new Map<string, string>();
@@ -349,6 +343,8 @@ export function App() {
     return () => clearInterval(t);
   }, []);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** The mood strip under the lights button (mood-strip.tsx), while it is open. */
+  const [stripOpen, setStripOpen] = useState(false);
   // Each media card's look (a long OK on it), and the menu while it is open: the card previews the menu's choice.
   const [cardStyles, setCardStyles] = useState<Record<string, CardStyle>>(() => loadCardStyles(storage));
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
@@ -385,8 +381,14 @@ export function App() {
   /** The sound system's state just asked for, shown until SmartThings reports it (a few seconds at most). */
   const [soundSet, setSoundSet] = useState<boolean | null>(null);
   const soundTimer = useRef<ReturnType<typeof setTimeout>>();
-  /** The picture mode Nest last set (kept across restarts): SmartThings' own status for it is stale on this TV. */
-  const [pictureSet, setPictureSet] = useState<string | null>(() => lastPictureMode() ?? null);
+  /**
+   * The picture mode as the TV itself reads it (picture-mode.ts), read again on load, when Secretary comes back to the
+   * screen, every half minute and after each change; undefined on a TV without the settings API. SmartThings' own
+   * status for it is stale on this TV.
+   */
+  const [tvPicture, setTvPicture] = useState<string | undefined>(readTvPicture);
+  /** The mood last set (moods.ts activeMood): the header's lights button shows its icon. */
+  const [moodKey, setMoodKey] = useState<string | null>(activeMood);
   const [time, setTime] = useState(clock);
   const [asking, setAsking] = useState(false);
   const [listening, setListening] = useState(false);
@@ -436,6 +438,8 @@ export function App() {
   /** What the TV's own assistant reads when it answers: the latest devices, scenes, forecast and focused title. */
   const lastFocusedTarget = useRef<{ type: CatalogKind; title: SlimTitle } | null>(null);
   const live = useRef({ devices, scenes, weather, continueItems, myList });
+  /** The viewer's mood by key (set below, beside applyMood), for Ask's mood prompts and routines. */
+  const moodBy = useRef<(key: MoodKey) => Promise<unknown>>(() => Promise.resolve());
   live.current = { devices, scenes, weather, continueItems, myList };
   const readFocusedTitle = async (): Promise<FocusedTitleContext | null> => {
     const pick =
@@ -504,6 +508,8 @@ export function App() {
       localBrain({
         reminders: localRem,
         lights: (cmd) => runLights(cmd, live.current.devices, live.current.scenes),
+        // Ask's "cinema mode", "movie night" and "goodnight" set the viewer's own moods, as the strip does.
+        mood: (key) => moodBy.current(key),
         focusedTitle: readFocusedTitle,
         continueWatching: () => live.current.continueItems.map((e) => ({ type: e.type, title: e.title })),
         myList: () =>
@@ -629,11 +635,18 @@ export function App() {
     const act = !parseRoutine(prompt) && (devices.length || scenes.length) ? homeAction(prompt, devices, scenes, independentLights()) : null;
     if (act) {
       flash(act.reply);
-      if (act.picture) {
-        rememberPictureMode(act.picture);
-        setPictureSet(act.picture);
-      }
       showLocal(brain.note(prompt, act.reply, "domotics_updated"));
+      // A picture mode is set on the TV itself where it can be (picture-mode.ts), else by the scene or command.
+      if (act.picture) {
+        const want = act.picture;
+        return void setPictureMode(want, devices, scenes).then(
+          (mode) => {
+            setTvPicture(readTvPicture() ?? mode);
+            pollHomeSoon();
+          },
+          () => flash("SmartThings didn't take that; try again"),
+        );
+      }
       const done =
         act.kind === "scene"
           ? home.runScene(act.scene.id)
@@ -758,7 +771,7 @@ export function App() {
   const togglePicture = () => {
     togglePictureMode(devices, scenes).then(
       (mode) => {
-        setPictureSet(mode);
+        setTvPicture(readTvPicture() ?? mode);
         flash(`Picture mode: ${mode}`);
         pollHomeSoon();
       },
@@ -908,13 +921,23 @@ export function App() {
     void refreshMe();
     void refreshApps();
     void refreshServer();
+    // The remote changes the picture mode without Secretary knowing: the TV is read again when Secretary comes back to
+    // the screen or gets the window back (the TV's own menu took it), and with the clock.
+    const readPicture = () => setTvPicture(readTvPicture());
     const onWake = () => {
-      if (document.visibilityState !== "hidden") void refreshServer();
+      if (document.visibilityState === "hidden") return;
+      void refreshServer();
+      readPicture();
     };
     document.addEventListener("visibilitychange", onWake);
-    const t = setInterval(() => setTime(clock()), 30_000);
+    window.addEventListener("focus", readPicture);
+    const t = setInterval(() => {
+      setTime(clock());
+      if (document.visibilityState !== "hidden") readPicture();
+    }, 30_000);
     return () => {
       document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", readPicture);
       clearInterval(t);
     };
   }, []);
@@ -1205,7 +1228,7 @@ export function App() {
     // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
     void refreshCloud();
   };
-  const pictureMode = pictureSet ?? pictureTv(devices)?.pictureMode;
+  const pictureMode = pictureNow(devices, tvPicture);
   const soundOn = soundSet ?? devices.find((d) => d.kind === "audio")?.on;
   const openReminders = reminders.filter((r) => !r.completed).length;
   const headerPerson = { name: me?.name ?? "Secretary", color: me?.color, img: me?.img };
@@ -1235,7 +1258,7 @@ export function App() {
     header: {
       time,
       person: headerPerson,
-      buttons: headerButtons(pictureMode, soundOn, openReminders),
+      buttons: headerButtons(pictureMode, soundOn, openReminders, moodKey),
       press: (at) => {
         const i = at === "person" ? HEADER_PROFILE : HEADER_ORDER[at];
         // Search keeps the title page to come back to with Back.
@@ -1496,10 +1519,10 @@ export function App() {
     sub: lux !== null ? `${Math.round(lux)} lux in the room` : homeConfigured() ? `${lights.total} lights` : SERVER_URL ? "Through Secretary Server" : "SmartThings not set up",
     // With SmartThings on the TV, the card's buttons are the Mood panel's four moods (moods.ts); through the server,
     // its scenes as before.
-    actions: homeConfigured() ? MOODS.map((m) => MOOD_ACTION[m.key]) : SCENES.map(([id]) => CARD_ACTION[id]),
+    actions: homeConfigured() ? mainMoods(scenes).map((m) => ({ icon: m.icon, label: m.label })) : SCENES.map(([id]) => CARD_ACTION[id]),
     run: (i) => {
       if (!homeConfigured()) return runScene(SCENES[i][0], SCENES[i][1]);
-      const m = MOODS[i];
+      const m = mainMoods(scenes)[i];
       applyMood(m).then(
         () => flash(`${m.label} is on`),
         (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the lights"),
@@ -1621,6 +1644,8 @@ export function App() {
   }, [continueItems, reminders, talk]);
 
 
+  // The strip's moods: the four and the routines shown, as the viewer set them (read while it is open).
+  const stripMoods = useMemo(() => (stripOpen ? allMoods(scenes) : []), [stripOpen, scenes]);
   const menuItems = [
     cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
     "TV settings",
@@ -1636,9 +1661,10 @@ export function App() {
       ask: 1,
       cols: rowLayout(columns, openCol).nav,
       menu: menuOpen ? menuItems.length : 0,
+      moods: stripOpen ? stripMoods.length + 1 : 0,
       header: HEADER_ITEMS,
     }),
-    [navKey, menuOpen],
+    [navKey, menuOpen, stripOpen, stripMoods.length],
   );
 
   // Focusing the assistant (Down, or OK on its card) starts listening at once, so the wave shows only while someone
@@ -1737,12 +1763,33 @@ export function App() {
     else if (SERVER_URL) toggleReminder(SERVER_URL, r.id).then(applyReminders, () => flash("Couldn't update the reminder"));
   }
 
-  /** A mood (moods.ts): its effects, then its lights (a show, a level or the viewer's routine). */
+  moodBy.current = (key) => {
+    const m = mainMoods(scenes).find((x) => x.key === key);
+    return m ? applyMood(m) : Promise.reject(new NestError(`No ${key} mood`));
+  };
+  /**
+   * A mood (moods.ts, with the viewer's changes): its effects, then together its lights (a show, a level or a routine,
+   * unless it leaves them), the TV's picture mode and the sound system, each only when the mood sets it.
+   */
   function applyMood(m: Mood): Promise<void> {
     setLightFx(m.fx);
     setActiveMood(m.key);
-    const done = "routine" in m.lights ? home.runScene(m.lights.routine).then(() => undefined) : runLights(m.lights, devices, scenes);
-    return done.then(() => pollHomeSoon());
+    setMoodKey(m.key);
+    const jobs: Promise<unknown>[] = [];
+    if ("routine" in m.lights) jobs.push(home.runScene(m.lights.routine));
+    else if ("scene" in m.lights) jobs.push(runLights(m.lights, devices, scenes));
+    if (m.picture) jobs.push(setPictureMode(m.picture, devices, scenes).then((mode) => setTvPicture(readTvPicture() ?? mode)));
+    const sound = devices.find((d) => d.kind === "audio");
+    if (m.sound !== undefined && sound && sound.on !== m.sound) {
+      jobs.push(
+        toggleSound(devices, !m.sound).then((on) => {
+          setSoundSet(on);
+          clearTimeout(soundTimer.current);
+          soundTimer.current = setTimeout(() => setSoundSet(null), 8000);
+        }),
+      );
+    }
+    return Promise.all(jobs).then(() => pollHomeSoon());
   }
 
   /** A scene from the Home card: SmartThings from the TV, else through the server. */
@@ -1761,6 +1808,29 @@ export function App() {
       () => flash("Couldn't reach the lights"),
     );
   }
+
+  /** OK on the lights button: the mood strip, focus on the active mood (or the first). */
+  const openStrip = () => {
+    const moods = allMoods(scenes);
+    setStripOpen(true);
+    setFocus({ area: "moods", i: Math.max(0, moods.findIndex((m) => m.key === moodKey)) });
+  };
+  const closeStrip = () => {
+    setStripOpen(false);
+    setFocus({ area: "header", i: HEADER_LIGHTS });
+  };
+  /** OK in the strip: that mood at once, or the full Mood panel from "more". */
+  const runStrip = (i: number) => {
+    const m = stripMoods[i];
+    setStripOpen(false);
+    if (!m) return void setView("lights");
+    setFocus({ area: "header", i: HEADER_LIGHTS });
+    flash(`${m.label}…`);
+    applyMood(m).then(
+      () => flash(`${m.label} is on`),
+      (e) => flash(e instanceof NestError ? e.message : "Couldn't reach the lights"),
+    );
+  };
 
   const closeMenu = () => {
     setMenuOpen(false);
@@ -1788,7 +1858,7 @@ export function App() {
     }
     if (i === HEADER_PARTY) return void setView("party");
     if (i === HEADER_SEARCH) return openSearch();
-    if (i === HEADER_LIGHTS) return homeConfigured() ? void setView("lights") : nextScene();
+    if (i === HEADER_LIGHTS) return homeConfigured() ? openStrip() : nextScene();
     if (i === HEADER_PICTURE) return togglePicture();
     if (i === HEADER_SOUND) return toggleSoundButton();
     // The catalog's settings (playback, sources, appearance, collections), the Hub's Settings tab.
@@ -1804,6 +1874,7 @@ export function App() {
   const activate = () => {
     const { area, i } = focus;
     if (area === "menu") return runMenu(i);
+    if (area === "moods") return runStrip(i);
     if (area === "header") return pressHeader(i);
     if (area === "ask" || area === "chat") return void listen();
     if (area === "row") {
@@ -1983,6 +2054,7 @@ export function App() {
     }
     if (key === "Enter") return pickedCard || hold.holding() || tilePicked || tileHold.holding() ? undefined : void activate();
     if (menuOpen && key === "Back") return closeMenu();
+    if (stripOpen && (key === "Back" || key === "Up" || key === "Down")) return closeStrip();
     if (menuOpen && (key === "Left" || key === "Right")) return;
     if (key === "Back" && focus.area === "row" && focus.inside) return setFocus(leave(focus));
     // Back on the chat leaves it for the Assistant card; Back on the assistant under the cards puts the screen back as it was.
@@ -2011,7 +2083,7 @@ export function App() {
   const panelHeader: PanelHeader = {
     time,
     person: { ...headerPerson, sub: status || undefined },
-    buttons: headerButtons(pictureMode, soundOn, openReminders),
+    buttons: headerButtons(pictureMode, soundOn, openReminders, moodKey),
     press: (i) => {
       if (i !== HEADER_PICTURE && i !== HEADER_SOUND) {
         setView("home");
@@ -2097,7 +2169,7 @@ export function App() {
           key={query}
           time={time}
           person={{ ...headerPerson, sub: status || undefined }}
-          buttons={headerButtons(pictureMode, soundOn, openReminders)}
+          buttons={headerButtons(pictureMode, soundOn, openReminders, moodKey)}
           find={findTitles}
           initialQuery={query}
           onQuery={(q) => (lastSearch = q)}
@@ -2136,6 +2208,8 @@ export function App() {
           moving={moving?.key ?? null}
           pictureMode={pictureMode}
           soundOn={soundOn}
+          mood={moodKey}
+          moodStrip={stripOpen ? { moods: stripMoods, active: moodKey } : null}
         />
       )}
       <HoldPill since={holdSince} />

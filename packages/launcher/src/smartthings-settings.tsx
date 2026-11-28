@@ -1,14 +1,31 @@
 // Settings › SmartThings (a category Secretary adds to the catalog's Settings, catalog-kit host.ts): the detailed setup
 // the Mood panel's moods are built from, one line each beside a preview of what it does. The light effects and their
-// switches (Poster colour and Match lights among them), then the routines (shown as moods or not, and which runs on
-// Play and after the film), then every light by room, switched from here.
+// switches (Poster colour and Match lights among them), then the mood editor (one mood at a time: its lights, each
+// effect, the picture mode and the sound system, saved as `nest.moods`), then the routines (shown as moods or not, and
+// which runs on Play and after the film), then every light by room, switched from here.
 import type { HostSettingRow, HostSettingsTab } from "@secretary/catalog-kit/src/host.ts";
-import { groupByRoom, lightCommands, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
+import { groupByRoom, lightCommands, pictureTv, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
 import { EFFECTS, EffectPreview, ranAgo } from "./light-effects.tsx";
 import { lightCount } from "./light-count.ts";
 import { type LightFx, lightFx, setLightFx } from "./light-fx.ts";
-import { type MovieScenes, movieScenes, setMovieScenes } from "./home-control.ts";
-import { type FilmPart, moodRoutines, toggleMoodRoutine, withPart } from "./moods.ts";
+import { type MovieScenes, movieScenes, picturePair, setMovieScenes } from "./home-control.ts";
+import {
+  allMoods,
+  cycle,
+  editMood,
+  type FilmPart,
+  lightsChoices,
+  type Mood,
+  type MoodLights,
+  moodRoutines,
+  moodStage,
+  pictureChoices,
+  resetMood,
+  sameLights,
+  SWITCH_STEPS,
+  toggleMoodRoutine,
+  withPart,
+} from "./moods.ts";
 
 export const SMARTTHINGS_TAB = "SmartThings";
 
@@ -67,6 +84,120 @@ function LightPreview({ d, on, room }: { d: StDevice; on: boolean; room: string 
   );
 }
 
+/** The mood the editor lines show, chosen on its first line; kept while Secretary runs. */
+let editing = "cinema";
+
+const SCENE_LABEL = { cinema: "Cinema, dimmed", music: "Music show", warm: "Warm and bright", off: "Off" } as const;
+
+function lightsLabel(l: MoodLights, name: (id: string) => string | undefined): string {
+  if ("scene" in l) return SCENE_LABEL[l.scene];
+  if ("routine" in l) return name(l.routine) ?? "A routine";
+  return "As they are";
+}
+
+const switchLabel = (v: boolean | undefined) => (v === undefined ? "As it is" : v ? "On" : "Off");
+
+function MoodEditPreview({ m }: { m: Mood }) {
+  return (
+    <div class="lfx-pv">
+      <div class={`lfx-stage ${moodStage(m)}`}>
+        <i class="lfx-sheen" />
+        <i class="lfx-lamp is-left" />
+        <i class="lfx-screen" />
+        <i class="lfx-lamp is-right" />
+      </div>
+      <b class="lfx-title">{m.label}</b>
+      <ul class="mood-does">
+        {m.does.map((d) => (
+          <li key={d}>{d}</li>
+        ))}
+      </ul>
+      <p class="lfx-about">{m.edited ? "Changed here. Left and Right change a line; the last line puts it back." : "As Secretary sets it. Left and Right change a line."}</p>
+    </div>
+  );
+}
+
+/** The mood editor: which mood, then what it does, one line each, stepped with Left and Right (OK steps forward). */
+function moodRows(st: SmartThingsSetup): HostSettingRow[] {
+  const moods = allMoods(st.scenes);
+  const m = moods.find((x) => x.key === editing) ?? moods[0];
+  editing = m.key;
+  const name = (id: string) => st.scenes.find((s) => s.id === id)?.name;
+  const dir = (key: "Enter" | "Left" | "Right") => (key === "Left" ? -1 : 1);
+  const preview = <MoodEditPreview m={m} />;
+  const lights = lightsChoices(st.scenes);
+  const pictures = pictureChoices(picturePair(), pictureTv(st.devices)?.pictureModes);
+  const rows: HostSettingRow[] = [
+    {
+      key: "mood:pick",
+      title: "Mood to set up",
+      sub: "Left and Right pick the mood",
+      value: m.edited ? `${m.label} · Changed` : m.label,
+      on: m.edited,
+      preview,
+      act: (key) => void (editing = cycle(moods, moods.indexOf(m), dir(key)).key),
+    },
+    {
+      key: "mood:lights",
+      title: `${m.label}: lights`,
+      sub: "A lights command or a routine",
+      value: lightsLabel(m.lights, name),
+      on: !("keep" in m.lights),
+      preview,
+      act: (key) => void editMood(m.key, { lights: cycle(lights, lights.findIndex((c) => sameLights(c, m.lights)), dir(key)) }),
+    },
+  ];
+  for (const e of EFFECTS) {
+    const v = m.fx[e.key];
+    rows.push({
+      key: `mood:fx:${e.key}`,
+      title: `${m.label}: ${e.label}`,
+      sub: e.hint,
+      value: switchLabel(v),
+      on: v === true,
+      preview,
+      act: (key) => {
+        const next = cycle(SWITCH_STEPS, SWITCH_STEPS.indexOf(v), dir(key));
+        const fx = { ...m.fx };
+        if (next === undefined) delete fx[e.key];
+        else fx[e.key] = next;
+        editMood(m.key, { fx });
+      },
+    });
+  }
+  rows.push({
+    key: "mood:picture",
+    title: `${m.label}: picture mode`,
+    sub: "The TV's own picture mode",
+    value: m.picture ?? "As it is",
+    on: m.picture !== undefined,
+    preview,
+    act: (key) => void editMood(m.key, { picture: cycle(pictures, pictures.indexOf(m.picture), dir(key)) ?? null }),
+  });
+  if (st.devices.some((d) => d.kind === "audio")) {
+    rows.push({
+      key: "mood:sound",
+      title: `${m.label}: sound system`,
+      sub: "On or off with the mood",
+      value: switchLabel(m.sound),
+      on: m.sound === true,
+      preview,
+      act: (key) => void editMood(m.key, { sound: cycle(SWITCH_STEPS, SWITCH_STEPS.indexOf(m.sound), dir(key)) ?? null }),
+    });
+  }
+  if (m.edited) {
+    rows.push({
+      key: "mood:reset",
+      title: `Put ${m.label} back`,
+      sub: "As Secretary sets it",
+      value: "OK",
+      preview,
+      act: (key) => void (key === "Enter" && resetMood(m.key)),
+    });
+  }
+  return rows;
+}
+
 /** The category's lines, read each time Settings draws. */
 export function smartThingsRows(st: SmartThingsSetup): HostSettingRow[] {
   const fx: LightFx = lightFx();
@@ -83,6 +214,7 @@ export function smartThingsRows(st: SmartThingsSetup): HostSettingRow[] {
       act: () => void setLightFx({ [e.key]: !fx[e.key] }),
     };
   });
+  rows.push(...moodRows(st));
   const picked = movieScenes();
   const shown = moodRoutines();
   const now = st.now ?? Date.now;
