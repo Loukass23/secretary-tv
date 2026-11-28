@@ -11,6 +11,7 @@ import {
   cinemaShow,
   danceShow,
   INDEPENDENT_DEFAULT,
+  isBluetoothSound,
   lightCommands,
   MUSIC_DEFAULT,
   type MusicConfig,
@@ -25,10 +26,13 @@ import {
   type RippleStyle,
   sharedLights,
   smartThings,
+  soundOutputScene,
+  soundTv,
   type StDevice,
   type StScene,
   type StTokens,
   type TokenSource,
+  tvSoundCommands,
 } from "@secretary/smartthings";
 import { NestError } from "./brain.ts";
 import { effective, lightFx } from "./light-fx.ts";
@@ -171,7 +175,7 @@ const SCENE_NAMES: Record<"cinema" | "warm" | "off" | "music", RegExp> = {
   music: /music/i,
   cinema: /cinema|movie|film/i,
   warm: /warm|evening|relax|cos[yi]/i,
-  off: /off|good ?night|bed/i,
+  off: / off |good ?night|bed/i,
 };
 /** The levels used when no scene fits: what the server's own scenes set. */
 const SCENE_LEVEL = { cinema: 15, warm: 70, off: 0, music: 50 } as const;
@@ -334,6 +338,50 @@ export async function runLights(cmd: LightsCommand, devices: readonly StDevice[]
   const shared = sharedLights(devices, independentLights());
   if (!shared.length) throw new NestError("I can't see any SmartThings lights yet.");
   await Promise.all(shared.map((d) => home.command(d.id, lightCommands(level > 0, d.dimmable ? level : undefined))));
+}
+
+/**
+ * Keeps the TV's own media sound on TV speakers / soundbar when a Bluetooth speaker hijacked the TV's master output, so
+ * AVPlay films stay on the TV while AI spoken replies route to Bluetooth (`setSinkId` in voice.ts). Prefers a SmartThings
+ * routine named "TV Speaker" / "TV Sound" (which Samsung TVs obey like picture-mode routines), else `samsungvd.soundFrom`.
+ */
+export async function ensureTvSoundForMedia(
+  devices: readonly StDevice[],
+  scenes: readonly StScene[],
+  bluetoothConnected = false,
+): Promise<boolean> {
+  if (!homeConfigured()) return false;
+  const tv = soundTv(devices);
+  const scene = soundOutputScene("tv", scenes);
+  const onBt = isBluetoothSound(tv?.soundFrom) || (tv?.soundFromMode !== undefined && tv.soundFromMode !== 0);
+  if (!scene && !onBt && !bluetoothConnected) return false;
+  try {
+    if (scene) {
+      await home.runScene(scene.id);
+      return true;
+    }
+    if (tv) {
+      await home.command(tv.id, tvSoundCommands(0, "TV Speaker"));
+      return true;
+    }
+  } catch (e) {
+    console.warn("[nest] tv sound output", e);
+  }
+  return false;
+}
+
+/** Restores a "Bluetooth Speaker" / "AI Speaker" SmartThings routine after media playback if the home has one. */
+export async function restoreAiSoundAfterMedia(scenes: readonly StScene[]): Promise<boolean> {
+  if (!homeConfigured()) return false;
+  const scene = soundOutputScene("bluetooth", scenes);
+  if (!scene) return false;
+  try {
+    await home.runScene(scene.id);
+    return true;
+  } catch (e) {
+    console.warn("[nest] restore bluetooth sound", e);
+    return false;
+  }
 }
 
 /** The header's sound button: the sound system on if it is off, off if it is on. Returns the state it asked for. */

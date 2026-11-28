@@ -104,7 +104,11 @@ html, body {
   transition: opacity var(--sg-fade) var(--sg-ease);
   will-change: opacity;
 }
-.nest-chip.is-focus { color: var(--sg-focus-ink); }
+.nest-chip { gap: 10px; transition: transform 180ms var(--sg-ease); will-change: transform; }
+.nest-chip.is-focus { color: var(--sg-focus-ink); transform: scale(1.04); }
+.nest-chip-primary { background: var(--sg-raised); }
+.nest-chip-chat { color: var(--sg-accent); }
+.nest-chip-dot { flex: none; width: 22px; height: 22px; border-radius: 50%; background: center / 100% 100% no-repeat; }
 .nest-chip.is-focus::before { opacity: 1; }
 
 /* --- the forecast (home.tsx WeatherSheet), dropping down under the weather --- */
@@ -224,7 +228,7 @@ html, body {
 .nest-empty small { font-size: var(--sg-t-l); }
 .sg-card.is-done b { text-decoration: line-through; }
 
-.nest-toast { display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: var(--sg-t-l); font-weight: 600; }
+.nest-toast { z-index: 35; display: flex; align-items: center; justify-content: center; border-radius: 30px; font-size: var(--sg-t-l); font-weight: 600; }
 
 /* --- search (search.tsx): the keyboard panel on the right, the results on the left --- */
 .nest-kb { border-radius: var(--sg-r-card); }
@@ -443,7 +447,7 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transition: opacity 450ms var(--sg-ease); will-change: opacity; }
 /* Its children are the root's direct children as far as the layout goes (.sg-root > * is absolute). */
 .nest-stage > * { position: absolute; }
-.nest-stage.is-away { opacity: 0.4; filter: blur(14px); }
+.nest-stage.is-away { opacity: 0.25; }
 /* What was said and the answer, written on the screen around the line while the assistant has focus. */
 .nest-say { position: absolute; left: 360px; width: 1200px; text-align: center; opacity: 0; transition: opacity 400ms var(--sg-ease); }
 .nest-say.is-on { opacity: 1; }
@@ -458,6 +462,247 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 /* Only a hint: quiet text, no button. The line itself shows that the assistant has focus. */
 .nest-ask-hint { max-width: 1200px; font-size: var(--sg-t-m); color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nest-ask-hint.is-live { color: var(--sg-ink); }
+
+/* --- page-tailored bottom Assistant Dock (conversation.tsx AssistantDock) --- */
+.nest-dock-wrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+  z-index: 24;
+  transition: opacity 220ms var(--sg-ease);
+  will-change: opacity;
+}
+.nest-dock-wrap.is-hidden { opacity: 0; visibility: hidden; }
+.nest-dock-wave {
+  position: absolute;
+  left: 0;
+  top: 882px;
+  width: 1920px;
+  height: 84px;
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition: opacity 260ms var(--sg-ease), transform 280ms var(--sg-ease);
+  will-change: transform, opacity;
+}
+.nest-dock-wave.is-shown { opacity: 1; transform: none; }
+.nest-dock-wrap.is-focused .nest-dock-wave { opacity: 1; transform: translate3d(0, -68px, 0); }
+.nest-dock-rest {
+  position: absolute;
+  left: 280px;
+  width: 1360px;
+  top: 976px;
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-radius: 32px;
+  background: rgba(14, 13, 18, 0.8);
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  transition: opacity 200ms var(--sg-ease), transform 240ms var(--sg-ease);
+  will-change: transform, opacity;
+}
+.sg-day .nest-dock-rest { background: rgba(252, 246, 239, 0.84); }
+.nest-dock-wrap.is-compact:not(.is-focused) .nest-dock-rest {
+  left: 320px;
+  width: 1280px;
+  top: 1002px;
+  height: 58px;
+}
+.nest-dock-rest.is-out { opacity: 0; transform: translate3d(0, 14px, 0); }
+.nest-dock-orb { flex: none; width: 32px; height: 32px; border-radius: 50%; background: center / 100% 100% no-repeat; }
+.nest-dock-badge {
+  flex: none;
+  padding: 4px 14px;
+  border-radius: 16px;
+  background: var(--sg-raised);
+  color: var(--sg-accent);
+  font-family: var(--sg-font-label);
+  font-size: var(--sg-t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.nest-dock-line {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--sg-t-s);
+  color: var(--sg-ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nest-dock-line.is-live { color: var(--sg-ink); font-weight: 600; }
+.nest-dock-bt {
+  flex: none;
+  padding: 3px 12px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  font-size: var(--sg-t-xs);
+  font-weight: 700;
+}
+.sg-day .nest-dock-bt { color: #0369a1; }
+.nest-dock-bar {
+  position: absolute;
+  left: 100px;
+  width: 1720px;
+  top: 904px;
+  height: 150px;
+  padding: 18px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: var(--sg-r-panel);
+  background: rgba(14, 13, 18, 0.92);
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition: opacity 220ms var(--sg-ease), transform 260ms var(--sg-ease);
+  will-change: transform, opacity;
+}
+.sg-day .nest-dock-bar { background: rgba(252, 246, 239, 0.94); }
+.nest-dock-bar.is-in { opacity: 1; transform: none; }
+.nest-dock-head { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.nest-dock-sub {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--sg-t-s);
+  color: var(--sg-ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nest-dock-items { display: flex; align-items: center; gap: 14px; }
+.nest-dock-items .nest-chip { height: 54px; font-size: var(--sg-t-s); max-width: 390px; overflow: hidden; text-overflow: ellipsis; }
+
+/* --- full-screen Conversation view (conversation.tsx ConversationOverlay) --- */
+.nest-conv {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  background: rgba(10, 9, 13, 0.98);
+  animation: nestCatIn 220ms var(--sg-ease) both;
+  will-change: opacity;
+}
+.sg-day .nest-conv { background: rgba(246, 239, 231, 0.98); }
+.nest-conv-top {
+  position: absolute;
+  left: 120px;
+  right: 120px;
+  top: 26px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nest-conv-brand { display: flex; align-items: center; gap: 16px; }
+.nest-conv-brand > b { font-family: var(--sg-font-title); font-size: var(--sg-t-xl); font-weight: 700; }
+.nest-conv-orb { flex: none; width: 42px; height: 42px; border-radius: 50%; background: center / 100% 100% no-repeat; }
+.nest-conv-audio {
+  padding: 5px 14px;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  font-size: var(--sg-t-xs);
+  color: var(--sg-ink-dim);
+}
+.nest-conv-audio.is-bt { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
+.sg-day .nest-conv-audio.is-bt { color: #0369a1; }
+.nest-conv-hint { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
+.nest-conv-thread {
+  position: absolute;
+  left: 140px;
+  top: 84px;
+  width: 1640px;
+  height: 696px;
+}
+.nest-conv-scroll {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 8px 16px 18px;
+  transition: transform 280ms var(--sg-ease);
+  will-change: transform;
+}
+.nest-turn { display: flex; flex-direction: column; gap: 14px; }
+.nest-msg-you { display: flex; justify-content: flex-end; }
+.nest-msg-bot { display: flex; align-items: flex-start; gap: 20px; }
+.nest-msg-avatar { flex: none; width: 50px; height: 50px; margin-top: 4px; border-radius: 50%; background: center / 100% 100% no-repeat; }
+.nest-msg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.nest-msg-bubble {
+  max-width: 1220px;
+  padding: 14px 24px;
+  border-radius: 8px 24px 24px 24px;
+  background: var(--sg-fill);
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+}
+.nest-msg-bubble.is-you {
+  max-width: 1020px;
+  border-radius: 24px 24px 8px 24px;
+  background: var(--sg-raised);
+}
+.nest-msg-bubble.is-you b { font-size: var(--sg-t-l); font-weight: 600; color: var(--sg-ink); }
+.nest-msg-bubble p { margin: 0; font-size: var(--sg-t-l); line-height: 1.38; color: var(--sg-ink); }
+.nest-msg-bubble.is-thinking p { color: var(--sg-ink-dim); }
+.nest-conv-recs { display: flex; flex-direction: column; gap: 14px; padding: 4px 4px 2px; }
+.nest-conv-posters { position: relative; width: 100%; }
+.nest-conv-cap {
+  max-width: 1240px;
+  padding: 14px 22px;
+  border-radius: 18px;
+  background: var(--sg-fill);
+  box-shadow: inset 0 0 0 1.5px var(--sg-line);
+  opacity: 0.78;
+  transition: opacity var(--sg-fade) var(--sg-ease);
+  will-change: opacity;
+}
+.nest-conv-cap.is-focus { opacity: 1; box-shadow: inset 0 0 0 2.5px var(--sg-focus); }
+.nest-conv-cap-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.nest-conv-cap-head b { font-family: var(--sg-font-title); font-size: var(--sg-t-l); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-conv-cap-head span { flex: none; font-size: var(--sg-t-s); color: var(--sg-accent); font-weight: 600; }
+.nest-conv-cap p {
+  margin: 8px 0 0;
+  font-size: var(--sg-t-s);
+  line-height: 1.35;
+  color: var(--sg-ink-dim);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.nest-conv-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 792px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.nest-conv-chips {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  max-width: 1760px;
+  height: 58px;
+  padding: 0 40px;
+}
+.nest-conv-chips .nest-chip { height: 52px; font-size: var(--sg-t-s); max-width: 410px; overflow: hidden; text-overflow: ellipsis; }
+.nest-conv-wave-row { position: relative; width: 1920px; height: 76px; margin-top: 6px; }
+.nest-conv-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 6px; height: 56px; }
+.nest-conv-state { font-size: var(--sg-t-s); color: var(--sg-accent); font-weight: 600; margin-left: 8px; }
+html[data-sg-motion="reduced"] .nest-dock-wave,
+html[data-sg-motion="reduced"] .nest-dock-rest,
+html[data-sg-motion="reduced"] .nest-dock-bar,
+html[data-sg-motion="reduced"] .nest-conv-scroll,
+html[data-sg-motion="reduced"] .nest-conv { animation: none; transition: none; }
 
 
 /* --- the glass components on Nest's home, at sofa size: the catalog apps keep tv-kit's own sizes --- */

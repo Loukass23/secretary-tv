@@ -54,3 +54,23 @@ export interface HostVoice {
   listen: boolean;
   speak: boolean;
 }
+
+/** Active catalog screen and highlighted/open title, reported to Secretary so the assistant adapts to the page. */
+export interface HostCatalogContext {
+  screen: "home" | "detail" | "folder" | "timeline" | "hub" | "player";
+  kind: "movie" | "series" | "anime";
+  title?: {
+    kind: "movie" | "series" | "anime";
+    id: string;
+    name: string;
+    year: string;
+    rating: string;
+    poster?: string;
+    background?: string;
+    description?: string;
+    resume?: boolean;
+    episodeLabel?: string;
+  };
+  folderTitle?: string;
+  sagaTitle?: string;
+}

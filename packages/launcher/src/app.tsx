@@ -54,6 +54,10 @@ import { COVER_EVERY_MS, COVER_TURN_KEY, coverPicks, oneEach } from "./card-cove
 import { CatalogHost, type CatalogEntry } from "./catalog-host.tsx";
 // Types only: the catalog itself loads as its own chunk (catalog-host.tsx).
 import type { EmbeddedHost } from "@secretary/catalog-kit";
+import type { HostCatalogContext } from "@secretary/catalog-kit/src/host.ts";
+import { statusForInteraction, tailorAssistant, type AssistantPageContext } from "./assistant-context.ts";
+import { clampConversation, type ConversationFocus, type ConversationShape, dockItemCount, stepConversation, stepDock } from "./conversation-nav.ts";
+import { AssistantDock, ConversationOverlay, MAX_INLINE_RESULTS } from "./conversation.tsx";
 import { DISCOVER, type DiscoverData, loadDiscover, refreshDiscover } from "./discover.ts";
 import { loadMylist, mylistItems, saveMylist } from "./mylist.ts";
 import { CARD_FOLDERS, type CollectionCard, loadCards, saveCards, toCards } from "./collections.ts";
@@ -90,6 +94,7 @@ import {
   step,
 } from "./nest-nav.ts";
 import {
+  ensureTvSoundForMedia,
   home,
   homeConfigured,
   homeGrant,
@@ -101,6 +106,7 @@ import {
   playOpenRipple,
   playRippleTest,
   playSplashRipple,
+  restoreAiSoundAfterMedia,
   syncMood,
   rememberPictureMode,
   rippleBeforeLaunch,
@@ -125,7 +131,7 @@ import { settled, SMARTTHINGS_TAB, smartThingsTab } from "./smartthings-settings
 import type { PanelHeader } from "./panel-header.tsx";
 import { WatchTogether } from "./party.tsx";
 import { SearchScreen } from "./search.tsx";
-import { play, record, type Recording } from "./voice.ts";
+import { getAudioRouteState, play, record, refreshAudioDevices, stopPlayback, watchAudioDevices, type AudioRouteState, type Recording } from "./voice.ts";
 import { cachedWeather, refreshWeather } from "./weather.ts";
 import { homeAction, homeAlerts, pictureTv, roomLux, type StDevice, type StRoom, type StScene } from "@secretary/smartthings";
 import { AssistantUnavailable, discoverCatalog, findCatalogs, type FocusedTitleContext, parseReminder, parseRoutine, transcribeGroq, speak as speakGemini, transcribe as transcribeGemini } from "@secretary/assistant";
@@ -391,6 +397,31 @@ export function App() {
   const [asking, setAsking] = useState(false);
   const [listening, setListening] = useState(false);
   const [answered, setAnswered] = useState(false);
+  const [hearing, setHearing] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [speakingAudio, setSpeakingAudio] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string | undefined>();
+  const [audioRoute, setAudioRoute] = useState<AudioRouteState>(getAudioRouteState);
+  const audioRouteRef = useRef(audioRoute);
+  audioRouteRef.current = audioRoute;
+  const [catalogCtx, setCatalogCtx] = useState<HostCatalogContext | null>(null);
+  const catalogCtxRef = useRef(catalogCtx);
+  catalogCtxRef.current = catalogCtx;
+  /** Assistant dock or full-screen conversation opened over a non-Home screen (Catalog, Detail, Mood). */
+  const [extAssistant, setExtAssistant] = useState<null | "dock" | "chat">(null);
+  const extAssistantRef = useRef(extAssistant);
+  extAssistantRef.current = extAssistant;
+  const [extDockIdx, setExtDockIdx] = useState(0);
+  const [convFocus, setConvFocus] = useState<ConversationFocus>({ zone: "controls", i: 0 });
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const lastHomeCol = useRef(0);
+  if (focus.area === "row") lastHomeCol.current = focus.col ?? 0;
+  const onWave = (v: number | null) => {
+    setWaveLevel(v);
+    const loud = v !== null && v > 0.08;
+    setHearing((was) => (was === loud ? was : loud));
+  };
   /** What the assistant just recommended: it replaces that kind's card items, and the card opens onto them. */
   const [found, setFound] = useState<{ kind: CatalogKind; query: string; prompt: string; reply: string; items: SearchResult[] } | null>(null);
   /** The card to put focus on once the row has been rebuilt (a card's index is only known then). */
@@ -402,11 +433,9 @@ export function App() {
   const speakReplies = prefs.spokenReplies;
   /** The clip being recorded from the room microphone. */
   const recording = useRef<Recording | null>(null);
-  /** The latest answer when the assistant was entered: earlier exchanges stay out of its view. */
-  const [since, setSince] = useState(0);
   /** The microphone is being opened: a second press waits for it. */
   const opening = useRef(false);
-  /** No room microphone (or no transcription): the mic key opens the TV keyboard, as before. */
+  /** Auto-listen pauses when no microphone is connected, cleared automatically on `devicechange` or manual retry. */
   const keyboardOnly = useRef(false);
   const [glow, setGlow] = useState<string | undefined>();
   const speakTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -437,9 +466,16 @@ export function App() {
   const lastFocusedTarget = useRef<{ type: CatalogKind; title: SlimTitle } | null>(null);
   const live = useRef({ devices, scenes, weather, continueItems, myList });
   live.current = { devices, scenes, weather, continueItems, myList };
+  const currentTitleTarget = (): { type: CatalogKind; title: SlimTitle } | null => {
+    if (viewRef.current === "catalog" && catalogCtxRef.current?.title) {
+      const ct = catalogCtxRef.current.title;
+      return { type: ct.kind, title: ct };
+    }
+    return lastFocusedTarget.current;
+  };
   const readFocusedTitle = async (): Promise<FocusedTitleContext | null> => {
     const pick =
-      lastFocusedTarget.current ??
+      currentTitleTarget() ??
       (live.current.continueItems[0] ? { type: live.current.continueItems[0].type, title: live.current.continueItems[0].title } : null);
     if (!pick) return null;
     const meta = await Promise.race([
@@ -511,7 +547,7 @@ export function App() {
             .sort((a, b) => b.addedAt - a.addedAt)
             .map((l) => ({ type: l.type, title: l.title })),
         setMyList: (wantSaved) => {
-          const pick = lastFocusedTarget.current;
+          const pick = currentTitleTarget();
           if (!pick) return null;
           const currently = inLibrary(pick.type, pick.title.id);
           if (currently !== wantSaved) toggleLibrary(pick.type, pick.title);
@@ -529,6 +565,56 @@ export function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), ms);
   };
+
+  // Detect Bluetooth / room audio devices connected after Secretary started, and keep media/movies on TV speakers.
+  const prevBluetooth = useRef(false);
+  useEffect(() => {
+    const off = watchAudioDevices((next) => {
+      setAudioRoute(next);
+      if (next.hasMic) keyboardOnly.current = false;
+      if (next.bluetooth && !prevBluetooth.current) {
+        flash("🔵 Bluetooth speaker ready for Secretary");
+        if (viewRef.current === "catalog" && catalogCtxRef.current?.screen === "player") {
+          void ensureTvSoundForMedia(live.current.devices, live.current.scenes, true);
+        }
+      }
+      prevBluetooth.current = next.bluetooth;
+    });
+    const onWake = () => {
+      if (document.visibilityState !== "hidden") void refreshAudioDevices();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      off();
+      document.removeEventListener("visibilitychange", onWake);
+    };
+  }, []);
+
+  // When leaving the catalog or changing top-level screens, close any floating non-Home assistant bar.
+  useEffect(() => {
+    if (view !== "catalog") setCatalogCtx(null);
+    if (view === "search" || view === "signin" || view === "profiles" || view === "party") {
+      recording.current?.cancel();
+      stopPlayback();
+      setExtAssistant(null);
+    }
+  }, [view]);
+
+  // While AVPlay plays a film or episode: hide the assistant, stop any AI speech, and route TV media audio to TV speakers.
+  const isPlayingMedia = view === "catalog" && catalogCtx?.screen === "player";
+  const wasPlayingMedia = useRef(false);
+  useEffect(() => {
+    if (isPlayingMedia) {
+      recording.current?.cancel();
+      stopPlayback();
+      setExtAssistant(null);
+      void ensureTvSoundForMedia(live.current.devices, live.current.scenes, audioRouteRef.current.bluetooth);
+    } else if (wasPlayingMedia.current) {
+      void restoreAiSoundAfterMedia(live.current.scenes);
+      void refreshAudioDevices();
+    }
+    wasPlayingMedia.current = isPlayingMedia;
+  }, [isPlayingMedia]);
 
   /** The one search (search.tsx), from the header, the Search key and CH-, here and inside the catalog; with no query, on the last one typed. */
   const openSearch = (q = "") => {
@@ -575,13 +661,28 @@ export function App() {
     flash(THEME_LABEL[pref]);
   };
 
-  /** A new answer: the wave speaks for a moment, and titles it found replace Continue Watching. */
+  /** A new answer: the wave speaks for a moment, and titles it found show inline in conversation or on the home card. */
   const onNewTurn = (turn: AssistantTurn) => {
     setAnswered(true);
     clearTimeout(speakTimer.current);
     speakTimer.current = setTimeout(() => setAnswered(false), SPEAK_MS);
-    // What was asked moves the view to the card concerned, unless the chat has the whole screen.
-    showTurn(turn, focusRef.current.area !== "chat");
+    const inChatNow = (viewRef.current === "home" && focusRef.current.area === "chat") || extAssistantRef.current === "chat";
+    showTurn(turn, viewRef.current === "home" && !inChatNow);
+    if (inChatNow) {
+      setConvFocus({ zone: "chips", i: 0 });
+    } else if (viewRef.current !== "home") {
+      if (turn.action === "resume" && turn.results?.[0]) {
+        const hit = turn.results[0];
+        const inProgress = live.current.continueItems.find((e) => e.title.id === hit.title.id);
+        if (inProgress) resume(inProgress);
+        else openHit(hit);
+      } else if (turn.results?.length || turn.action === "title_info" || turn.action === "briefing" || turn.action === "weather") {
+        setExtAssistant("chat");
+        setConvFocus({ zone: "chips", i: 0 });
+      } else {
+        flash(turn.reply);
+      }
+    }
     if (turn.action === "reminder_added") setLocalItems(localRem.list());
   };
 
@@ -640,38 +741,46 @@ export function App() {
           : Promise.all(act.targets.map((t) => home.command(t.device.id, t.commands)));
       return void done.then(pollHomeSoon, () => flash("SmartThings didn't take that; try again"));
     }
+    stopPlayback();
+    setPendingPrompt(prompt);
     setAsking(true);
     const wantSpeech = speaksReply(prefs, spoken, VOICE_KEYS.speak);
     let speech: Uint8Array | null | undefined;
     try {
       const turn = await brain.ask(prompt);
+      setAsking(false);
+      setPendingPrompt(undefined);
       showLocal(turn);
       if (wantSpeech) speech = await speakGemini(turn.reply, GEMINI_KEY);
     } finally {
       setAsking(false);
+      setPendingPrompt(undefined);
     }
     if (speech) {
       // The wave keeps speaking for as long as the reply plays, not just SPEAK_MS.
       clearTimeout(speakTimer.current);
       setAnswered(true);
-      await play(speech, setWaveLevel);
+      setSpeakingAudio(true);
+      await play(speech, onWave);
+      setSpeakingAudio(false);
       setAnswered(false);
     }
   };
 
   /**
-   * The mic key: a clip from the room microphone (docs/launcher.md, "Room microphone"), the key again to stop early.
-   * Without a transcription key, or when the TV gives the app no microphone, it opens the TV keyboard instead.
+   * The mic key: a clip from the room/Bluetooth microphone (docs/launcher.md, "Room microphone"), the key again to stop
+   * early. Without a transcription key, or when no microphone is connected, manual presses fall back to the TV keyboard.
    */
   const listen = async (auto = false) => {
     if (!mayListen(prefsRef.current, auto, VOICE_KEYS.listen)) return auto ? undefined : openAsk();
     if (recording.current) return recording.current.stop();
     if (opening.current) return;
-    if (keyboardOnly.current) return auto ? undefined : openAsk();
+    if (auto && keyboardOnly.current) return;
     let rec: Recording;
     opening.current = true;
     try {
-      rec = await record(setWaveLevel);
+      rec = await record(onWave);
+      keyboardOnly.current = false;
     } catch {
       opening.current = false;
       keyboardOnly.current = true;
@@ -679,13 +788,18 @@ export function App() {
     }
     opening.current = false;
     // Focus left the assistant while the microphone was opening: nothing to listen for.
-    if (auto && focusRef.current.area !== "ask" && focusRef.current.area !== "chat") return rec.cancel();
+    const stillListening =
+      (viewRef.current === "home" && (focusRef.current.area === "ask" || focusRef.current.area === "chat")) ||
+      extAssistantRef.current !== null;
+    if (auto && !stillListening) return rec.cancel();
     recording.current = rec;
     setListening(true);
     const clip = await rec.done;
     recording.current = null;
     setListening(false);
+    setHearing(false);
     if (!clip) return rec.cancelled ? undefined : flash(`Couldn't hear anything on ${rec.name.match(/\(([^)]+)\)$/)?.[1] ?? "the microphone"}`);
+    setTranscribing(true);
     setAsking(true);
     let words = "";
     try {
@@ -698,6 +812,7 @@ export function App() {
         flash(reason === "no-speech" ? "Couldn't hear anything" : "Couldn't reach the assistant");
       }
     } finally {
+      setTranscribing(false);
       setAsking(false);
     }
     if (words) await send(words, true);
@@ -1167,6 +1282,7 @@ export function App() {
   };
   /** Shows the catalog inside Secretary, on its home or on what `entry` names. */
   const browse = (entry: CatalogEntry) => {
+    setExtAssistant(null);
     setCatalog(entry);
     setView("catalog");
   };
@@ -1197,6 +1313,7 @@ export function App() {
   /** The catalog screen Settings was opened from (the header's settings button), to come back to with Back. */
   const settingsFrom = useRef<CatalogEntry | null>(null);
   const leaveCatalog = () => {
+    setExtAssistant(null);
     const back = settingsFrom.current;
     settingsFrom.current = null;
     if (back && catalog?.hub) return browse({ ...back, open: back.open && { ...back.open, autoPlay: false, room: undefined } });
@@ -1204,6 +1321,19 @@ export function App() {
     setView("home");
     // Watching in the catalog moved progress, My List and collections: Nest's cards read them again.
     void refreshCloud();
+  };
+  const openExternalAssistant = (how: "voice" | "dock" | "chat") => {
+    if (how === "voice") {
+      setExtAssistant("chat");
+      setConvFocus({ zone: "controls", i: 0 });
+      void listen(false);
+    } else if (how === "chat") {
+      setExtAssistant("chat");
+      setConvFocus({ zone: "controls", i: 0 });
+    } else {
+      setExtDockIdx(0);
+      setExtAssistant("dock");
+    }
   };
   const pictureMode = pictureSet ?? pictureTv(devices)?.pictureMode;
   const soundOn = soundSet ?? devices.find((d) => d.kind === "audio")?.on;
@@ -1216,6 +1346,9 @@ export function App() {
     person: headerPerson,
     onExit: leaveCatalog,
     onSearch: searchFromCatalog,
+    assistantOpen: extAssistant !== null,
+    onAssistant: openExternalAssistant,
+    onContext: setCatalogCtx,
     // Settings › SmartThings: the effects, routines and lights the Mood panel's moods are built from.
     // Settings › Accounts: the watch trackers (Simkl).
     settingsTabs: [
@@ -1287,7 +1420,10 @@ export function App() {
     label: "Assistant",
     greeting: brief.greeting,
     lines: brief.lines,
-    run: () => setFocus({ area: "chat", i: 0 }),
+    run: () => {
+      setConvFocus({ zone: "controls", i: 0 });
+      setFocus({ area: "chat", i: 0 });
+    },
   });
   push({
     kind: "weather",
@@ -1512,7 +1648,7 @@ export function App() {
     key: "reminders",
     label: "Reminders",
     items: shownReminders.map((r) => {
-      const [from, color] = SOURCE_LABEL[r.source] ?? SOURCE_LABEL.local;
+      const [, color] = SOURCE_LABEL[r.source] ?? SOURCE_LABEL.local;
       return { title: r.text, sub: reminderLine(r, reminders), meta: r.completed ? "✓" : r.due ? `⏰ ${r.due}` : undefined, color: r.completed ? "#6d6c68" : color, done: r.completed };
     }),
     add: "+ Add reminder",
@@ -1547,17 +1683,16 @@ export function App() {
     });
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
+  const homeColIdx = Math.min(lastHomeCol.current, Math.max(0, columns.length - 1));
   mediaFocused.current = columns[colAt]?.kind === "media";
-  if (columns[colAt]?.kind === "media") {
-    const focusedTile = targetAt(columns[colAt], focus.inside ? Math.max(0, focus.i) : 0);
-    if (focusedTile) lastFocusedTarget.current = { type: focusedTile.type, title: focusedTile.title };
+  let homeFocusedTile: TileTarget | null = null;
+  if (columns[homeColIdx]?.kind === "media") {
+    homeFocusedTile = targetAt(columns[homeColIdx], focus.area === "row" && focus.inside ? Math.max(0, focus.i) : 0);
+    if (colAt >= 0 && homeFocusedTile) lastFocusedTarget.current = { type: homeFocusedTile.type, title: homeFocusedTile.title };
   }
   // On a card itself (not yet inside it) the background takes the colour of its first poster, so moving between cards tints too.
   const rowArt = colAt >= 0 ? (focus.inside && focus.i >= 0 ? art[colAt]?.[focus.i] : art[colAt]?.[0]) : undefined;
-  const focusedArt: { src: string; type: CatalogKind } | null =
-    rowArt
-      ? rowArt
-      : null;
+  const focusedArt: { src: string; type: CatalogKind } | null = rowArt ? rowArt : null;
   // A card without a poster (Assistant, Weather, Calendar...) has its own warm colour, stable for its key.
   const cardKey = colAt >= 0 ? columns[colAt]?.key : undefined;
   useEffect(() => {
@@ -1609,17 +1744,44 @@ export function App() {
       continueItems,
       reminders,
       assistant: talk,
+      audio: audioRoute,
       // spoken: the reply is read aloud as after a voice prompt (Gemini speech, envelope, playback).
       ask: (q: string, spoken = false) => send(q, spoken),
       // Drives the wave like a voice would, for cdp.mjs walks with nobody speaking (null hands it back).
       wave: setWaveLevel,
       // A reply's WAV through the real playback (envelope, speakerphone, wave), when the speech model is out of quota.
-      play: (wav: Uint8Array) => play(wav, setWaveLevel),
+      play: (wav: Uint8Array) => play(wav, onWave),
       theme: (pref: ThemePref) => pickTheme(pref),
       openSearch: (q = "") => openSearch(q),
     };
-  }, [continueItems, reminders, talk]);
+  }, [continueItems, reminders, talk, audioRoute]);
 
+  // Build the active page context so the bottom Assistant Dock and Conversation suggestions adapt to the page/title.
+  const pageContext: AssistantPageContext = useMemo(() => {
+    const common = { hasContinue: continueItems.length > 0, lightsOn: lights.on, lightsTotal: lights.total, openReminders, userName: me?.name };
+    if (view === "lights") return { ...common, screen: "lights" };
+    if (view === "catalog" && catalogCtx) {
+      const s = catalogCtx.screen;
+      const t = catalogCtx.title;
+      return {
+        ...common,
+        screen: s === "detail" || s === "folder" || s === "timeline" ? s : "catalog-home",
+        kind: catalogCtx.kind,
+        focused: t ? { kind: t.kind, title: t, resume: t.resume, episodeLabel: t.episodeLabel } : null,
+        folderTitle: catalogCtx.folderTitle,
+        sagaTitle: catalogCtx.sagaTitle,
+      };
+    }
+    return {
+      ...common,
+      screen: "home",
+      card: columns[homeColIdx]?.key,
+      focused: homeFocusedTile ? { kind: homeFocusedTile.type, title: homeFocusedTile.title, resume: homeFocusedTile.resume } : null,
+    };
+  }, [view, catalogCtx, columns[homeColIdx]?.key, homeFocusedTile?.title.id, homeFocusedTile?.resume, continueItems.length, lights.on, lights.total, openReminders, me?.name]);
+
+  const lastAnswer = talk.turns[talk.turns.length - 1];
+  const tailored = useMemo(() => tailorAssistant(pageContext, lastAnswer), [pageContext, lastAnswer]);
 
   const menuItems = [
     cloudEnabled ? (me ? "Switch profile" : "Sign in to Nuvio") : "Profiles",
@@ -1629,11 +1791,11 @@ export function App() {
   ];
   // A media card is open while the remote is inside it: its row of titles takes the width.
   const openCol = focus.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
-  const navKey = `${openCol}:${rowLayout(columns, openCol).nav.map((c) => `${c.count}/${c.across}`).join()}`;
+  const dockCount = dockItemCount(tailored.dockChips.length);
+  const navKey = `${openCol}:${dockCount}:${rowLayout(columns, openCol).nav.map((c) => `${c.count}/${c.across}`).join()}`;
   const layout: Layout = useMemo(
     () => ({
-      // The assistant under the cards is one stop.
-      ask: 1,
+      ask: dockCount,
       cols: rowLayout(columns, openCol).nav,
       menu: menuOpen ? menuItems.length : 0,
       header: HEADER_ITEMS,
@@ -1641,18 +1803,44 @@ export function App() {
     [navKey, menuOpen],
   );
 
-  // Focusing the assistant (Down, or OK on its card) starts listening at once, so the wave shows only while someone
-  // speaks; leaving it drops the clip.
-  const talking = focus.area === "ask" || focus.area === "chat";
+  const inHomeDock = view === "home" && focus.area === "ask";
+  const inHomeChat = view === "home" && focus.area === "chat";
+  const dockFocused = inHomeDock || extAssistant === "dock";
+  const chatOpen = inHomeChat || extAssistant === "chat";
+  const activeDockIndex = inHomeDock ? focus.i : extDockIdx;
+
+  // Focusing the assistant (Speak on the dock, or opening Conversation) starts listening when `listenOnFocus` is on.
+  const autoListenActive = (dockFocused && activeDockIndex === 0) || (chatOpen && convFocus.zone === "controls" && convFocus.i === 0);
   useEffect(() => {
-    if (!talking || view !== "home") return;
-    setSince(talk.turns[talk.turns.length - 1]?.id ?? 0);
-    if (mayListen(prefs, true, VOICE_KEYS.listen) && !recording.current && !keyboardOnly.current) void listen(true);
-    return () => recording.current?.cancel();
-  }, [talking, view, prefs.listenOnFocus]);
+    if (!autoListenActive) return;
+    const t = setTimeout(() => {
+      if (mayListen(prefs, true, VOICE_KEYS.listen) && !recording.current && !keyboardOnly.current) void listen(true);
+    }, 180);
+    return () => {
+      clearTimeout(t);
+      if (recording.current && !recording.current.heard) recording.current.cancel();
+    };
+  }, [dockFocused, chatOpen, prefs.listenOnFocus]);
+
+  // Keep conversation focus valid as turns and chips update.
+  const turnsWithResults = useMemo(() => talk.turns.filter((t) => (t.results?.length ?? 0) > 0), [talk]);
+  const convShape: ConversationShape = useMemo(
+    () => ({
+      resultRows: turnsWithResults.map((t) => Math.min(MAX_INLINE_RESULTS, t.results!.length)),
+      chips: tailored.chatChips.length,
+      controls: VOICE_KEYS.speak ? 3 : 2,
+    }),
+    [turnsWithResults, tailored.chatChips.length],
+  );
+  useEffect(() => {
+    if (!chatOpen) return;
+    const clamped = clampConversation(convFocus, convShape);
+    if (clamped.zone !== convFocus.zone || clamped.i !== convFocus.i || clamped.row !== convFocus.row) {
+      setConvFocus(clamped);
+    }
+  }, [chatOpen, convShape]);
 
   // An answer that is about a card puts focus on it, once the row holds what the answer found.
-  // The Recent card joins the row once Nest is idle, which moves every card after it, so wait for that first.
   const rowSettled = recent.map((c) => c.key).join() === latestKey;
   useEffect(() => {
     if (!goto || !idle || !rowSettled) return;
@@ -1687,8 +1875,7 @@ export function App() {
     return () => clearTimeout(t);
   }, [found]);
 
-  // Keep focus valid when a card's items change. Focus waits on the row while it is still empty, so the first card is
-  // focused once Continue Watching, the trending titles or the apps arrive.
+  // Keep focus valid when a card's items change.
   useEffect(() => {
     if (focus.area === "row" && !layout.cols.some((c) => c.count > 0) && !error) return;
     const next = clamp(focus, layout);
@@ -1720,7 +1907,6 @@ export function App() {
     setHidden(next);
     saveHidden(storage, next);
     flash(`${columns.find((c) => c.key === key)?.label ?? labelOf(key)} removed · the last card adds it back`);
-    // The card after it takes its place in the row.
     setFocus({ area: "row", col: Math.min(focus.col ?? 0, Math.max(0, columns.length - 2)), i: 0 });
   }
 
@@ -1801,15 +1987,118 @@ export function App() {
     }
   };
 
+  const runDockItem = (idx: number) => {
+    const chips = tailored.dockChips;
+    if (idx === 0) return void listen();
+    if (idx >= 1 && idx <= chips.length) {
+      const chip = chips[idx - 1];
+      recording.current?.cancel();
+      setConvFocus({ zone: "chips", i: 0 });
+      if (view === "home") setFocus({ area: "chat", i: 0 });
+      else setExtAssistant("chat");
+      if (chip) void send(chip, false);
+      return;
+    }
+    recording.current?.cancel();
+    setConvFocus({ zone: "controls", i: 0 });
+    if (view === "home") setFocus({ area: "chat", i: 0 });
+    else setExtAssistant("chat");
+  };
+
+  const closeConversation = () => {
+    recording.current?.cancel();
+    stopPlayback();
+    if (view === "home") {
+      setFocus({ area: "row", col: homeColIdx, i: 0 });
+    } else {
+      setExtAssistant(null);
+    }
+  };
+
+  const activateConversation = () => {
+    const cur = clampConversation(convFocus, convShape);
+    if (cur.zone === "controls") {
+      if (cur.i === 0) return void listen();
+      if (cur.i === 1) {
+        recording.current?.cancel();
+        return openAsk();
+      }
+      if (cur.i === 2) return toggleSpeech();
+      return;
+    }
+    if (cur.zone === "chips") {
+      const chip = tailored.chatChips[cur.i];
+      if (!chip) return;
+      recording.current?.cancel();
+      void send(chip, false);
+      return;
+    }
+    // Inline media recommendation selected from the conversation thread!
+    const turn = turnsWithResults[cur.row ?? turnsWithResults.length - 1];
+    const hit = turn?.results?.[cur.i];
+    if (!hit) return;
+    closeConversation();
+    if (turn.action === "resume") {
+      const inProgress = live.current.continueItems.find((e) => e.title.id === hit.title.id);
+      if (inProgress) return resume(inProgress);
+    }
+    openHit(hit);
+  };
+
+  // Remote keys for the full-screen Conversation view (works identically over Home, Catalog, Detail and Mood).
+  useKeys(chatOpen, (key) => {
+    if (key === "SearchVoice") return void listen();
+    if (key === "Blue") return toggleSpeech();
+    if (key === "Back") return closeConversation();
+    if (key === "Enter") return activateConversation();
+    if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
+      const next = stepConversation(convFocus, key, convShape);
+      if (next.zone !== "controls" && recording.current && !recording.current.heard) {
+        recording.current.cancel();
+      }
+      setConvFocus(next);
+      return;
+    }
+    return true;
+  });
+
+  // Remote keys for the bottom Assistant Dock when focused over a non-Home screen (Catalog, Detail, Mood).
+  useKeys(extAssistant === "dock" && !chatOpen, (key) => {
+    if (key === "SearchVoice") return void listen();
+    if (key === "Blue") return toggleSpeech();
+    if (key === "Back" || key === "Up") {
+      recording.current?.cancel();
+      setExtAssistant(null);
+      return;
+    }
+    if (key === "Enter") return runDockItem(extDockIdx);
+    if (key === "Left" || key === "Right") {
+      const next = stepDock(extDockIdx, key, tailored.dockChips.length);
+      if (typeof next === "number") {
+        if (next > 0 && recording.current && !recording.current.heard) recording.current.cancel();
+        setExtDockIdx(next);
+      }
+      return;
+    }
+    return true;
+  });
+
   const activate = () => {
     const { area, i } = focus;
     if (area === "menu") return runMenu(i);
     if (area === "header") return pressHeader(i);
-    if (area === "ask" || area === "chat") return void listen();
+    if (area === "ask") return runDockItem(i);
+    if (area === "chat") return activateConversation();
     if (area === "row") {
       // A card as a whole: OK goes inside it (a media card opens, useOkHold below). Inside, an item does its own thing.
       // On the Assistant card, OK opens the full chat.
-      if (!focus.inside) return columns[focus.col ?? 0]?.kind === "assistant" ? setFocus({ area: "chat", i: 0 }) : setFocus(enter(focus, layout));
+      if (!focus.inside) {
+        if (columns[focus.col ?? 0]?.kind === "assistant") {
+          setConvFocus({ zone: "controls", i: 0 });
+          return setFocus({ area: "chat", i: 0 });
+        }
+        return setFocus(enter(focus, layout));
+      }
       const col = columns[focus.col ?? 0];
       // The bar under an opened media card's last row: back to its first title, the assistant's picks, or the catalog.
       if (col?.kind === "media" && i === END_TOP) return setFocus({ ...focus, i: 0 });
@@ -1826,7 +2115,7 @@ export function App() {
 
   // On a media card as a whole, OK is split: a short press opens it, a long one opens its style menu (the remote sends
   // no repeats for a held OK). Everywhere else OK acts on the keydown as before.
-  const pickedCard = view === "home" && !styleMenu && !removeMenu && !moving && focus.area === "row" && !focus.inside;
+  const pickedCard = view === "home" && !chatOpen && !styleMenu && !removeMenu && !moving && focus.area === "row" && !focus.inside;
 
   /** Starts moving a card: Left and Right slide it along the row, OK keeps it there, Back puts it back. */
   const startMove = (key: string) => {
@@ -1843,7 +2132,10 @@ export function App() {
   };
   const openPicked = () => {
     const c = columns[focus.col ?? 0];
-    if (c?.kind === "assistant") return setFocus({ area: "chat", i: 0 });
+    if (c?.kind === "assistant") {
+      setConvFocus({ zone: "controls", i: 0 });
+      return setFocus({ area: "chat", i: 0 });
+    }
     setFocus(enter(focus, layout));
   };
   const hold = useOkHold(pickedCard, openPicked, () => {
@@ -1855,7 +2147,7 @@ export function App() {
 
   // On a title tile inside an opened media card the same split: a short OK does what it did (plays or opens), a long
   // one opens the title's menu (details, play, watched, My List). The Open tile and the rows under it stay immediate.
-  const tileCol = view === "home" && focus.area === "row" && focus.inside ? columns[focus.col ?? 0] : undefined;
+  const tileCol = view === "home" && !chatOpen && focus.area === "row" && focus.inside ? columns[focus.col ?? 0] : undefined;
   const tilePicked = !styleMenu && !removeMenu && !moving && !tileMenu && tileCol?.kind === "media" && !!targetAt(tileCol, focus.i);
   const tileHold = useOkHold(tilePicked, activate, () => {
     const target = tileCol?.kind === "media" ? targetAt(tileCol, focus.i) : null;
@@ -1903,7 +2195,7 @@ export function App() {
     if (id === "mylist") return flash(toggleLibrary(t.type, t.title) ? `${t.title.name} added to My List` : `${t.title.name} removed from My List`);
   };
 
-  useKeys(view === "home", (key) => {
+  useKeys(view === "home" && !chatOpen, (key) => {
     // The tile menu takes every key while it is open: Up and Down pick, OK does it, Back leaves it.
     if (tileMenu) {
       if (key === "Enter" && tileHold.holding()) return;
@@ -1970,7 +2262,7 @@ export function App() {
     }
     // Channel Down (CH-) or Search opens the search.
     if (key === "ChannelDown" || key === "Search") return openSearch();
-    // The microphone key talks to Ask Nest on the home screen; Red flips the picture mode, Green cycles the theme, Blue
+    // The microphone key talks to Secretary on the home screen; Red flips the picture mode, Green cycles the theme, Blue
     // mutes spoken replies.
     if (key === "SearchVoice") return void listen();
     if (key === "Red") return togglePicture();
@@ -1985,9 +2277,10 @@ export function App() {
     if (menuOpen && key === "Back") return closeMenu();
     if (menuOpen && (key === "Left" || key === "Right")) return;
     if (key === "Back" && focus.area === "row" && focus.inside) return setFocus(leave(focus));
-    // Back on the chat leaves it for the Assistant card; Back on the assistant under the cards puts the screen back as it was.
-    if (key === "Back" && focus.area === "chat") return setFocus({ area: "row", col: 0, i: 0 });
-    if (key === "Back" && focus.area === "ask") return setFocus({ area: "row", col: 0, i: 0 });
+    if (key === "Back" && focus.area === "ask") {
+      recording.current?.cancel();
+      return setFocus({ area: "row", col: homeColIdx, i: 0 });
+    }
     if (key === "Back") {
       const now = performance.now();
       if (now - lastBack.current < EXIT_WINDOW_MS) return void playFarewell().finally(() => exitApp());
@@ -1996,7 +2289,14 @@ export function App() {
       return;
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
+      if (focus.area === "ask" && key === "Up") {
+        recording.current?.cancel();
+        return setFocus({ area: "row", col: homeColIdx, i: 0 });
+      }
       const next = step(focus, key, layout);
+      if (focus.area === "ask" && next.area === "ask" && next.i > 0 && recording.current && !recording.current.heard) {
+        recording.current.cancel();
+      }
       if (next !== focus) setFocus(next);
       return;
     }
@@ -2029,18 +2329,27 @@ export function App() {
     SERVER_URL ? (serverOnline ? "Server online · CH- to search" : "Server offline · apps still work") : "No server configured",
   ];
 
-  const lastAnswer = talk.turns[talk.turns.length - 1];
   const wave = waveState({ listening, asking, answered });
-  // An answer from before the assistant was entered is not shown again in it.
-  const stale = (lastAnswer?.id ?? 0) <= since;
+  const liveStatus = statusForInteraction({
+    listening,
+    hearing,
+    transcribing,
+    asking,
+    speaking: speakingAudio,
+  }) || WAVE_STATUS[wave];
+  const showAssistantBar =
+    view === "home" ||
+    view === "lights" ||
+    (view === "catalog" && catalogCtx?.screen !== "player" && catalogCtx?.screen !== "hub" && !catalog?.hub);
+
   const askView = {
     wave,
-    status: WAVE_STATUS[wave],
-    prompt: listening || stale ? undefined : lastAnswer?.prompt,
-    reply: stale ? "" : (lastAnswer?.reply ?? summary ?? ""),
+    status: liveStatus,
+    prompt: listening ? undefined : lastAnswer?.prompt,
+    reply: lastAnswer?.reply ?? summary ?? "",
     turnId: lastAnswer?.id ?? 0,
-    focused: focus.area === "ask",
-    full: focus.area === "chat",
+    focused: inHomeDock,
+    full: inHomeChat,
   };
 
   return (
@@ -2050,7 +2359,7 @@ export function App() {
       frost={backdrop?.frost}
       mood={moodOn ? { palette: shownMood, day: theme === "day" } : undefined}
       sheen={effective(fx).shimmer && { palette: shownMood }}
-      class={theme === "day" ? "nest sg-day" : "nest"}
+      class={theme === "day" && view !== "catalog" ? "nest sg-day" : "nest"}
     >
       {view === "signin" ? (
         <SignIn
@@ -2088,6 +2397,8 @@ export function App() {
           devices={devices}
           scenes={scenes}
           header={panelHeader}
+          active={extAssistant === null}
+          onAssistant={openExternalAssistant}
           onMood={applyMood}
           onSetup={() => browse({ type: "movie", hub: { tab: "settings", category: SMARTTHINGS_TAB } })}
           onClose={() => setView("home")}
@@ -2101,10 +2412,7 @@ export function App() {
           find={findTitles}
           initialQuery={query}
           onQuery={(q) => (lastSearch = q)}
-          // The phone keyboard goes through the home server (being retired, docs/server-retirement.md): offered only
-          // when one is set and answering.
           desk={SERVER_URL && serverOnline ? SERVER_URL : ""}
-          // The page opens inside Secretary, leaving the search for the catalog view.
           onOpen={(hit) => {
             setSearchFrom(null);
             browse({ type: hit.type, open: { type: hit.type, title: hit.title } });
@@ -2138,6 +2446,34 @@ export function App() {
           soundOn={soundOn}
         />
       )}
+      {showAssistantBar && (
+        <AssistantDock
+          wave={wave}
+          status={liveStatus}
+          reply={lastAnswer?.reply ?? summary ?? ""}
+          tailored={tailored}
+          focused={dockFocused}
+          focusIndex={activeDockIndex}
+          compact={view !== "home" || openCol >= 0}
+          hidden={chatOpen || (view === "home" && openCol >= 0)}
+          listening={listening}
+          audio={audioRoute}
+        />
+      )}
+      <ConversationOverlay
+        open={chatOpen}
+        turns={talk.turns}
+        wave={wave}
+        status={liveStatus}
+        listening={listening}
+        asking={asking}
+        pendingPrompt={pendingPrompt}
+        tailored={tailored}
+        focus={convFocus}
+        audio={audioRoute}
+        speakOn={speakReplies}
+        canSpeak={VOICE_KEYS.speak}
+      />
       <HoldPill since={holdSince} />
       {toast && (
         <Glass x={560} y={1000} w={800} h={60} class="nest-toast">

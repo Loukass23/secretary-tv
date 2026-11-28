@@ -778,3 +778,24 @@ from 172 KB to 178 KB for it.
 Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so every deploy stopped at
 `check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
 and player work. Each sprint PR states how much it adds.
+
+Budget, 28 Nov assistant & conversation rework: after PR #43 (multi-turn follow-ups, Gemini JSON routing, library intents,
+spoiler-safe title Q&A, taste recommendations, routines, due reminders and weather horizons) plus the full-screen
+`ConversationOverlay` with inline recommendation tiles, page-tailored `AssistantDock`, Bluetooth hot-plug detection and
+SmartThings TV sound routing, the deploy build is 195.3 KB gzip (`dist` 648.8 KB). `budget.json` was raised from 190 KB
+to 196 KB (`200704` bytes).
+
+### Assistant dock and full-screen conversation (28 Nov 2026, GU43DU7199UXZG)
+
+Measured on the Samsung TV (`GU43DU7199UXZG`, Tizen 9) with `main` (`eeaa7c2`) and this branch deployed in place one
+right after the other (`cdp.mjs walk` at 250 ms per key, 3 runs each):
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home default walk (`cdp.mjs walk`), 3 runs | `main` | 33 ms | 83-100 ms | 39, 40, 33 | 6.7-8.1 MB |
+| | this change | 17-33 ms | 83 ms | 40, 48, 42 | 4.4-4.7 MB |
+| Full-screen `ConversationOverlay` (`Right`x2, `Left`x2, `Down`, `Right`x2, `Left`, `Down`, `Right`, `Left`, `Up`x2 across inline posters, chips and controls), 3 runs | this change | 33 ms | 50-67 ms | 29, 9, 20 | 5.0-5.9 MB |
+
+Boot ready time (`[boot] ready`) was 1.57-2.24 s (against 2.25 s on `main`), and `.nest-stage.is-away` dims by opacity
+only (the old `filter: blur(14px)` is gone). Auto-listen waits 180 ms of focus rest before opening Web Audio so walking
+across the dock never opens the microphone mid-walk.

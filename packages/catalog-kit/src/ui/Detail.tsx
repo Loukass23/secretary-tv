@@ -84,7 +84,7 @@ const EP_STRIDE = LANDSCAPE.w + LANDSCAPE.gap;
  * seasons), and every line in it keeps its height, so nothing moves as focus does. The mark is the title's logo, else
  * its name in the display face.
  */
-const CAPTION_MOVIE = { x: PAD, foot: 772, w: 1060, mark: { w: 720, h: 160 }, name: { w: 1060, h: 200 } };
+const CAPTION_MOVIE = { x: PAD, foot: 706, w: 1060, mark: { w: 720, h: 150 }, name: { w: 1060, h: 190 } };
 // A logo keeps its box; a show's name without one wraps to two lines across the caption rather than being cut.
 const CAPTION_SERIES = { x: PAD, foot: 612, w: 1060, mark: { w: 600, h: 110 }, name: { w: 1060, h: 180 } };
 /** The synopsis' lines, as `.det-about` sets them (detail.css): the blurred copy (Blur) is laid out the same. */
@@ -95,8 +95,9 @@ const EPS_Y = 728;
 /** How long the page waits for a title's details before it shows what it has. */
 const META_WAIT_MS = 6000;
 /** "More like this" under a film's panel: a row label, then the home row's posters, smaller. */
-const SIM_SCALE = 0.6;
-const SIM = { labelY: 792, y: 836, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
+const SIM_SCALE = 0.52;
+const SIM = { labelY: 726, y: 768, stride: Math.round((POSTER.w + POSTER.gap) * SIM_SCALE) };
+
 /** The sources sheet, on the right; rows scroll inside it. */
 const SHEET = { x: 1060, y: 60, w: 800, h: 960 };
 const SOURCE_H = 112;
@@ -146,6 +147,8 @@ interface Props {
   /** A title of "More like this": its own page opens (Back comes back here). */
   onOpenTitle?(title: Title): void;
   onWatchedChange(): void;
+  onAssistant?(how: "voice" | "dock" | "chat"): void;
+  keysPaused?: boolean;
   onBack(): void;
 }
 
@@ -313,6 +316,8 @@ export function Detail({
   party,
   onOpenTimeline,
   onOpenTitle,
+  onAssistant,
+  keysPaused,
   onWatchedChange,
   onBack,
 }: Props) {
@@ -815,7 +820,7 @@ export function Detail({
   // OK on an action, an episode or a source acts when released: a short press does it; held for 600 ms the timer has
   // already opened the context menu (actions, episodes) or the details card (sources) instead.
   useEffect(() => {
-    if (!active) return;
+    if (!active || keysPaused) return;
     const onUp = (e: KeyboardEvent) => {
       if (e.keyCode !== 13) return;
       ctxHolding.current = false;
@@ -832,7 +837,7 @@ export function Detail({
     };
   }, [active]);
 
-  useKeys(active, (key) => {
+    useKeys(active && !keysPaused, (key) => {
     // The context menu takes every key while it is open.
     if (ctx) {
       if (key === "Enter" && ctxHolding.current) return;
@@ -966,7 +971,10 @@ export function Detail({
     }
     if (key === "Left" || key === "Right" || key === "Up" || key === "Down") {
       let next = move(lengths, focus, key.toLowerCase() as Dir);
-      if (next === focus) return;
+      if (next === focus) {
+        if (key === "Down" && onAssistant) onAssistant("dock");
+        return;
+      }
       moved.current = true;
       if (series && focus.row !== 1 && next.row === 1) {
         const idx = seasons.indexOf(shownSeason);

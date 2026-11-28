@@ -101,6 +101,7 @@ interface Props {
   onRowStyle(rowId: string, style: RowStyle): void;
   onDwell(title: Title): void;
   onOpenHub(tab?: OverlayTab, autoVoice?: boolean): void;
+  onAssistant?(how: "voice" | "dock" | "chat"): void;
   onBack(): void;
 }
 
@@ -151,6 +152,7 @@ export function Home({
   onRowStyle,
   onDwell,
   onOpenHub,
+  onAssistant,
   onBack,
 }: Props) {
   /** Focus in the header (the person, or a button's index), or null when it is in the rows. */
@@ -264,6 +266,11 @@ export function Home({
   useKeys(active, (key, e) => {
     if (menu) return void menuKey(menu, key);
     // CH- or Search opens search; CH+ back to Secretary's home is the catalog's own (app.tsx).
+    if (key === "SearchVoice" && onAssistant) {
+      setTopIdx(null);
+      onAssistant("voice");
+      return;
+    }
     if (key === "ChannelDown" || key === "Search" || key === "SearchVoice") {
       setTopIdx(null);
       onOpenHub("search", key === "SearchVoice");
@@ -284,6 +291,7 @@ export function Home({
 
     if (endIdx !== null) {
       if (key === "Up" || key === "Back") return void setEndIdx(null);
+      if (key === "Down" && onAssistant) return void onAssistant("dock");
       if (key === "Left" || key === "Right") return void setEndIdx(key === "Left" ? 0 : 1);
       if (key === "Enter" && !e.repeat) {
         setEndIdx(null);

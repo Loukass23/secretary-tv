@@ -55,6 +55,28 @@ export const sharedLights = (devices: readonly StDevice[], independent: readonly
 /** The TV that reports a picture mode, if any. */
 export const pictureTv = (devices: readonly StDevice[]): StDevice | undefined => devices.find((d) => d.kind === "tv" && d.pictureMode);
 
+/** The TV device for sound-output routing (preferring one that reports `soundFrom`). */
+export const soundTv = (devices: readonly StDevice[]): StDevice | undefined =>
+  devices.find((d) => d.kind === "tv" && d.soundFrom) ?? devices.find((d) => d.kind === "tv");
+
+/** True when the TV's reported sound output is a Bluetooth device rather than TV/HDMI/optical speakers. */
+export const isBluetoothSound = (soundFrom: string | undefined): boolean =>
+  /\b(?:bluetooth|bt|headset|earbuds?|jabra|speakerphone|hands[- ]?free)\b/i.test(soundFrom ?? "");
+
+/**
+ * A SmartThings routine that switches the TV's sound output ("TV Speaker" / "TV Sound" for movies, or "Bluetooth Speaker"
+ * / "AI Speaker" to restore Bluetooth when a TV disconnects Bluetooth on TV Speaker).
+ */
+export function soundOutputScene(target: "tv" | "bluetooth", scenes: readonly StScene[]): StScene | undefined {
+  return scenes.find((s) => {
+    const n = norm(s.name);
+    if (target === "tv") {
+      return !/ bluetooth | bt | ai /.test(n) && (/ tv (?:speaker|speakers|sound|audio) /.test(n) || / (?:speaker|sound|audio) tv /.test(n) || / soundbar /.test(n));
+    }
+    return / (?:bluetooth|bt|ai) (?:speaker|speakers|sound|audio) /.test(n) || / (?:speaker|sound|audio) (?:bluetooth|bt) /.test(n);
+  });
+}
+
 const modeKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** A spoken or saved mode as the name this TV uses ("echo" and "eco" both find "Eco"); capitalised as given when unlisted. */
