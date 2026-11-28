@@ -87,7 +87,9 @@ html.avplay .cc-root, html.avplay .cc-root * { visibility: visible; }
 .ply-src > .ply-state { position: relative; z-index: 2; display: block; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ply-src > h2 { position: relative; z-index: 2; margin: 10px 10px 0; font-size: var(--sg-t-xl); font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ply-src > .ply-src-chips { position: absolute; }
-.ply-src-chips .sg-seg-item { font-size: var(--sg-t-xs); white-space: nowrap; }
+/* Each chip as wide as its label, never squeezed into the next; the row scrolls (PlayerSources keeps focus in view). */
+.ply-src > .ply-src-chips { overflow: hidden; justify-content: flex-start; }
+.ply-src-chips .sg-seg-item { flex: none; padding: 0 16px; font-size: var(--sg-t-xs); white-space: nowrap; transform: translate3d(var(--chip-shift, 0px), 0, 0); }
 .ply-src .sg-card-row { font-size: var(--sg-t-m); }
 .ply-src .sg-card small { font-size: var(--sg-t-xs); margin-left: 26px; }
 .ply-src-sec { position: absolute; left: 6px; width: 700px; height: 46px; white-space: nowrap; display: flex; align-items: flex-end; padding-bottom: 8px; font-size: var(--sg-t-xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sg-ink-dim); }

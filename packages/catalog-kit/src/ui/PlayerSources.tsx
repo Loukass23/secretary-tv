@@ -92,10 +92,28 @@ export function PlayerSources({ streams, playing, heading, order = "grouped", is
       ? "The sources could not be found"
       : "Looking for sources…";
 
+  // The chips take their labels' width, more than the sheet holds: they slide (a transform, so the frame stays put) to
+  // keep the focused one in view. One layout read per chip step, only while the chips have focus.
+  const chipsAt = useRef<HTMLSpanElement>(null);
+  const chipShift = useRef(0);
+  useEffect(() => {
+    const row = chipsAt.current?.parentElement?.querySelector<HTMLElement>(".ply-src-chips");
+    if (!row) return;
+    const item = row.querySelector<HTMLElement>(".sg-seg-item.is-focus");
+    let next = item ? chipShift.current : 0;
+    if (item) {
+      const left = item.offsetLeft - 12;
+      const right = item.offsetLeft + item.offsetWidth + 12 - row.clientWidth;
+      if (left < next) next = Math.max(0, left);
+      else if (right > next) next = right;
+    }
+    chipShift.current = next;
+    row.style.setProperty("--chip-shift", `${-next}px`);
+  }, [nav.chip]);
   return (
     <GlassRoot mode="flat" class="ply-src-root">
       <Glass {...SHEET} frost={false} class="ply-src">
-        <span class="ply-state">{`Change source · ${heading}`}</span>
+        <span class="ply-state" ref={chipsAt}>{`Change source · ${heading}`}</span>
         <h2>{title}</h2>
         {list && (
           <Segmented

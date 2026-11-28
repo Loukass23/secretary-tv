@@ -540,7 +540,7 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest-kind-videos .sg-tile-cap,
 .nest-named .sg-tile-cap { left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 14px; background: rgba(8, 9, 12, 0.55); font-size: var(--sg-t-s); }
 .nest-kind-videos .sg-tile-cap b,
-.nest-named .sg-tile-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; line-height: 1.2; }
+.nest-named .sg-tile-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; font-weight: 600; line-height: 1.2; }
 .nest-kind-videos .sg-tile-cap small,
 .nest-named .sg-tile-cap small { display: block; margin: 0; padding: 0; background: none; font-size: var(--sg-t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
