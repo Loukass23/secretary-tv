@@ -5,6 +5,7 @@
 // Where an existing control already fits, use it: `Glass` for a surface, `Segmented` for a few fixed options of equal
 // width, `MediaTile` for any other art, `ListCard` for a list line.
 import type { ComponentChildren } from "preact";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import { Glass } from "./Glass.tsx";
 import { Icon, ListCard, MediaTile } from "./controls.tsx";
 import type { IconName } from "./icons.ts";
@@ -149,25 +150,52 @@ export function ButtonRow({
   );
 }
 
-/** One tab's width and the gap after it, for hosts that place things under a tab. */
+/** A tab's least width and the gap after it: a tab grows to fit its label (Large text, a long category name). */
 export const TAB = { w: 176, h: 60, gap: 12 } as const;
+
+/** Where the tabs of one run sit, kept while its labels and the page's type stay the same. */
+interface TabPlaces {
+  key: string;
+  ends: { left: number; right: number }[];
+}
+
+/** What changes a tab's width besides its label: the text size, the type style and the font on <html>. */
+function typeKey(): string {
+  const r = typeof document !== "undefined" ? document.documentElement : null;
+  return r ? `${r.getAttribute("data-sg-text")}|${r.getAttribute("data-sg-type")}|${r.getAttribute("data-sg-font")}` : "";
+}
 
 /**
  * A row of tabs (a show's seasons, a settings page's sections). `picked` is the one shown, `focusIndex` the one under
- * the remote (-1 when the remote is elsewhere). Tabs have one width (`TAB.w`) so the row scrolls by transform to keep
- * the focused, else the picked, tab in view; for a few options of their own width, use `Segmented`.
+ * the remote (-1 when the remote is elsewhere). Each tab is as wide as its label (at least `TAB.w`, so a row of short
+ * ones keeps its rhythm), so nothing spills at the Large text size. The row scrolls by transform to keep the focused,
+ * else the picked, tab in view; the tabs are measured once per set of labels and type, not on every key. For a few
+ * options of their own width, use `Segmented`.
  */
 export function Tabs({ x, y, w, items, picked, focusIndex = -1 }: { x: number; y: number; w: number; items: readonly string[]; picked: number; focusIndex?: number }) {
-  const stride = TAB.w + TAB.gap;
+  const run = useRef<HTMLDivElement>(null);
+  const places = useRef<TabPlaces | null>(null);
   const at = focusIndex >= 0 ? focusIndex : picked;
-  const total = items.length * stride - TAB.gap;
-  // Keep `at` in view with one tab of room after it, never past the ends.
-  const offset = Math.max(0, Math.min(total - w, (at + 2) * stride - TAB.gap - w));
+  useLayoutEffect(() => {
+    const el = run.current;
+    if (!el || !items.length) return;
+    const key = `${items.join("\u0000")}|${typeKey()}`;
+    if (places.current?.key !== key) {
+      const tabs = Array.from(el.children) as HTMLElement[];
+      places.current = { key, ends: tabs.map((t) => ({ left: t.offsetLeft, right: t.offsetLeft + t.offsetWidth })) };
+    }
+    const ends = places.current.ends;
+    const total = ends[ends.length - 1]?.right ?? 0;
+    // Keep `at` in view with one tab of room after it, never past the ends.
+    const room = ends[Math.min(Math.max(0, at) + 1, ends.length - 1)]?.right ?? 0;
+    const offset = Math.max(0, Math.min(total - w, room - w));
+    el.style.transform = `translate3d(${-offset}px,0,0)`;
+  });
   return (
     <div class="sg-tabs" style={{ left: `${x}px`, top: `${y}px`, width: `${w}px` }}>
-      <div class="sg-tabs-run" style={{ transform: `translate3d(${-offset}px,0,0)` }}>
+      <div class="sg-tabs-run" ref={run} style={{ gap: `${TAB.gap}px` }}>
         {items.map((label, i) => (
-          <span key={i} class={`sg-tab${i === picked ? " is-picked" : ""}${i === focusIndex ? " is-focus" : ""}`} style={{ left: `${i * stride}px` }}>
+          <span key={i} class={`sg-tab${i === picked ? " is-picked" : ""}${i === focusIndex ? " is-focus" : ""}`} style={{ minWidth: `${TAB.w}px` }}>
             {label}
           </span>
         ))}

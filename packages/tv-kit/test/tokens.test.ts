@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ACCENT, DAY, FONTS, MOTION, NIGHT, PAGE_BG, RADII, TEXT_SIZES, TYPE_SCALE, TYPE_STYLES } from "../src/glass/tokens.ts";
-import { typeAttrs } from "../src/glass/type.ts";
+import { ACCENT, ACCENTS, DAY, DISPLAY_FONTS, FONTS, MOTION, NIGHT, PAGE_BG, RADII, TEXT_SIZES, TYPE_SCALE, TYPE_STYLES } from "../src/glass/tokens.ts";
+import { fontAttr, typeAttrs } from "../src/glass/type.ts";
 
 const css = readFileSync(new URL("../src/glass/glass.css", import.meta.url), "utf8");
 
@@ -82,4 +82,49 @@ test("the defaults put no attribute on the page", () => {
 test("every font size in the glass is on the type scale", () => {
   const raw = [...css.matchAll(/font-size:\s*([0-9.]+)px/g)].map((m) => m[1]);
   assert.deepEqual(raw, []);
+});
+
+test("each display face has its rule and its bundled file", () => {
+  assert.equal(DISPLAY_FONTS.grotesk.family, FONTS.display);
+  assert.deepEqual(fontAttr("grotesk"), {});
+  for (const [name, f] of Object.entries(DISPLAY_FONTS)) {
+    if (name === "grotesk") continue;
+    assert.equal(rule(`:root[data-sg-font="${name}"]`).get("--sg-font-display"), f.family, name);
+    const face = f.family.match(/^"([^"]+)"/)?.[1];
+    assert.ok(face && css.includes(`font-family: "${face}";`), `@font-face for ${face}`);
+  }
+  for (const m of css.matchAll(/url\("\.\/fonts\/([^"]+)"\)/g)) assert.ok(readFileSync(new URL(`../src/glass/fonts/${m[1]}`, import.meta.url)).length > 0, m[1]);
+});
+
+/** WCAG contrast of two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const lum = (h: string) => {
+    const n = parseInt(h.slice(1), 16);
+    const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/** `color-mix(in srgb, a p%, b)` for two #rrggbb colours. */
+function mix(a: string, b: string, p: number): string {
+  const A = parseInt(a.slice(1), 16);
+  const B = parseInt(b.slice(1), 16);
+  return `#${[16, 8, 0].map((s) => Math.round(((A >> s) & 255) * p + ((B >> s) & 255) * (1 - p)).toString(16).padStart(2, "0")).join("")}`;
+}
+
+test("every accent's ink, and its text tint in both themes, holds 4.5:1", () => {
+  assert.equal(ACCENT.accent, `var(--accent, ${ACCENTS.ember.hex})`);
+  assert.equal(ACCENT["accent-ink"], `var(--tinta, ${ACCENTS.ember.ink})`);
+  const night = Number(NIGHT["accent-text"].match(/ (\d+)%/)?.[1]) / 100;
+  const day = Number(DAY["accent-text"].match(/ (\d+)%/)?.[1]) / 100;
+  for (const [name, a] of Object.entries(ACCENTS)) {
+    assert.ok(contrast(a.hex, a.ink) >= 4.5, `${name} ink`);
+    assert.ok(contrast(mix(a.hex, "#ffffff", night), PAGE_BG.night) >= 4.5, `${name} night text`);
+    assert.ok(contrast(mix(a.hex, DAY.ink, day), PAGE_BG.day) >= 4.5, `${name} day text`);
+  }
 });

@@ -449,13 +449,17 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest-stage > * { position: absolute; }
 .nest-stage.is-away { opacity: 0.4; filter: blur(14px); }
 /* What was said and the answer, written on the screen around the line while the assistant has focus. */
-.nest-say { position: absolute; left: 360px; width: 1200px; text-align: center; opacity: 0; transition: opacity 400ms var(--sg-ease); }
+.nest-say { position: absolute; left: 360px; width: 1200px; text-align: center; opacity: 0; transition: opacity 400ms var(--sg-ease); will-change: opacity; }
 .nest-say.is-on { opacity: 1; }
-.nest-say-you { top: 330px; height: 150px; display: flex; flex-direction: column; justify-content: flex-end; }
+/* What was said ends 60 px over the line (540) and grows upwards, so a long question at the Large text size never
+   reaches the line; it shows two lines at most. */
+.nest-say-you { bottom: 600px; display: flex; flex-direction: column; justify-content: flex-end; }
+.nest-say-you b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .nest-say-reply { top: 610px; }
 .nest-say small { display: block; font-size: var(--sg-t-m); color: var(--sg-ink-dim); }
-.nest-say b { display: block; font-size: var(--sg-t-xxl); font-weight: 500; line-height: 1.2; color: var(--sg-accent); }
-.nest-say p { margin: 0; font-size: var(--sg-t-xl); line-height: 1.4; color: #ffd08a; animation: nestRise 420ms var(--sg-ease) both; }
+/* The assistant's words take the accent as text (glass --sg-accent-text: lifted at night, deepened by day). */
+.nest-say b { display: block; font-size: var(--sg-t-xxl); font-weight: 500; line-height: 1.2; color: var(--sg-accent-text); }
+.nest-say p { margin: 0; font-size: var(--sg-t-xl); line-height: 1.4; color: var(--sg-accent-text); animation: nestRise 420ms var(--sg-ease) both; }
 /* What the assistant has for the day, in the left column before the cards: the greeting, the reminder count, the first ones. */
 .nest-ask-dock { position: absolute; left: 0; width: 1920px; display: flex; justify-content: center; transition: opacity 300ms var(--sg-ease); }
 .nest-ask-dock.is-gone { opacity: 0; }
@@ -490,7 +494,7 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 
 /* --- the Assistant card, first in the row: what it has for the day and the last exchange --- */
 .nest-assist-card { padding: 34px; }
-.nest-assist-card > b { display: block; margin-top: 26px; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.15; }
+.nest-assist-card > b { display: block; margin-top: 26px; font-size: var(--sg-t-xl); font-weight: 600; line-height: 1.15; color: var(--sg-accent-text); }
 .nest-assist-card > small { display: block; margin-top: 10px; font-size: var(--sg-t-m); color: var(--sg-ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nest-assist-card > small:first-of-type { color: var(--sg-ink); }
 
@@ -524,8 +528,8 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .nest-cal-dow { font-size: var(--sg-t-s); opacity: 0.55; }
 .nest-cal-today { border-radius: 27px; box-shadow: inset 0 0 0 3px currentColor; font-weight: 600; }
 /* What the assistant understood, beside the label while a card holds its suggestions: your words, then what it did. */
-.nest-col-note { position: absolute; left: 380px; top: 9px; max-width: 1100px; font-size: var(--sg-t-m); color: #ffd08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nest-col-note b { font-weight: 500; color: var(--sg-accent); }
+.nest-col-note { position: absolute; left: 380px; top: 9px; max-width: 1100px; font-size: var(--sg-t-m); color: var(--sg-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-col-note b { font-weight: 600; color: var(--sg-accent-text); }
 
 /* The YouTube and collection cards: small captions, two lines at most, on a flat band so they read on any picture. */
 .nest-kind-videos .sg-tile-cap,
@@ -602,6 +606,11 @@ html[data-sg-motion="reduced"] .nest-open-in,
 html[data-sg-motion="reduced"] .nest-rise,
 html[data-sg-motion="reduced"] .nest-end,
 html[data-sg-motion="reduced"] .nest-end-orb { animation: none; }
+/* The assistant: its words appear without rising, and the orb's line jumps to the middle instead of gliding. */
+html[data-sg-motion="reduced"] .nest-say p,
+html[data-sg-motion="reduced"] .nest-chip { animation: none; }
+html[data-sg-motion="reduced"] .nest-bottom,
+html[data-sg-motion="reduced"] .nest-col { transition-property: opacity; }
 .nest-more-label em, .nest-col-label em { margin-left: 14px; font-size: var(--sg-t-s); font-style: normal; font-weight: 500; color: var(--sg-ink-dim); }
 .nest-crumb { margin: 0 14px; font-style: normal; color: var(--sg-ink-dim); }
 .nest-more:not(.is-peek) .nest-more-label { visibility: hidden; }
