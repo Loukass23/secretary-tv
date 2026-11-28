@@ -9,17 +9,19 @@ import { readJson, writeJson } from "@secretary/tv-kit";
 import { QrCode } from "./qr.tsx";
 
 declare const __SIMKL_CLIENT_ID__: string | undefined;
+declare const __SIMKL_CLIENT_SECRET__: string | undefined;
 
 export const ACCOUNTS_TAB = "Accounts";
 
 const clientId = () => (typeof __SIMKL_CLIENT_ID__ !== "undefined" ? __SIMKL_CLIENT_ID__ : "");
+const clientSecret = () => (typeof __SIMKL_CLIENT_SECRET__ !== "undefined" ? __SIMKL_CLIENT_SECRET__ : "");
 
 let client: SimklClient | null = null;
 
 /** The one Simkl client, or null when this build has no client id (`SIMKL_CLIENT_ID` in .env.tizen). */
 export function simkl(): SimklClient | null {
   if (!clientId()) return null;
-  client ??= createSimkl({ clientId: clientId(), kv: { get: readJson, set: writeJson } });
+  client ??= createSimkl({ clientId: clientId(), clientSecret: clientSecret(), kv: { get: readJson, set: writeJson } });
   return client;
 }
 
@@ -49,7 +51,7 @@ function connect(c: SimklClient): void {
       changed();
       const ok = await waitForPin(c, code, { signal });
       if (signal.aborted) return;
-      pin = ok ? { phase: "idle" } : { phase: "failed", why: "The code ran out. OK gives a new one." };
+      pin = ok ? { phase: "idle" } : { phase: "failed", why: "The code ran out or was refused. OK gives a new one." };
       if (ok) simklPullSoon();
       changed();
     },
@@ -76,7 +78,7 @@ function SimklPreview({ signedIn }: { signedIn: boolean }) {
     return (
       <div class="lfx-pv acc-pv">
         <div class="acc-pin">
-          <QrCode text={url} size={200} />
+          <QrCode text={pin.code.urlWithCode} size={200} />
           <div>
             <small class="acc-kicker">On your phone, open</small>
             <b class="acc-url">{url.replace(/^https?:\/\//, "")}</b>

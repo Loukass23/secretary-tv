@@ -6,7 +6,7 @@ import preact from "@preact/preset-vite";
 // The build-time globals the screens read, all empty: no keys, no server, no network.
 const GLOBALS = [
   "FANART_API_KEY", "GEMINI_KEY", "GROQ_KEY", "NUVIO_KEY", "NUVIO_URL", "PARTY_URL", "PLUGIN_REPOS",
-  "PM_API_KEY", "SERVER_URL", "SIMKL_CLIENT_ID", "ST_CLIENT_ID", "ST_CLIENT_SECRET", "ST_TOKEN",
+  "PM_API_KEY", "SERVER_URL", "SIMKL_CLIENT_ID", "SIMKL_CLIENT_SECRET", "ST_CLIENT_ID", "ST_CLIENT_SECRET", "ST_TOKEN",
   "TMDB_API_KEY", "TORBOX_API_KEY", "TRAKT_CLIENT_ID", "TVDB_API_KEY", "WEATHER_CITY", "WEATHER_LAT", "WEATHER_LON",
 ];
 
