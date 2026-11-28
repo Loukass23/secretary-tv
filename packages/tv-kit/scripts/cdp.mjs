@@ -21,6 +21,9 @@ const KEYS = {
   ChannelDown: 428,
   Search: 405,
   SearchVoice: 10225,
+  Red: 403,
+  Green: 404,
+  Blue: 406,
 };
 
 const [port, command, ...rest] = process.argv.slice(2);

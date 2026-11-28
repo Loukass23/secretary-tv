@@ -28,13 +28,13 @@
 .det-credit { display: block; margin-top: 14px; font-size: var(--sg-t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--sg-ink); }
 .det-credit span + span { margin-left: 30px; }
 .det-credit em { margin-right: 12px; font-style: normal; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }
-/* Spoiler protection, Blur: the synopsis as its blurred picture (ui/stillblur.ts), soft bars until it is made. */
+/* Spoiler protection, Bands: the synopsis as flat bars where its lines would be, leaning as the tiles' bands do, each a
+   step shorter, in the still's band colours (Detail.tsx BandedAbout) or the raised fill. No blur, no gradient. */
 .det-redact { display: block; opacity: 1; }
-.det-redact-img { display: block; width: 100%; height: 100%; }
-.det-redact i { display: block; height: 18px; margin: 10px 0 11px; border-radius: 9px; background: var(--sg-raised); }
-.det-redact i:first-child { width: 92%; }
-.det-redact i:nth-child(2) { width: 74%; }
-.det-redact i:nth-child(3) { width: 58%; }
+.det-redact i { display: block; height: 20px; margin: 9px 0 10px; border-radius: 4px; background: var(--sg-raised); transform: skewX(-13.7deg); transform-origin: left bottom; }
+.det-redact i:first-child { width: 88%; }
+.det-redact i:nth-child(2) { width: 68%; }
+.det-redact i:nth-child(3) { width: 48%; }
 /* Buttons on the art: a flat fill under the hairline so they read on any picture; focus is the white sheet as everywhere. */
 .det-caption .sg-btn { background: rgba(255, 255, 255, 0.1); }
 .det-caption .sg-btn.is-primary { background: var(--sg-raised); }
@@ -54,7 +54,9 @@
 
 /* --- episodes: tv-kit LandscapeTile, the title on the art --- */
 .det-ep.is-soon img { opacity: 0.5; }
-/* Spoiler protection, Hide: no still, the number and the title on the tile's flat fill. */
+/* Spoiler protection, Bands: the still is flat bands of its colours (ui/stillbands.ts), already dark enough for the
+   title; it shows at once, with no fade and no skeleton. Hide: no still, the number and the title on the flat fill. */
+.det-ep.is-blur img.sg-fade { transition: none; }
 .det-ep.is-hide { background: var(--sg-raised); }
 
 /* --- sources sheet --- */

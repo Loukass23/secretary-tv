@@ -141,8 +141,14 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Area | Where | OK does |
 | --- | --- | --- |
 | Profile | top left; under the name, an icon for Nuvio sync and one for the server (an alert dot when it is offline), or a line when something needs doing | opens the profile menu: what the TV is connected to in words, then Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
-| Watch together, Search, Lights, Picture, Sound, Settings, Bell | top right, left of the clock, no fill until focused | the party; search; the Mood panel (or the next scene); the TV's picture mode (a screen icon: bright for Dynamic, a moon for Eco); the sound system; Settings; the first open reminder in its card (the badge counts them). Watch together shows only in a build with `PARTY_URL` set (`config.ts` `WATCH_TOGETHER`) |
+| Watch together, Search, Lights, Picture, Sound, Settings, Bell | top right, left of the clock, no fill until focused | the party; search; the mood strip under it, one icon per mood and "more" for the Mood panel, the button showing the active mood's icon (the next scene without SmartThings on the TV); the TV's picture mode (a screen icon: bright for Dynamic, a moon for Eco), read on the TV itself; the sound system; Settings; the first open reminder in its card (the badge counts them). Watch together shows only in a build with `PARTY_URL` set (`config.ts` `WATCH_TOGETHER`) |
+
+
 | Assistant (first card) | the greeting, the open reminders and the last exchange | the **full conversation** (`src/conversation.tsx`, `ConversationOverlay`): the stage dims (`opacity` only, no runtime blur) and a multi-turn conversation thread opens with user bubbles on the right, Secretary's replies on the left, **inline recommended poster cards** directly under each watch reply (navigable and playable with the remote), a bottom status + `VoiceWave` dock, remote-clickable suggestion and follow-up chips, and Voice / Type / Full chat / Close controls. Opening it starts listening; Back returns to the screen underneath |
+
+
+
+
 | Weather | a full card: now, the next 5 hours and the next 4 days | OK says it in the toast; the old forecast drop-down is gone |
 | Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
 | Assistant dock (bottom bar) | fixed at the bottom centre across browsing screens (`Home`, `CatalogHome`, `Detail`, `Folder`, `Timeline`, `Mood`; hidden in `Player`, `Search`, `HubOverlay`, `Party` and profile sign-in) | the **page-tailored** dock (`src/conversation.tsx` `AssistantDock`, `src/assistant-context.ts` `tailorAssistant`). Shows a live context badge (`For you`, `Cinema`, the focused film/show, `Lights`, etc.), a reactive `VoiceWave` orb, status or latest answer, and three remote-clickable suggestion chips tailored to the active page or title (`What's this about?`, `Something like this`, `Add to My List`, etc.), plus Voice, Type and Full chat buttons. Down at the bottom of a card, catalog home, film/series detail or Mood panel focuses the dock; Left/Right walks the orb, chips and buttons; OK runs a chip immediately or speaks; watch answers with multiple picks open into the full conversation with inline posters |
@@ -152,7 +158,7 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Anime | a 3×2 grid of covers | opens the card: every title; resumes or opens the title |
 | My List, genre rows | not cards of their own: rows under the picks inside each opened media card (`src/mylist.ts`, `src/discover.ts`) | The rows are drawn like the picks row: same tiles, each rising in a beat apart when the row is reached, and the focused title's caption (name, line, three lines of synopsis in a fixed panel with room of its own) under them (a line of synopsis). Down from the picks in an opened Cinema, Shows or Anime card goes to its My List (that kind's titles from the Nuvio library, cached per profile), then its genre rows , the stack sliding up by transform; OK on a title opens its page inside Secretary; Down from the last row reaches the end bar (Back to top; Recommend me: the assistant's picks as a row on the card, `src/recommend.ts`; See all: the catalog home for that kind). With something in progress the first row is Continue watching: large landscape thumbs with the title's logo (Fanart.tv), a thick progress bar, and the episode ("S1 · E5 · its name", a generic "Episode 5" left out) with the time left under it (bigger tiles for Shows and Anime than for films); the picks follow as a row of their own. Posters in the opened rows are 280×420. Up from the picks folds the card |
 | YouTube | three popular videos as wide thumbnails (`src/youtube.ts`, the Data API with `NEST_YOUTUBE_API_KEY`, kept for an hour); without a key a one-line card | opens the video in the TV's YouTube app (a view app-control with the watch address, else a plain launch; `NEST_YOUTUBE_APP_ID` if the TV's app id differs from the default). **To confirm on the TV:** the app id and that it takes the address |
-| Nuvio collections | one card per collection of the profile, its first four folders as cover tiles, two across (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens that folder in the catalog inside Secretary (`folder`; it shows once the collections are in). Cards are `nuvio:<id>`, so they can be moved and removed like the others |
+| Nuvio collections | one card per collection of the profile, drawn as a media card: its folders' covers in the card style picked for it (a 3×2 grid by default, two stills when most covers are landscape), each folder's name on its cover (`src/collections.ts`, pulled with the Nuvio session, cached per profile) | opens the card in place, as Cinema does (see "Collection cards"). Cards are `nuvio:<id>`, so they can be styled, moved and removed like the others |
 | Home | the lights, the room's lux, then Cinema / Warm / Off | runs that scene (SmartThings from the TV, else through the server) |
 | Reminders | up to three cards and "+ Add reminder"; under each, where it came from only when the reminders came from more than one place (or not from the TV) | marks it done or open again; adds one with the TV keyboard. Left and Right at the card's edges go on to the cards beside it (the bell lands inside it) |
 | Apps | the TV's other apps, two to a line; YouTube and Workspace with their own icons (`src/app-icons.ts`: the TV reports a placeholder for them), an app whose icon is a placeholder with its initial | opens the app |
@@ -188,6 +194,20 @@ and the titles rise in a beat apart. The cards after it slide right by transform
 (opacity and transform only, on their own layers). Focus lands on the
 first title. The focused title's name, its line (episode or year) and a line of its synopsis sit in a fixed
 panel at the left under the row (from the catalog, or Cinemeta and Kitsu for titles in progress). Up or Back folds the card again.
+
+### Collection cards
+
+A Nuvio collection card opens like Cinema (`MediaRow` in `src/cards.tsx`; the card is a `media` column built in
+`app.tsx` from `src/collections.ts`). The first row is the collection's folders, in the shape most of their Nuvio covers
+have (poster, landscape or square; the row's look can still be picked), each with its name on the cover; OK on a folder
+opens its page in the catalog inside Secretary (catalog-kit `NuvioFolder`). Under it, one row per folder holds that
+folder's first 20 titles (the first page of each source the TV can read, taken in turn, as the folder page's All tab:
+catalog-kit `lib/folder-titles.ts`). They load when the card is picked, from the catalog's own chunk (imported then, so
+the addon client stays out of Secretary's first bundle and no chunk is split off for it), and the last load is kept per profile (`localStorage["nest.folderTitles"]`, the 40
+folders seen last), so an opened card shows them on its first frame. A folder still loading, or that no source on this
+TV can fill, has no row, and the remote never stops on one. Each folder's row keeps its own look (`<card>/<folder id>`
+in `nest.rowLooks`) and the title menu works as in Cinema's rows. The end bar has no Recommend me: it names the
+collection and its folders, then **Open collection** (the folder page at the first folder) and Back to top.
 
 ### Title menu (long OK on a tile)
 
@@ -251,7 +271,7 @@ the next category, Down goes into its lines, and only the lines around focus are
 | Apps | One line per app the Apps card could show; OK hides or shows it |
 | Appearance | Accent colour, clock, boot animation, poster colour and the collection looks |
 | SmartThings (Secretary's, when set up) | Light effects, routines and lights (`launcher/src/smartthings-settings.tsx`) |
-| Accounts (Secretary's) | Simkl: connect with a code, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`) |
+| Accounts (Secretary's) | Simkl and AniList: connect from the phone, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`, `docs/anilist.md`) |
 | Advanced | The autoplay patterns and "Restore default settings" (a second OK confirms) |
 
 Secretary's own preferences are the `home` section of the same settings (`sectv:settings:v1`), read by the launcher
@@ -271,7 +291,7 @@ Nest menu's "Play" always plays.
 
 ### Card styles (long OK)
 
-A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows or Anime opens a menu
+A long OK (held 600 ms; `useOkHold` in tv-kit, as the catalog's collection rows) on Cinema, Shows, Anime or a collection opens a menu
 beside it: Poster, Stills, Grid or Row, and a size (Small, Medium, Large); every layout is the same height at a size. The card previews each line as the remote
 reaches it; OK keeps it, Back puts the old style back. Styles are saved on the TV (`localStorage["nest.cardStyles"]`,
 `src/card-style.ts`); the defaults are today's (a poster, two stills, a grid). A short OK on such a card acts on the

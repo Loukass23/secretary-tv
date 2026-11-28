@@ -20,7 +20,7 @@ test("settings migration: a v1 file from before the home section keeps every val
   };
   const s = mergeSettings(old as never);
   assert.equal(s.general.clockFormat, "12h");
-  assert.equal(s.general.accentTheme, "blue");
+  assert.equal(s.general.accentTheme, "slate");
   assert.equal(s.domotics.cinemaAutoDim, true);
   assert.equal(s.domotics.moodBackground, false);
   assert.equal(s.playback.resumeAtOnce, false);
@@ -48,7 +48,7 @@ test("settings migration: wrong types fall back per field, and hidden apps keep 
   assert.deepEqual(mergeSettings({ home: "broken" } as never).home, DEFAULT_SETTINGS.home);
 });
 
-test("settings: spoiler protection is Off by default and its line, under Watching, cycles Off, Blur and Hide", () => {
+test("settings: spoiler protection is Off by default and its line, under Watching, cycles Off, Bands and Hide", () => {
   assert.equal(DEFAULT_SETTINGS.playback.spoilerProtection, "off");
   const item = SETTING_ITEMS.find((i) => i.id === "playback.spoilerProtection");
   assert.ok(item);
@@ -56,7 +56,7 @@ test("settings: spoiler protection is Off by default and its line, under Watchin
   assert.equal(item.getValue(DEFAULT_SETTINGS), "Off");
   const blur = item.cycle(DEFAULT_SETTINGS, 1);
   assert.equal(blur.playback.spoilerProtection, "blur");
-  assert.equal(item.getValue(blur), "Blur");
+  assert.equal(item.getValue(blur), "Bands");
   const hide = item.cycle(blur, 1);
   assert.equal(item.getValue(hide), "Hide");
   assert.equal(item.cycle(hide, 1).playback.spoilerProtection, "off");

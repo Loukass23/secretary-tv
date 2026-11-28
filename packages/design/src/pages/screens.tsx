@@ -4,6 +4,9 @@ import { type DashboardSettings, DEFAULT_SETTINGS, type SettingTab } from "@secr
 import { HubOverlay } from "@secretary/catalog-kit/src/ui/HubOverlay.tsx";
 import { PauseMenu } from "@secretary/catalog-kit/src/ui/PauseMenu.tsx";
 import { pauseActions, stepPause } from "@secretary/catalog-kit/src/lib/pausemenu.ts";
+import { endsAtLabel, shortSynopsis } from "@secretary/catalog-kit/src/lib/pausepanel.ts";
+import { PlayerSources } from "@secretary/catalog-kit/src/ui/PlayerSources.tsx";
+import type { Stream } from "@secretary/catalog-kit/src/lib/streams.ts";
 import type { CatalogType } from "@secretary/catalog-kit/src/lib/types.ts";
 import { Home as CatalogHome } from "@secretary/catalog-kit/src/ui/Home.tsx";
 import { Detail } from "@secretary/catalog-kit/src/ui/Detail.tsx";
@@ -17,15 +20,19 @@ import { applyOrder, keepOrder, moveKey } from "@secretary/launcher/src/card-ord
 import { expands, rowLayout } from "@secretary/launcher/src/cards.tsx";
 import { HEADER_ITEMS, headerButtons, Home as NestHome } from "@secretary/launcher/src/home.tsx";
 import { MoodPanel } from "@secretary/launcher/src/mood.tsx";
-import { setActiveMood } from "@secretary/launcher/src/moods.ts";
+import { activeMood, allMoods, setActiveMood } from "@secretary/launcher/src/moods.ts";
 import { setLightFx } from "@secretary/launcher/src/light-fx.ts";
 import { accountsTab } from "@secretary/launcher/src/accounts-settings.tsx";
 import { smartThingsTab } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
-import { enter, type Focus, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
+
+
 import { type ConversationFocus, dockItemCount, stepConversation } from "@secretary/launcher/src/conversation-nav.ts";
 import { AssistantDock, ConversationOverlay } from "@secretary/launcher/src/conversation.tsx";
 import { tailorAssistant } from "@secretary/launcher/src/assistant-context.ts";
+
+import { enter, type Focus, HEADER_LIGHTS, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
+
 import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
@@ -39,6 +46,7 @@ export const SCREENS = [
   "Home",
   "Home · assistant",
   "Home · chat",
+  "Home · mood strip",
   "Mood",
   "Cinema",
   "Shows",
@@ -81,10 +89,10 @@ export function ScreensPage(props: PageProps & { art: Art; screen: number; look:
   if (name === "Player · paused") return <PausedPlayer art={props.art} />;
   if (name.includes("page")) return <DetailScreen key={name} variant={name} art={props.art} />;
   if (type) return <Catalog key={type} type={type} art={props.art} />;
-  return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : "row"} />;
+  return <Nest key={name} {...props} start={name === "Home · chat" ? "chat" : name === "Home · assistant" ? "ask" : name === "Home · mood strip" ? "moods" : "row"} />;
 }
 
-function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; start: "row" | "ask" | "chat" }) {
+function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; start: "row" | "ask" | "chat" | "moods" }) {
   // The card styles live in this page only: the TV keeps its own (nest.cardStyles).
   const [styles, setStyles] = useState<Record<string, CardStyle>>({});
   const [styleMenu, setStyleMenu] = useState<StyleMenu | null>(null);
@@ -104,6 +112,10 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   const [convFocus, setConvFocus] = useState<ConversationFocus>({ zone: "chips", i: 0 });
   const chatTurns = useMemo(() => askConversationFixture(art), [art]);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The mood strip under the lights button (launcher mood-strip.tsx), on the workbench's routines (LIGHT_SCENES).
+  const [stripOpen, setStripOpen] = useState(start === "moods");
+  const [mood, setMood] = useState<string | null>(activeMood);
+  const moods = useMemo(() => allMoods(LIGHT_SCENES), [stripOpen]);
   const [glow, setGlow] = useState<string | undefined>();
   useEffect(() => void glowImage(TINTS.orange).then(setGlow), []);
 
@@ -115,6 +127,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
     ask: dockItemCount(3),
     cols: rowLayout(columns, openCol).nav,
     menu: menuOpen ? MENU.length : 0,
+    moods: stripOpen ? moods.length + 1 : 0,
     header: HEADER_ITEMS,
   };
 
@@ -156,6 +169,17 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
       return true;
     }
     if (key === "Enter" && ((holdable && columns[focus.col ?? 0]?.kind !== "assistant") || hold.holding())) return true;
+    if (stripOpen && (key === "Back" || key === "Up" || key === "Down" || key === "Enter")) {
+      // OK sets the mood (here: marks it active) or, on "more", stands for opening the Mood panel; either closes the strip.
+      const m = key === "Enter" ? moods[focus.i] : undefined;
+      if (m) {
+        setActiveMood(m.key);
+        setMood(m.key);
+      }
+      setStripOpen(false);
+      setFocus({ area: "header", i: HEADER_LIGHTS });
+      return true;
+    }
     if (key === "Back") {
       if (menuOpen) {
         setMenuOpen(false);
@@ -168,6 +192,9 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
       if (focus.area === "header" && focus.i === HEADER_PROFILE) {
         setMenuOpen(true);
         setFocus({ area: "menu", i: 0 });
+      } else if (focus.area === "header" && focus.i === HEADER_LIGHTS) {
+        setStripOpen(true);
+        setFocus({ area: "moods", i: Math.max(0, moods.findIndex((m) => m.key === mood)) });
       } else if (focus.area === "row" && !focus.inside && columns[focus.col ?? 0]?.kind === "assistant") setFocus({ area: "chat", i: 0 });
       else if (focus.area !== "ask" && focus.area !== "chat") setFocus(enter(focus, layout));
       return true;
@@ -197,6 +224,8 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
         links={[{ icon: "sync" }, { icon: "server", off: true }]}
         menuInfo={["Nuvio · synced as Robin", "Server offline · apps still work"]}
         me={{ name: "Robin", color: "#5b52e6" }}
+        mood={mood}
+        moodStrip={stripOpen ? { moods, active: mood } : null}
       />
       <AssistantDock
         wave={(start === "row" ? ASK_IDLE : ASK_ANSWER).wave}
@@ -299,33 +328,62 @@ function SettingsPage({ tab, look, onLook }: { tab: SettingTab | "SmartThings"; 
   );
 }
 
+/** Made-up sources for the player's sheet: documentation-only addresses, no real provider. */
+const PLAYER_SOURCES: Stream[] = [
+  { name: "Example 4K", title: "The.Quiet.Harbour.S01E03.2160p.WEB-DL.HDR10.HEVC.Atmos\n18.2 GB", url: "https://cdn.example.com/a.mkv" },
+  { name: "Example 4K", title: "The.Quiet.Harbour.S01E03.2160p.WEB-DL.HEVC\n14.1 GB", url: "https://cdn.example.com/b.mkv" },
+  { name: "Example 1080p", title: "The.Quiet.Harbour.S01E03.1080p.WEB-DL.x264\n3.4 GB", url: "https://cdn.example.com/c.mp4" },
+  { name: "Example 1080p", title: "The.Quiet.Harbour.S01E03.1080p.WEB-DL.HEVC.MULTI\n2.1 GB", url: "https://cdn.example.com/d.mkv" },
+  { name: "Example 720p", title: "The.Quiet.Harbour.S01E03.720p.WEB-DL.x264\n1.2 GB", url: "https://cdn.example.com/e.mp4" },
+];
+
 /**
  * The pause menu (catalog-kit ui/PauseMenu.tsx) over a paused frame: a fixture still stands in for the video plane.
- * Left and Right move along the buttons; OK on Picture steps its fit.
+ * Left and Right move along the buttons; OK on Picture steps its fit, OK on Sources opens the player's sources sheet
+ * (Back closes it, OK on a source closes it as switching would).
  */
 function PausedPlayer({ art }: { art: Art }) {
-  const actions = pauseActions({ next: true, picture: true });
+  const actions = pauseActions({ next: true, picture: true, sources: true });
   const [at, setAt] = useState(0);
   const [aspect, setAspect] = useState(0);
-  useKeys(true, (key) => {
+  const [sheet, setSheet] = useState(false);
+  useKeys(!sheet, (key) => {
     const step = stepPause(at, actions.length, key);
     if (!step) return false;
     if ("at" in step) return void setAt(step.at);
     if (actions[step.run] === "picture") setAspect((a) => (a + 1) % 3);
+    if (actions[step.run] === "sources") setSheet(true);
   });
   return (
     <div class="player" style={{ position: "absolute", inset: 0, background: "#000" }}>
       <img src={art.backgrounds[1 % art.backgrounds.length]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-      <PauseMenu
-        name="The Quiet Harbour"
-        episodeLine="S1E3 · A Door in the Fog"
-        pos={1394}
-        dur={3120}
-        actions={actions}
-        at={at}
-        values={{ subs: "English", picture: ["Fit", "Fill", "Stretch"][aspect] }}
-        badges={["4K", "HDR10", "Atmos"]}
-      />
+      {!sheet && (
+        <PauseMenu
+          name="The Quiet Harbour"
+          episodeLine="S1E3 · A Door in the Fog"
+          facts="2024  ·  ★ 8.1  ·  Drama, Mystery"
+          runtime="52 min"
+          synopsis={shortSynopsis(
+            "The fog rolls in for a week and the ferry stops running. Ines finds a door in the old lighthouse that was bricked up before she was born, and her brother will not say why. In town, the harbour master starts keeping a list of the people who walk out into the fog and come back.",
+          )}
+          endsAt={endsAtLabel(1394, 3120, new Date())}
+          pos={1394}
+          dur={3120}
+          actions={actions}
+          at={at}
+          values={{ subs: "English", picture: ["Fit", "Fill", "Stretch"][aspect] }}
+          badges={["4K", "HDR10", "Atmos"]}
+        />
+      )}
+      {sheet && (
+        <PlayerSources
+          streams={PLAYER_SOURCES}
+          playing={PLAYER_SOURCES[0]}
+          heading="S1E3 A Door in the Fog"
+          onPick={() => setSheet(false)}
+          onClose={() => setSheet(false)}
+        />
+      )}
     </div>
   );
 }

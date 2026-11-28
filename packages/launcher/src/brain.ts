@@ -5,6 +5,7 @@ import {
   type FocusedTitleContext,
   type LibraryEffects,
   type LightsCommand,
+  type MoodKey,
   MAX_HISTORY_TURNS,
   route,
   searchCatalogs,
@@ -89,6 +90,8 @@ export interface LocalBrainOptions extends LibraryEffects {
   reminders: LocalReminders;
   /** Runs a lights command on SmartThings; throws when this TV has no SmartThings. */
   lights(cmd: LightsCommand): Promise<unknown>;
+  /** Sets one of the viewer's moods (moods.ts, app.tsx applyMood): "cinema mode", "movie night", "goodnight". */
+  mood?(key: MoodKey): Promise<unknown>;
   focusedTitle?(): Promise<FocusedTitleContext | null>;
   weather?(): Promise<Weather | null>;
   now?(): Date;
@@ -128,6 +131,7 @@ export function localBrain(opts: LocalBrainOptions) {
           addReminder: (text, due, dueAt) => opts.reminders.add(text, due, clock().getTime(), dueAt),
           openReminders: () => opts.reminders.list().filter((r) => !r.completed).map((r) => r.text),
           lights: opts.lights,
+          mood: opts.mood,
           find: find(f),
           focusedTitle: opts.focusedTitle,
           continueWatching: opts.continueWatching,

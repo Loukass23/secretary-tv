@@ -6,25 +6,32 @@ import { Glass, Glow, Header, type HeaderButton, Icon, type IconName, Scroller, 
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnHeight, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { WATCH_TOGETHER } from "./config.ts";
+import { MoodStrip, type MoodStripView } from "./mood-strip.tsx";
+import { moodIcon } from "./moods.ts";
 import { type Focus, HEADER_BELL, HEADER_PROFILE, headerItems } from "./nest-nav.ts";
 
 const PAD = 80;
 export const HEADER_ITEMS = headerItems(WATCH_TOGETHER);
 export const HEADER_ORDER = HEADER_ITEMS.filter((i) => i !== HEADER_PROFILE);
 
-const ICONS = (pictureMode: string | undefined, soundOn: boolean | undefined): readonly IconName[] => [
+/** Each header button's icon, by its nest-nav number (1 Watch together ... 7 the bell). */
+const ICONS = (pictureMode: string | undefined, soundOn: boolean | undefined, mood: string | null): readonly IconName[] => [
   "party",
   "party",
   "search",
-  "lights",
+  moodIcon(mood),
   pictureIcon(pictureMode),
   soundOn === false ? "hifi-off" : "hifi",
   "settings",
   "bell",
 ];
 
-export const headerButtons = (pictureMode: string | undefined, soundOn: boolean | undefined, open: number): HeaderButton[] => {
-  const icons = ICONS(pictureMode, soundOn);
+/**
+ * The header's buttons, as home draws them and as every other screen and panel draws them (catalog-kit host.ts). The
+ * lights button shows the active mood's icon (moods.ts moodIcon), the plain bulb before any.
+ */
+export const headerButtons = (pictureMode: string | undefined, soundOn: boolean | undefined, open: number, mood: string | null = null): HeaderButton[] => {
+  const icons = ICONS(pictureMode, soundOn, mood);
   return HEADER_ORDER.map((i) => ({ key: String(i), icon: icons[i], badge: i === HEADER_BELL ? open : undefined }));
 };
 
@@ -65,6 +72,10 @@ interface Props {
   moving?: string | null;
   pictureMode?: string;
   soundOn?: boolean;
+  /** The active mood's key: the lights button's icon. */
+  mood?: string | null;
+  /** The mood strip under the lights button, while it is open (focus area "moods"). */
+  moodStrip?: Omit<MoodStripView, "at"> | null;
 }
 
 const INFO_H = 36;
@@ -144,7 +155,7 @@ function RemoveMenu({ m, x, y, name }: { m: CardMenu; x: number; y: number; name
 
 export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
-export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, tileMenu, moving, pictureMode, soundOn }: Props) {
+export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, tileMenu, moving, pictureMode, soundOn, mood = null, moodStrip }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
   const openCol = focus?.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
   const layout = rowLayout(columns, openCol);
@@ -167,7 +178,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
       <Header
         time={time}
         person={{ name: me?.name ?? "Secretary", sub: status || <Links links={links} />, color: me?.color, img: me?.img }}
-        buttons={headerButtons(pictureMode, soundOn, open)}
+        buttons={headerButtons(pictureMode, soundOn, open, mood)}
         focus={focus?.area !== "header" ? null : focus.i === HEADER_PROFILE ? "person" : HEADER_ORDER.indexOf(focus.i)}
       />
 
@@ -205,6 +216,7 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         const name = k.kind === "media" ? k.name : k.label;
         return styleMenu ? <CardStyleMenu m={styleMenu} x={mx} y={ROW.y + LABEL_H} name={name} /> : <RemoveMenu m={removeMenu!} x={mx} y={ROW.y + LABEL_H} name={name} />;
       })()}
+      {moodStrip && <MoodStrip {...moodStrip} at={focus?.area === "moods" ? focus.i : -1} />}
       {menu && (
         <Glass x={MENU.x} y={MENU.y} w={MENU.w} h={menuTop(menuInfo) + menu.length * MENU.item + 12} class="nest-menu">
           {menuInfo.map((line, i) => (

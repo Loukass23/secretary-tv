@@ -109,7 +109,8 @@ Upcoming:
 | `packages/catalog-kit` (`@secretary/catalog-kit`) | **Secretary Catalog Kit** | The catalog screens Secretary embeds: rows, title pages, search, sources, settings, and the AVPlay player. Not an app of its own. |
 | `packages/server` (`@secretary/server`) | **Secretary Desk & Server** | The home server and the phone companion. |
 | `packages/nuvio` (`@secretary/nuvio`) | **Secretary Nuvio** | Nuvio Cloud client: auth, profiles, library, progress, collections. |
-| `packages/simkl` (`@secretary/simkl`) | **Secretary Simkl** | Simkl client: PIN sign-in, scrobbling, watch history and stats. |
+| `packages/simkl` (`@secretary/simkl`) | **Secretary Simkl** | Simkl client: device sign-in, scrobbling, watch history and stats. |
+| `packages/anilist` (`@secretary/anilist`) | **Secretary AniList** | AniList client for anime: list progress, lists and stats. |
 | `packages/party` (`@secretary/party`) | **Secretary Party** | Watch-party rooms: a Cloudflare Worker and Durable Object, signed in with Nuvio Cloud. |
 | `packages/tv-kit` (`@secretary/tv-kit`) | **Secretary TV Kit** | Focus grid, remote keys, glass components, row looks, perf marks, the Tizen build plugin, deploy and inspector scripts. |
 | `packages/design` (`@secretary/design`) | **Secretary Design** | The desktop workbench (`pnpm design`): Secretary's screens and components at 1920x1080 with the TV rules linter. |
@@ -146,6 +147,7 @@ pnpm typecheck
 - `docs/addons.md`: Stremio-protocol addons.
 - `docs/nuvio-cloud.md`: accounts, profiles and sync.
 - `docs/simkl.md`: Simkl as a watch tracker.
+- `docs/anilist.md`: AniList as the anime tracker.
 - `docs/watch-party.md`: watching together, and deploying the Worker.
 - `docs/launcher.md`: Secretary's home screen, and why the Home button is not rebound.
 - `docs/embedding-catalog.md`: how the catalog and the player live inside Secretary.

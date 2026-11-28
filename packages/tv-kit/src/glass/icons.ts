@@ -34,6 +34,12 @@ export const ICON_PATHS = {
   power: '<path d="M12 3.5v8"/><path d="M7 6.7a7.5 7.5 0 1 0 10 0"/>',
   music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
   sync: '<path d="M7 18.5h10a4 4 0 0 0 .4-8 5.6 5.6 0 0 0-10.8 1.2A3.4 3.4 0 0 0 7 18.5z"/><path d="M10 14.5l2 2 3.5-4"/>',
+  // --- the moods (launcher moods.ts): Cinema and Music above, then Dining (fork and knife), Off (the bulb struck
+  // through), a routine of the viewer's (a list with a play mark), and "more" for the full Mood panel ---
+  dining: '<path d="M7 3v5.5a2 2 0 0 0 4 0V3M9 10.5V21"/><path d="M16.5 21V3c-2 1.4-3 4-3 7.5h3"/>',
+  "lights-off": '<path d="M9.5 17.5h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1v1.6h5v-1.6c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z"/><path d="M3.5 3.5l17 17"/>',
+  routine: '<path d="M4 6h11M4 11.5h7M4 17h5"/><path d="M14.5 13l6 3.5-6 3.5z"/>',
+  more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
   // --- weather ---
   clear: SUN,
   "clear-night": MOON,

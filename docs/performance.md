@@ -779,11 +779,148 @@ Budget, 27 Nov sprint: `main` reached 179.1 KB gzip, over the 178 KB limit, so e
 `check-budget.mjs`. `budget.json` was raised from 178 KB to 190 KB, to leave room for this sprint's fonts, image cache
 and player work. Each sprint PR states how much it adds.
 
+## Collection cards, art cache, skeletons and spoiler bands (sprint C, 2026-11-27)
+
+Measured on the Samsung TV inside Secretary, this branch against `main` (`eeaa7c2`) deployed the same way from a
+worktree, one right after the other, 50 s after launch, 250 ms per key, 3 runs each. The home's cards on this TV:
+Assistant, Shows, Anime, Cinema, YouTube, Weather, one Nuvio collection (22 folders), Home, Reminders, Apps.
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Home cards (`Right,Right,Right,Left,Left,Left` twice, from the Assistant card) | `main` | 33 ms | 83-100 ms | 28, 25, 24 | 4-5 MB |
+| | this branch | 17-33 ms | 83-100 ms | 25, 28, 26 | 6-8 MB |
+| Opened Shows card (`Right,Right,Right,Right,Down,Right,Right,Down,Left,Left,Up,Up,Right,Left`) | `main` | 33-50 ms | 117-167 ms | 44, 39, 37 | 4-6 MB |
+| | this branch | 50 ms | 133-167 ms | 49, 48, 45 | 6-7 MB |
+| | this branch, skeleton pulse off | 33 ms | 117-167 ms | 39, 45, 35 | 10-12 MB |
+| | this branch, pulse on again | 33-50 ms | 117-133 ms | 44, 39, 40 | 10-15 MB |
+| Show page (Shows card, OK on Continue watching; the walk in the sections above) | `main` | 17 ms | 33-50 ms | 8, 3, 3 | 7-12 MB |
+| | this branch | 17 ms | 33-133 ms | 24, 3, 1 | 8-9 MB |
+| Collection card opened (`Enter,Right,Right,Down,Right,Right,Down,Right,Left,Up,Up,Left`) | `main` (OK opens the catalog's folder page: not the same screen) | 33 ms | 100 ms | 25 | 7 MB |
+| | this branch | 33-50 ms | 150-200 ms | 41, 36, 35 | 9-15 MB |
+
+- **Home and the show page**: the same within the run-to-run spread. The show page's first run after launch is the
+  worst on both builds (24 against 8 here); runs 2 and 3 match.
+- **Opened Shows card**: a few more long frames on the first runs (45-49 against 37-44). It is not the skeleton: with
+  its pulse switched off in the page the same walk gave 35-45, and with it back on 39-44, both inside `main`'s spread.
+- **Collection card**: as heavy as an opened media card with landscape art (35-41 long frames). The first time a card
+  is picked in a visit loads the catalog's chunk for the folder titles (`lib/folder-titles.ts`); that run is the worst
+  (41) and holds the heap peak (14.6 MB), the next two settle at 9.5 MB.
+- **First-load image timing** (from navigation to every folded tile's art in, `img.is-ready`, polled at 16 ms): `main`
+  3.3 s at launch, 1.4-2.1 s on reloads; this branch 3.5 s at launch, 1.6-2.0 s on reloads. The same: the folded
+  collection card shows more tiles (a 3×2 grid against 2×2).
+
+### Art cache: measured, not wired in
+
+`tv-kit/src/art-cache.ts` keeps the home's pictures as IndexedDB blobs (LRU 150, unit tested). Wired into Secretary it
+was measured three ways and never beat `main`, because the TV's own HTTP cache already serves the home's pictures on a
+second start:
+
+| Variant | warm read at start | folded tiles from blobs | every folded tile in, reloads | `main`, reloads |
+| --- | --- | --- | --- | --- |
+| Full-size pictures (73 blobs, 5.9 MB), render after the read | 730-1120 ms | 8-13 of 13 | (floor of the poll) | 1.4-2.1 s |
+| Shrunk to 480 px (99 blobs, 2.4 MB), 40 read, render after | 320-350 ms | 2-5 of 13 (the covers turn each start) | 1.9-2.2 s | |
+| The same, 120 read, render after | 700-1150 ms | 9-14 of 14 | 2.3-3.1 s | |
+| 40 read alongside the render, never awaited | 2.0-2.7 s (competes with the render) | 0 | 1.6-3.0 s | |
+
+In the page, once Secretary is idle, IndexedDB is fast (open 3 ms, 80 reads 51 ms), so the cost is reading at start
+while the bundle and the first render run; a timer cap does not help, the main thread is busy (`docs/lessons.md`,
+timer starvation). Secretary therefore does not use it: `MediaTile` loads its art as before. The module stays for a
+host where the HTTP cache does not hold (offline starts, an evicted cache). The Tizen filesystem was not tried: the
+read was not the slow part.
+
+- **Size**: this branch adds 1.5 KB gzip to Secretary's JS (184.1 KB on `main` without keys, 185.6 KB here); the
+  deploy build with keys is 189.6 KB of the 190 KB budget. Wired in, the art cache cost another 1.2 KB.
+### The mood strip and the picture mode (sprint 27 Nov, D)
+
+OK on the header's lights button now opens a small strip of mood icons under it (`launcher/src/mood-strip.tsx`): one
+frosted panel with the icons as their own unfrosted `IconButton`s beside it (no glass inside glass), focus by the
+glass's own sheet (opacity), drawn only while open. The picture mode is read on the TV (`webapis.settings`, about 16 ms
+a call), only on load, on `visibilitychange`/`focus`, every 30 s with the clock and at a press, never per frame.
+
+Measured on the Samsung TV inside Secretary, `main` at `eeaa7c2` and this branch deployed the same way one after the
+other, 250 ms per key, 3 runs each, from the home row:
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Header (`Up`, `Right`x6, `Left`x6, `Down`) | `main` | 17 ms | 33-50 ms | 3, 3, 4 | 4-5 MB |
+| | branch | 17 ms | 33-50 ms | 5, 5, 4 | 6-7 MB |
+| Mood strip (`Up,Right,Right,Enter`, `Right`x4, `Left`x4, `Back,Down`) | branch | 17 ms | 33 ms | 5, 4, 4 | 4-5 MB |
+
+The strip costs about what the header walk does; no mood was set while measuring (they act on the room).
+
+Budget: the branch adds 3.3 KB gzip (187.7 KB on `main` at `eeaa7c2`, 191.0 KB with it, deploy build with the owner's
+keys), 1 KB over the 190 KB `budget.json`, which this branch leaves for the sprint's integration to settle.
+### Look and type, 27 Nov sprint B (2026-11-27)
+
+Plumage accents, the Font setting (Oswald and Outfit beside Space Grotesk), tabs sized to their labels, list lines and
+preview captions that fit at Large, the home's push-in in the Reduce motion preview, and Settings keeping its preview
+between keys that do not change it (`HubOverlay` memoises `SettingPreview` on the line and the settings). Measured on
+the Samsung TV inside Secretary, `207b41e` against `main` at `eeaa7c2` deployed the same way, at 250 ms per key. The
+TV's own settings were in use: text size Large, the saved accent (Raptor Orange, which the branch maps to Burnt Orange).
+
+| Walk | Build | median | p95 | frames over 50 ms, per walk | heap |
+| --- | --- | --- | --- | --- | --- |
+| Settings, Watching (header button; `Down`x6, `Up`x6, `Right,Right,Left,Left,Down,Down,Up,Up`), 3 runs | `main` | 17 ms | 33 ms | 5, 5, 2 | 5-8 MB |
+| | branch | 17 ms | 33-50 ms | 10, 1, 4 | 6-7 MB |
+| Settings, tabs only (`Right`x5 to Appearance, `Left`x5), 4 runs on main, 6 on the branch | `main` | 17 ms | 50-67 ms | 13, 3, 5, 6 | 5-8 MB |
+| | branch | 17 ms | 50 ms | 6, 5, 9, 8, 6, 6 | 6 MB |
+| Settings, Appearance (`Right`x5, `Down,Down,Up,Up`, `Left`x5), 4 runs each | `main` | 17 ms | 50 ms | 7, 6, 6, 6 | 5 MB |
+| | branch | 17 ms | 50-67 ms | 12, 6, 8, 8 | 6-7 MB |
+| Home cards from the Assistant card (`Right,Right,Right,Left,Left,Left` twice) | `main`, 3 runs | 33 ms | 83-100 ms | 24, 24, 25 | 6-8 MB |
+| | branch, 7 runs | 33 ms | 83-150 ms | 31, 29, 19, 25, 28, 24, 23 | 6-9 MB |
+
+- **Settings**: about one or two long frames more per walk on the branch, inside the spread between runs of the same
+  build (main's Appearance walk gave 3-5 in an earlier set of runs the same afternoon). Every change of tab redraws the
+  list and its preview on both builds; that is where these frames come from, not the tab row. Turning off the tabs'
+  clip (`.sg-tab` `overflow: hidden`, live on the TV) changed nothing (5-9). The tabs measure their labels once per
+  set of labels and type, never on a key.
+- **Preview memo**: on `main` the 25 Nov integration measured 3 long frames per Watching walk from the preview
+  redrawing on every key; here the branch gives 1 and 4 after the first walk. Not a clear win at this walk's size.
+- **Home**: the same within the spread (median 25 against 24). One frame of 1050 ms in one branch run, as the 25 Nov
+  integration saw once on its build; not seen again in the next four runs.
+- **Fonts**: only the face in use is fetched; with Grotesk, the default, nothing new loads. Not measured with
+  Condensed or Geometric picked.
+- Not measured: Reduce motion on, the Reduce motion preview looping by itself, Normal text size.
+
+Budget: +0.8 KB JS gzip (vite build 184.1 → 184.9 KB; deploy build with the keys 188.1 → 189.0 KB of 190 KB) and
++65 KB in the package (the two woff2 files).
+### Player and sources (27 Nov sprint, A)
+
+The pause menu is now the whole screen: no box, a smoke layer of five flat bands at stepped opacities (no gradient),
+the logo large at the top left, and the episode, facts, a short synopsis, the bar with "Ends at" and the buttons at the
+bottom left (`ui/PauseMenu.tsx`). The pause menu's new Sources opens a sheet inside the player (`ui/PlayerSources.tsx`,
+the title page's lines and chips on the player's smoked glass, only the rows around focus rendered).
+
+Measured on the Samsung TV inside Secretary, `main` at `eeaa7c2` against this branch deployed the same way, a 21 min
+1080p episode resumed from Continue watching and paused with OK, 3 runs each:
+
+| Walk | `main` | branch |
+| --- | --- | --- |
+| Pause menu buttons (`walk 250 Right×5,Left×5`) | median 17 ms, p95 17 ms, 0 over 50 ms | median 17 ms, p95 17 ms, 0 over 50 ms |
+| Pause and resume (`walk 700 Enter×6`, three pauses a walk), smoke mounted on pause | 0, 0, 0 over 50 ms (max 33 ms) | 2, 1, 2 over 50 ms (max 67 ms) |
+| The same, smoke kept mounted while playing, faded in by opacity (what ships) | | 1, 1, 0 over 50 ms (max 67 ms) |
+| Playback, 6 s recorded while playing (the invisible smoke layer above the video) | | 17 ms median, 0 over 50 ms, 2 runs |
+| Sources sheet, 37 sources (`walk 250 Down×8,Up×8`) | | median 17 ms, p95 33 ms, 2, 0, 0 over 50 ms |
+
+- Mounting a full-screen layer at the moment of the pause cost about one long frame per pause. The smoke is now
+  mounted with the player's first frame at opacity 0 and only fades in, which halves that; the rest is the menu's own
+  text appearing. Heap 7-10 MB throughout.
+- The sheet's list came back in 1.6 s (`[perf] sources-list`, from the stream cache's search). Picking another source
+  saved the place, stopped AVPlay and reopened the player on the pick at the same second (283 s); OK to first frame
+  9.2 s for that source.
+- Up next with a 15 s countdown: Cancel (Right, OK) hid the card, playback ran to the end, and Secretary went back to
+  the title page with the next episode offered; nothing played by itself (`[upnext] cancelled`).
+- A first run landed on another show whose remembered source was AV1 and failed to decode (`PIPELINE_ERROR_DECODE`):
+  the same on `main`, unrelated to this branch.
+
+Budget: the branch builds to 190.4 KB gzip against 187.7 KB for `main` at `eeaa7c2`, so it adds 2.7 KB and is 0.4 KB
+over the 190 KB limit; the TV builds above were deployed with the limit raised locally, not committed.
+
 Budget, 28 Nov assistant & conversation rework: after PR #43 (multi-turn follow-ups, Gemini JSON routing, library intents,
 spoiler-safe title Q&A, taste recommendations, routines, due reminders and weather horizons) plus the full-screen
 `ConversationOverlay` with inline recommendation tiles, page-tailored `AssistantDock`, Bluetooth hot-plug detection and
-SmartThings TV sound routing, the deploy build is 195.3 KB gzip (`dist` 648.8 KB). `budget.json` was raised from 190 KB
-to 196 KB (`200704` bytes).
+SmartThings TV sound routing (plus PRs #44-#49 merged from `main`), the deploy build is 206.8 KB gzip (`dist` 747.4 KB); `budget.json` was raised to 208 KB (`212992` bytes).
+
 
 ### Assistant dock and full-screen conversation (28 Nov 2026, GU43DU7199UXZG)
 

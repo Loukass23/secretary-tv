@@ -173,10 +173,15 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  packages/anilist: {}
+
   packages/assistant: {}
 
   packages/catalog-kit:
     dependencies:
+      '@secretary/anilist':
+        specifier: workspace:*
+        version: link:../anilist
       '@secretary/core':
         specifier: workspace:*
         version: link:../core
@@ -234,6 +239,9 @@ importers:
 
   packages/launcher:
     dependencies:
+      '@secretary/anilist':
+        specifier: workspace:*
+        version: link:../anilist
       '@secretary/assistant':
         specifier: workspace:*
         version: link:../assistant

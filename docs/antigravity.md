@@ -88,7 +88,7 @@ Features to assess:
 2. Structured routing: when no local rule matches, ask Gemini for a JSON intent (watch / reminder / lights / weather
    / chat) with a responseSchema, validated, before the free-text answer. Local regex rules stay first.
 3. Title questions: "what's this about?", "is it any good?", "catch me up" about the focused title or the next
-   episode, from the catalog description, respecting the Spoilers setting (Off / Blur / Hide).
+   episode, from the catalog description, respecting the Spoilers setting (Off / Bands / Hide).
 4. Taste-aware picks: recommend.ts uses what the viewer watched (Continue Watching, My List) instead of rotating
    genres, and says why in one line.
 5. Reminders that fire: parse due times properly ("in 20 minutes", "tomorrow at 8") and show a toast on the TV when

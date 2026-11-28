@@ -347,8 +347,18 @@ test("settings & reminders: organized settings persist and reminders switch clea
   const moodDef = SETTING_ITEMS.find((i) => i.id === "domotics.moodBackground")!;
   assert.equal(moodDef.cycle(initial, 1).domotics.moodBackground, false);
   const legacy = mergeSettings({ general: { startupView: "dashboard", accentTheme: "gold" } } as never);
-  assert.deepEqual(Object.keys(legacy.general).sort(), ["accentTheme", "bootAnimation", "clockFormat", "reduceMotion", "textSize", "typeStyle"]);
-  assert.equal(legacy.general.accentTheme, "gold");
+  assert.deepEqual(Object.keys(legacy.general).sort(), ["accentTheme", "bootAnimation", "clockFormat", "displayFont", "reduceMotion", "textSize", "typeStyle"]);
+  // The accents from before the plumage set map to the nearest new one; unknown ones to the default.
+  assert.equal(legacy.general.accentTheme, "ochre");
+  assert.equal(mergeSettings({ general: { accentTheme: "raptor" } } as never).general.accentTheme, "ember");
+  assert.equal(mergeSettings({ general: { accentTheme: "rose" } } as never).general.accentTheme, "ember");
+  assert.equal(mergeSettings({ general: { accentTheme: "blue" } } as never).general.accentTheme, "slate");
+  assert.equal(mergeSettings({ general: { accentTheme: "sage" } } as never).general.accentTheme, "sage");
+  assert.equal(mergeSettings({ general: { accentTheme: 7 } } as never).general.accentTheme, "ember");
+  // The display face: Grotesk by default, only a known face kept.
+  assert.equal(legacy.general.displayFont, "grotesk");
+  assert.equal(mergeSettings({ general: { displayFont: "condensed" } } as never).general.displayFont, "condensed");
+  assert.equal(mergeSettings({ general: { displayFont: "comic" } } as never).general.displayFont, "grotesk");
   // Reduce motion is off by default and only a boolean is kept.
   assert.equal(legacy.general.reduceMotion, false);
   assert.equal(mergeSettings({ general: { reduceMotion: true } } as never).general.reduceMotion, true);
@@ -419,17 +429,23 @@ test("nuvio design system: parseStreamInfo extracts structured badges and size f
 
 test("nuvio design system: accentTheme cycles and persists with contrast-aware ink", () => {
   const initial = loadSettings();
-  assert.equal(initial.general.accentTheme, "raptor");
+  assert.equal(initial.general.accentTheme, "ember");
 
   const themeDef = SETTING_ITEMS.find((i) => i.id === "general.accentTheme")!;
-  const roseSettings = saveSettings(themeDef.cycle(initial, 1));
-  assert.equal(roseSettings.general.accentTheme, "rose");
-  assert.equal(ACCENT_THEMES.rose.hex, "#ec407a");
-  assert.equal(ACCENT_THEMES.rose.ink, "#ffffff");
+  const ochre = saveSettings(themeDef.cycle(initial, 1));
+  assert.equal(ochre.general.accentTheme, "ochre");
+  assert.equal(ACCENT_THEMES.ochre.hex, "#d4a03c");
+  assert.equal(ACCENT_THEMES.ochre.ink, "#1c120c");
 
-  const blueSettings = saveSettings(themeDef.cycle(roseSettings, 1));
-  assert.equal(blueSettings.general.accentTheme, "blue");
-  assert.equal(ACCENT_THEMES.blue.ink, "#0d0f13");
+  const slate = saveSettings(themeDef.cycle(ochre, 1));
+  assert.equal(slate.general.accentTheme, "slate");
+  assert.equal(loadSettings().general.accentTheme, "slate");
+  assert.equal(themeDef.cycle(initial, -1).general.accentTheme, "sage");
+
+  const fontDef = SETTING_ITEMS.find((i) => i.id === "general.displayFont")!;
+  assert.equal(fontDef.section, "Appearance");
+  assert.deepEqual(fontDef.choices!(initial), { items: ["Grotesk", "Condensed", "Geometric"], at: 0 });
+  assert.equal(fontDef.cycle(initial, 1).general.displayFont, "condensed");
 
   saveSettings(DEFAULT_SETTINGS);
 });
