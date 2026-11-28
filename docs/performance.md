@@ -915,3 +915,6 @@ Measured on the Samsung TV inside Secretary, `main` at `eeaa7c2` against this br
 
 Budget: the branch builds to 190.4 KB gzip against 187.7 KB for `main` at `eeaa7c2`, so it adds 2.7 KB and is 0.4 KB
 over the 190 KB limit; the TV builds above were deployed with the limit raised locally, not committed.
+
+Budget after the 27 Nov sprint merges (#44 to #49): `main` builds to 195.1 KB gzip. `budget.json` was raised from 190 KB
+to 205 KB, which leaves about 10 KB for wave 2 (the profile page and the French strings).
