@@ -31,12 +31,23 @@ export type AskAction =
   | "mylist_updated";
 
 export type LightsCommand = { scene: "cinema" | "warm" | "off" | "music" } | { level: number };
+/** Secretary's four moods, by key. */
+export type MoodKey = "cinema" | "music" | "dining" | "off";
+
+/** A mood when the caller has them, else its lights command: one definition of "cinema" for the moods and for Ask. */
+export const moodOrLights = (fx: Pick<Effects, "lights" | "mood">, key: MoodKey, cmd: LightsCommand): Promise<unknown> =>
+  fx.mood ? fx.mood(key) : fx.lights(cmd);
 
 export interface Effects extends LibraryEffects {
   addReminder(text: string, due?: string, dueAt?: number): unknown;
   /** Open reminders' text, for the briefing. */
   openReminders(): string[];
   lights(cmd: LightsCommand): Promise<unknown>;
+  /**
+   * Sets one of the viewer's moods (Secretary's moods.ts: lights, light effects, picture mode, sound system, as set in
+   * Settings › SmartThings). Absent, the prompts that name one run the plain lights command instead.
+   */
+  mood?(key: MoodKey): Promise<unknown>;
   /** Lights on now, for the canned briefing; absent leaves them out. */
   lightsOn?(): number;
   /** Finds titles for a watch prompt (search or browse); without it such prompts fall through to the briefing. */
@@ -211,7 +222,7 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
 
   // Music mode: the sound system and a warm room. Cinema never starts the sound system.
   if (/\bmusic mode\b/.test(lower)) {
-    await fx.lights({ scene: "music" });
+    await moodOrLights(fx, "music", { scene: "music" });
     return { reply: "🎵 Music mode: the sound system is on and the room is warm.", action: "domotics_updated" };
   }
 
@@ -220,7 +231,7 @@ export async function route(prompt: string, fx: Effects): Promise<Answer> {
     const pctMatch = lower.match(/(\d{1,3})\s*%/);
     let reply: string;
     if (lower.includes("cinema") || lower.includes("movie mode")) {
-      await fx.lights({ scene: "cinema" });
+      await moodOrLights(fx, "cinema", { scene: "cinema" });
       reply = "🦅 Cinema mode: the lights go down and the glare is eliminated.";
     } else if (lower.includes("off")) {
       await fx.lights({ scene: "off" });

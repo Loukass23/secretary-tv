@@ -202,4 +202,17 @@ test("a collection card's end bar has Open collection and Back to top only", () 
   assert.deepEqual(step(inside(0, END_ALL), "Right", len), inside(0, END_TOP));
   assert.deepEqual(step(inside(0, END_TOP), "Left", len), inside(0, END_ALL));
   assert.deepEqual(step(inside(0, END_TOP), "Up", len), inside(0, 10), "Up goes back to the last row");
+  });
+
+test("the mood strip: Left and Right along its stops, and closed it gives the lights button back", async () => {
+  const { HEADER_LIGHTS } = await import("../src/nest-nav.ts");
+  const open: Layout = { ...full, moods: 5 };
+  const at = { area: "moods" as const, i: 0 };
+  assert.deepEqual(step(at, "Left", open), at);
+  assert.deepEqual(step(at, "Right", open), { area: "moods", i: 1 });
+  assert.deepEqual(step({ area: "moods", i: 4 }, "Right", open), { area: "moods", i: 4 }, "\"more\" is the last stop");
+  // Up, Down and Back close it (app.tsx); the step leaves them alone.
+  assert.deepEqual(step(at, "Down", open), at);
+  assert.deepEqual(clamp({ area: "moods", i: 7 }, open), { area: "moods", i: 4 });
+  assert.deepEqual(clamp({ area: "moods", i: 2 }, full), { area: "header", i: HEADER_LIGHTS });
 });

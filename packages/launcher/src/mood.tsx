@@ -1,12 +1,12 @@
 // The Mood panel (the header's lights button): a few activities, each one press that switches several things at once
-// (moods.ts), as a list beside a preview of what the focused one will do, the active one marked. Its last line opens
-// Settings › SmartThings, where the effects, routines and lights are set up one by one.
+// (moods.ts, with the viewer's changes), as a list of their icons beside a preview of what the focused one will do, the
+// active one marked. Its last line opens Settings › SmartThings, where each mood, the effects, routines and lights are set up.
 import { useKeys } from "@secretary/tv-kit";
 import { Kicker, PreviewList } from "@secretary/tv-kit/src/glass/index.ts";
 import type { StDevice, StScene } from "@secretary/smartthings";
 import { useMemo, useState } from "preact/hooks";
 import { lightCount } from "./light-count.ts";
-import { activeMood, MOODS, type Mood, moodRoutines, routineMoods } from "./moods.ts";
+import { activeMood, allMoods, type Mood, moodStage } from "./moods.ts";
 import { HEADER_LIGHTS } from "./nest-nav.ts";
 import { type PanelHeader, usePanelHeader } from "./panel-header.tsx";
 
@@ -15,13 +15,6 @@ const LIST = { x: 80, y: 290, w: 1760, h: 750, listW: 640 };
 /** The last line: Settings › SmartThings. */
 const SETUP = "setup";
 
-/** The little room of the effects' previews (style.css .lfx-*), lit the way a mood leaves it. */
-const STAGE: Record<string, string> = {
-  cinema: "is-sync is-on is-dim",
-  music: "is-dance is-on",
-  dining: "is-warm is-on",
-  off: "",
-};
 
 function MoodPreview({ mood, active }: { mood: Mood | null; active: boolean }) {
   if (!mood) {
@@ -39,7 +32,7 @@ function MoodPreview({ mood, active }: { mood: Mood | null; active: boolean }) {
   }
   return (
     <div class="lfx-pv">
-      <div class={`lfx-stage ${STAGE[mood.key] ?? "is-on"}`}>
+      <div class={`lfx-stage ${moodStage(mood)}`}>
         <i class="lfx-sheen" />
         <i class="lfx-lamp is-left" />
         <i class="lfx-screen" />
@@ -75,7 +68,8 @@ export function MoodPanel({
   onClose: () => void;
   header: PanelHeader;
 }) {
-  const moods = useMemo(() => [...MOODS, ...routineMoods(scenes, moodRoutines())], [scenes]);
+  // As the viewer set them in Settings › SmartThings (moods.ts allMoods).
+  const moods = useMemo(() => allMoods(scenes), [scenes]);
   const [at, setAt] = useState(0);
   const [active, setActive] = useState(activeMood);
   const [note, setNote] = useState<string | null>(null);
@@ -125,8 +119,8 @@ export function MoodPanel({
         {...LIST}
         kicker="Moods"
         items={[
-          ...moods.map((m) => ({ key: m.key, title: m.label, sub: m.hint, meta: active === m.key ? "Active" : undefined, lit: active === m.key, color: "var(--sg-line)" })),
-          { key: SETUP, title: "SmartThings settings", sub: "Effects, routines and lights, one by one" },
+          ...moods.map((m) => ({ key: m.key, title: m.label, sub: m.hint, meta: active === m.key ? "Active" : undefined, lit: active === m.key, icon: m.icon })),
+          { key: SETUP, title: "SmartThings settings", sub: "What each mood does, effects, routines and lights", icon: "settings" },
         ]}
         focusIndex={head.head == null ? i : -1}
         shown={i}

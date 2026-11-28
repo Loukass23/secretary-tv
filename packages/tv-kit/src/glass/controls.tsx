@@ -87,14 +87,16 @@ interface CardProps {
   meta?: ComponentChildren;
   /** Colour of the leading dot (a calendar, a source, an app). */
   color?: string;
+  /** A leading line icon in place of the dot (a mood). */
+  icon?: IconName;
 }
 
-/** A list row: dot, title and meta on one line, subtitle under it. Turns solid white when focused. */
-export function ListCard({ title, sub, meta, color, ...box }: BoxProps & CardProps) {
+/** A list row: dot or icon, title and meta on one line, subtitle under it. Turns solid white when focused. */
+export function ListCard({ title, sub, meta, color, icon, ...box }: BoxProps & CardProps) {
   return (
     <Glass {...box} class={cx("sg-card", box.class)}>
       <div class="sg-card-row">
-        {color && <i class="sg-dot" style={{ background: color }} />}
+        {icon ? <Icon name={icon} class="sg-card-icon" /> : color && <i class="sg-dot" style={{ background: color }} />}
         <b>{title}</b>
         {meta != null && <span class="sg-card-meta">{meta}</span>}
       </div>

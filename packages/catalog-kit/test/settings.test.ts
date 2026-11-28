@@ -20,7 +20,7 @@ test("settings migration: a v1 file from before the home section keeps every val
   };
   const s = mergeSettings(old as never);
   assert.equal(s.general.clockFormat, "12h");
-  assert.equal(s.general.accentTheme, "blue");
+  assert.equal(s.general.accentTheme, "slate");
   assert.equal(s.domotics.cinemaAutoDim, true);
   assert.equal(s.domotics.moodBackground, false);
   assert.equal(s.playback.resumeAtOnce, false);

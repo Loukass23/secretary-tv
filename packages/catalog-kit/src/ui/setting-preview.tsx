@@ -1,7 +1,7 @@
 // What a setting does, beside Settings' list (HubOverlay.tsx): a small live mock of its effect, its one line, and its
 // values with the one set lit. Plain DOM and flat fills only, no images: the mocks cost a few nodes each and move only
 // by transform and opacity (hub.css), and nothing moves under Reduce motion (`data-sg-motion="reduced"`).
-import { TEXT_SIZES, type TextSize, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
+import { DISPLAY_FONTS, type DisplayFont, TEXT_SIZES, type TextSize, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
 import type { ComponentChildren, JSX } from "preact";
 import { ACCENT_THEMES, type DashboardSettings, type SpoilerMode } from "../lib/settings.ts";
 
@@ -26,17 +26,23 @@ function typeVars(style: TypeStyle): JSX.CSSProperties {
   return out as JSX.CSSProperties;
 }
 
+/** The page's type style with the display face `font`, on this element only. */
+function fontVars(style: TypeStyle, font: DisplayFont): JSX.CSSProperties {
+  return { ...(typeVars(style) as Record<string, string>), "--sg-font-display": DISPLAY_FONTS[font].family } as JSX.CSSProperties;
+}
+
 /** A title's caption as the screens set it: kicker, name, numbers and a button, in the faces of the page or of `style`. */
-function Caption({ style, size }: { style?: TypeStyle; size?: TextSize }) {
+function Caption({ style, size, vars }: { style?: TypeStyle; size?: TextSize; vars?: JSX.CSSProperties }) {
   // A text size is shown at its own scale, beside the other one, so its sizes are set here rather than by the page.
   const f = size ? TEXT_SIZES[size].factor : 0;
   const px = (n: number) => (f ? { fontSize: `${Math.round(n * f)}px` } : undefined);
   return (
-    <div class="set-cap" style={style ? typeVars(style) : undefined}>
+    <div class="set-cap" style={vars ?? (style ? typeVars(style) : undefined)}>
       {/* The face itself, large: Studio and Bold set titles in the display face, Classic in the TV's own. */}
-      {style && <b class="set-cap-aa">Aa 12</b>}
+      {(style || vars) && <b class="set-cap-aa">Aa 12</b>}
       <span class="set-cap-kicker" style={px(21)}>Drama · Show</span>
-      <b class="set-cap-title" style={px(38)}>{SHOW}</b>
+      {/* Three faces side by side leave a narrow column: the short name there, so it reads on one line. */}
+      <b class="set-cap-title" style={px(38)}>{style || vars ? "Harbour" : SHOW}</b>
       <span class="set-cap-num" style={px(24)}>8.4 · 2019 · 3 seasons</span>
       <span class="set-cap-btn" style={px(24)}>Play</span>
     </div>
@@ -96,6 +102,18 @@ function Stage({ line, s }: { line: PreviewLine; s: DashboardSettings }) {
           ))}
         </div>
       );
+    case "general.displayFont":
+      // The same caption in each face, with the page's type style deciding where the face shows.
+      return (
+        <div class="set-cols">
+          {(Object.keys(DISPLAY_FONTS) as DisplayFont[]).map((f) => (
+            <div key={f} class={`set-col${f === g.displayFont ? " is-on" : ""}`}>
+              <Caption vars={fontVars(g.typeStyle, f)} />
+              <em>{DISPLAY_FONTS[f].label}</em>
+            </div>
+          ))}
+        </div>
+      );
     case "general.textSize":
       return (
         <div class="set-cols">
@@ -108,9 +126,11 @@ function Stage({ line, s }: { line: PreviewLine; s: DashboardSettings }) {
         </div>
       );
     case "general.reduceMotion":
-      // A row of cards with focus walking along it: each pushes in as focus reaches it, unless motion is reduced.
+      // The home's focus, walking along a row of cards: the focused one pushes in about 4% while the others step back
+      // and the glow behind slides under it (launcher style.css .nest-col.is-picked). Reduced: the ring alone.
       return (
         <div class={`set-row${g.reduceMotion ? " is-calm" : ""}`}>
+          <i class="set-row-glow" />
           {[0, 1, 2, 3].map((k) => (
             <i key={k} class={`set-card set-tone-${k}`} style={{ animationDelay: `${k * 1.2}s` }} />
           ))}
@@ -139,7 +159,10 @@ function Stage({ line, s }: { line: PreviewLine; s: DashboardSettings }) {
           <span class="set-badge">4K</span>
           <div class="set-swatches">
             {Object.entries(ACCENT_THEMES).map(([k, a]) => (
-              <i key={k} class={k === g.accentTheme ? "is-on" : ""} style={{ background: a.hex }} />
+              <span key={k} class={k === g.accentTheme ? "is-on" : ""}>
+                <i style={{ background: a.hex }} />
+                {a.label}
+              </span>
             ))}
           </div>
         </div>
@@ -229,6 +252,11 @@ function Stage({ line, s }: { line: PreviewLine; s: DashboardSettings }) {
         </div>
       );
   }
+}
+
+/** What a preview shows: the same for the same line, value and settings, so Settings can keep it between keys. */
+export function previewKey(line: PreviewLine): string {
+  return `${line.key}\u0000${line.title}\u0000${line.sub}\u0000${line.value}\u0000${line.on ?? ""}\u0000${line.choices ? `${line.choices.at}:${line.choices.items.join("\u0001")}` : ""}`;
 }
 
 /** The preview panel's content for one line. */

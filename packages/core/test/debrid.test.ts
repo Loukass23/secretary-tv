@@ -27,3 +27,32 @@ test("debrid: only services with a key, in the user's order; Premiumize picks th
   assert.equal(await services[0].resolve(HASH, undefined, null), "https://cdn.example/e1");
   assert.match(calls[0], /cache\/check 2/);
 });
+
+test("debrid: TorBox with Cached sources only checks first and never adds an uncached torrent", async () => {
+  const calls: string[] = [];
+  const cached = new Set([HASH]);
+  const f = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    calls.push(url.pathname.replace(/.*\/torrents\//, ""));
+    if (url.pathname.endsWith("/checkcached")) {
+      const asked = (url.searchParams.get("hash") ?? "").split(",");
+      return new Response(JSON.stringify({ data: asked.filter((h) => cached.has(h)).map((hash) => ({ hash })) }));
+    }
+    if (url.pathname.endsWith("/createtorrent")) return new Response(JSON.stringify({ data: { torrent_id: 7 } }));
+    if (url.pathname.endsWith("/mylist")) return new Response(JSON.stringify({ data: { files: [{ id: 1, name: "Film.mkv", size: 900 }] } }));
+    if (url.pathname.endsWith("/requestdl")) return new Response(JSON.stringify({ data: "https://cdn.example/film" }));
+    return new Response("", { status: 404 });
+  }) as typeof fetch;
+  let on = true;
+  const [tb] = debridServices({ tb: "key" }, ["tb"], f, { cachedOnly: () => on });
+  assert.equal(await tb.resolve(HASH, undefined, null), "https://cdn.example/film");
+  assert.deepEqual(calls, ["checkcached", "createtorrent", "mylist", "requestdl"]);
+  calls.length = 0;
+  await assert.rejects(tb.resolve("d".repeat(40), undefined, null), /Not cached/);
+  assert.deepEqual(calls, ["checkcached"], "no torrent added");
+  // Off, it adds the torrent as before, without a check.
+  on = false;
+  calls.length = 0;
+  await tb.resolve("d".repeat(40), undefined, null);
+  assert.deepEqual(calls, ["createtorrent", "mylist", "requestdl"]);
+});

@@ -31,6 +31,11 @@ export interface DebridSettings {
   order: DebridId[];
   /** Check TorBox sources before their turn too (it adds them to the account, so off by default; lib/verify.ts). */
   torboxAhead?: boolean;
+  /**
+   * Settings › Sources "Cached sources only", on by default: a link that names a torrent is listed only when a debrid
+   * service has it cached, and TorBox never adds an uncached one to the account.
+   */
+  cachedOnly?: boolean;
 }
 
 const DEBRID_KEY = "sectv.debrid";
@@ -44,6 +49,7 @@ export function loadDebrid(): DebridSettings {
     },
     order: saved?.order?.length ? saved.order : ["tb", "pm"],
     torboxAhead: saved?.torboxAhead ?? false,
+    cachedOnly: saved?.cachedOnly ?? true,
   };
 }
 
@@ -52,9 +58,12 @@ export function saveDebrid(next: DebridSettings): DebridSettings {
   return next;
 }
 
+/** Read on every search and every resolve, so the setting applies at once. */
+const cachedOnlyOn = () => loadDebrid().cachedOnly !== false;
+
 export const debrids = () => {
   const d = loadDebrid();
-  return debridServices(d.keys, d.order);
+  return debridServices(d.keys, d.order, fetch, { cachedOnly: cachedOnlyOn });
 };
 
 const defaults = built(typeof __PLUGIN_REPOS__ !== "undefined" ? __PLUGIN_REPOS__ : "")
@@ -76,6 +85,7 @@ const hostOptions = {
   runner,
   target: createIdMapper({ tmdbKey: built(typeof __TMDB_API_KEY__ !== "undefined" ? __TMDB_API_KEY__ : "") }),
   debrid: debrids,
+  cachedOnly: cachedOnlyOn,
   tmdbKey: built(typeof __TMDB_API_KEY__ !== "undefined" ? __TMDB_API_KEY__ : ""),
   // Read on every search, so a language changed in Settings applies to the next one.
   context: () => ({ deviceProfile: "tv" as const, deviceCaps: deviceCaps(), langPref: langPref(loadSettings().playback) }),

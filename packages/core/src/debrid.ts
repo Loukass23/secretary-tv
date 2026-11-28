@@ -15,13 +15,24 @@ export interface Debrid {
 
 export const DEBRID_LABELS: Record<DebridId, string> = { tb: "TorBox", pm: "Premiumize" };
 
-export function torboxDebrid(apiKey: string, f: typeof fetch = fetch): Debrid {
+export interface DebridOptions {
+  /**
+   * Settings › Sources "Cached sources only", read on every resolve: TorBox then never adds a torrent it does not have
+   * cached (adding one starts a download on the account and plays nothing for minutes).
+   */
+  cachedOnly?: () => boolean;
+}
+
+export function torboxDebrid(apiKey: string, f: typeof fetch = fetch, { cachedOnly = () => false }: DebridOptions = {}): Debrid {
   const tb = createTorbox({ apiKey, fetch: f });
   return {
     id: "tb",
     label: DEBRID_LABELS.tb,
     checkCached: (hashes) => tb.checkCached(hashes),
     async resolve(hash, fileIdx, hint) {
+      if (cachedOnly() && !(await tb.checkCached([hash.toLowerCase()])).has(hash.toLowerCase())) {
+        throw new Error("Not cached on TorBox");
+      }
       const torrentId = await tb.createTorrent(hash);
       const file = pickFile(await tb.listFiles(torrentId), fileIdx, hint);
       return file ? tb.requestDownload(torrentId, file.id) : null;
@@ -29,7 +40,8 @@ export function torboxDebrid(apiKey: string, f: typeof fetch = fetch): Debrid {
   };
 }
 
-export function premiumizeDebrid(apiKey: string, f: typeof fetch = fetch): Debrid {
+/** Premiumize's direct links exist only for cached torrents, so it never starts a download: `options` changes nothing. */
+export function premiumizeDebrid(apiKey: string, f: typeof fetch = fetch, _options: DebridOptions = {}): Debrid {
   const pm = createPremiumize({ apiKey, fetch: f });
   return {
     id: "pm",
@@ -48,7 +60,8 @@ export function debridServices(
   keys: Partial<Record<DebridId, string>>,
   order: readonly DebridId[] = ["tb", "pm"],
   f: typeof fetch = fetch,
+  options: DebridOptions = {},
 ): Debrid[] {
   const make = { tb: torboxDebrid, pm: premiumizeDebrid };
-  return order.filter((id) => keys[id]?.trim()).map((id) => make[id](keys[id]!.trim(), f));
+  return order.filter((id) => keys[id]?.trim()).map((id) => make[id](keys[id]!.trim(), f, options));
 }

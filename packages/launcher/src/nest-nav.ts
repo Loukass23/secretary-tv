@@ -13,7 +13,9 @@
 //             Right at its right edge go on to the card beside it, so focus never sits trapped in one (the bell lands
 //             inside Reminders)
 //   menu      the profile menu, while it is open
-export type Area = "header" | "ask" | "chat" | "row" | "menu";
+//   moods     the mood strip under the header's lights button, while it is open: the moods' icons side by side, then
+//             "more" (the full Mood panel). Left and Right move along it; Up, Down and Back close it (app.tsx)
+export type Area = "header" | "ask" | "chat" | "row" | "menu" | "moods";
 
 export interface Focus {
   area: Area;
@@ -54,6 +56,8 @@ export interface Layout {
   ask: number;
   cols: readonly Column[];
   menu: number;
+  /** The mood strip's stops (its moods and "more"), while it is open; 0 or absent while it is closed. */
+  moods?: number;
   /** The header's items in order, as the numbers below (`headerItems`); default all of them. */
   header?: readonly number[];
 }
@@ -133,6 +137,10 @@ export function step(at: Focus, key: string, len: Layout): Focus {
       if (key === "Up") return i > 0 ? { area, i: i - 1 } : at;
       if (key === "Down") return i < len.menu - 1 ? { area, i: i + 1 } : at;
       return at;
+    case "moods":
+      if (key === "Left") return i > 0 ? { area, i: i - 1 } : at;
+      if (key === "Right") return i < (len.moods ?? 0) - 1 ? { area, i: i + 1 } : at;
+      return at;
     case "row": {
       const c = at.col ?? 0;
       const col = len.cols[c];
@@ -208,6 +216,12 @@ export function clamp(at: Focus, len: Layout): Focus {
     case "menu":
       if (len.menu > 0) return at.i < len.menu ? at : { area: "menu", i: len.menu - 1 };
       break;
+    case "moods": {
+      const n = len.moods ?? 0;
+      // The strip closed: back on the button that opened it.
+      if (n > 0) return at.i < n ? at : { area: "moods", i: n - 1 };
+      return header(HEADER_LIGHTS);
+    }
     case "row": {
       const c = at.col ?? 0;
       const col = len.cols[c];

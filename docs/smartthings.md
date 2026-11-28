@@ -7,7 +7,8 @@ any of it. The server's `/domotics` stays as a fallback for builds without Smart
 
 | | Where | How |
 | --- | --- | --- |
-| Moods | The header's lights button opens the Mood panel (`mood.tsx`) | Cinema (lights dim, side lights follow the poster), Music (warm room, the dance on), Dining (warm and brighter, side lights still) and Off, then the routines chosen to show. Each is one press built from the commands below and the light effects (`moods.ts`); the preview says what it will do and the active one is marked. The Home card's four buttons are the same moods. |
+| Moods | OK on the header's lights button opens the mood strip under it (`mood-strip.tsx`); its last icon ("more") opens the Mood panel (`mood.tsx`) | Cinema (lights dim, side lights follow the poster), Music (warm room, the dance on), Dining (warm and brighter, side lights still) and Off, then the routines chosen to show, each with its icon. One press on an icon in the strip sets that mood; Up, Down or Back close the strip. Each mood is built from the commands below, the light effects, and optionally the TV's picture mode and the sound system (`moods.ts`); the panel's preview says what it will do and the active one is marked. The header's lights button shows the active mood's icon (the plain bulb before any). The Home card's four buttons, and Ask's "cinema mode", "music mode", "movie night" (Cinema) and "goodnight" (Off), set the same moods as the viewer set them (`assistant` `Effects.mood`); "good morning" has no mood and brings the warm lights up. |
+| Mood editor | Settings › SmartThings, after the light effects | One mood at a time: the first line picks the mood (Left and Right), then a line each for its lights (cinema, music, warm, off, any routine, or "as they are"), each light effect (on, off, or "as it is"), the picture mode ("as it is", the two favourites, then the modes the TV lists) and, with a sound system, the sound system (on, off, as it is). Left and Right step a line, OK steps forward; the preview rewrites what the mood does. Changes are saved as `nest.moods` (`{ [mood key]: { lights?, fx?, picture?, sound? } }`, `null` for "as it is") over the defaults in `moods.ts`, which `applyMood()` (app.tsx) follows; a changed mood gets a last line that puts it back. A routine's mood takes changes by its key (`routine:<id>`). This TV's sound mode is not open to apps (`webapis.settings` has only the sound output), so the sound part is the sound system on or off. |
 | Routines and lights | Settings › SmartThings (`smartthings-settings.tsx`, a category Secretary adds to Settings) | The light effects and their switches, then the routines (SmartThings scenes, manual routines in the app): OK shows or hides one in Mood, Left and Right give it its part with a film (on Play, after the film); then every light and switch by room (rooms by name; devices in no room under "No room"), OK switches it. Each line has a preview. |
 | Movie lights | Catalog settings, Settings → Lights → Movie lights | On Play Secretary runs the routine set to "Runs on Play" in Settings › SmartThings; when the player closes, the one set to "Runs after the film". |
 | Home status | Nest's home screen | A toast when the phone leaves or comes home, when the vacuum starts, finishes or gets stuck. |
@@ -20,18 +21,39 @@ any of it. The server's `/domotics` stays as a fallback for builds without Smart
 | Ripple tests | Ask Nest, or this PC | Say or type "ripple test" (the slow one) or "launch ripple" (the quick one) to Ask Nest to play it on request, even with the ripples switched off. From this PC, with the same code and a personal token in `.env`: `pnpm lights status` (the lights, the sensor, the brightness the ripple would use), `pnpm lights levels` (the brightness for a range of room light), and `pnpm lights ripple open|launch [--dry] [--lux N]`, which prints the steps, plays them (`--dry` only prints; `--lux` pretends the sensor reads N), then reads the lights again and says whether each is back as it was. |
 | Sound button | Nest's top bar, between Picture and the bell | OK switches the sound system on or off. The icon is a hi-fi speaker with sound arcs when it is on and a slash when it is off, and flips at once while SmartThings confirms. |
 | Independent lights | Every mode, scene and "all the lights" prompt | The computer desk is never switched by a mode; naming it still works ("turn off the computer desk"). `nest.independentLights` (name fragments) changes the list. |
-| Picture mode | Nest: Red on the remote, or the Picture button in the top bar | Flips the TV between two favourite picture modes (Dynamic and Eco by default, `nest.pictureModes` in local storage to change them) through SmartThings, since a Tizen web app has no picture-setting API of its own. The button's icon is a sun on Dynamic, a moon on Eco. |
+| Picture mode | Secretary: Red on the remote, the Picture button in the top bar, a mood that sets one, or Ask ("eco mode") | Flips the TV between two favourite picture modes (Dynamic and Eco by default, `nest.pictureModes` in local storage to change them). It reads and sets the mode on the TV itself (`picture-mode.ts`), and falls back to SmartThings where the TV has no such API. The first press always switches to the other mode of the pair, even after the remote changed it. The button's icon is a sun on Dynamic, a moon on Eco. |
 
-**Make two scenes in the SmartThings app first**, named for the TV and the mode: "TV Eco" and "TV Dynamic" (manual
-routines whose one action sets the TV's picture mode). Nest runs the scene named for the mode (`pictureScene`).
+**On the TV itself (checked 2026-11-27 on the reference 43" Crystal UHD, firmware 3.5.1).** Samsung's
+`webapis.settings` answers for the item `picturemode` (the first child of `picture`) with what the TV's own menu shows,
+`{ osdName: "Dynamic", value: 65536 }`, with no extra privilege in `config.xml`. It follows a change made outside
+Secretary within two seconds (checked by running the "TV Eco" and "TV Dynamic" scenes, which change the mode as the
+remote and the SmartThings app do). `getItemDataList("picturemode")` lists every mode, each name several times, once per
+kind of source (the high 16 bits of the value: 65536 is the TV's own apps, where Secretary runs), and
+`setItemValue("picturemode", String(value))` sets one and returns `true`; reading again then gives the new mode.
+`picture-mode.ts` sets the entry of the current source's kind. Each call is synchronous and costs about 16 ms on this
+TV, so Secretary reads it on load, when it comes back to the screen (`visibilitychange`) or gets the window back
+(`focus`, after the TV's own menu), every 30 s with the clock, after each change and at each press, never per frame.
+Other probes: `webapis.avinfo.getBacklight` and `getBrightness` answer "Permission denied" (partner privilege);
+`webapis.tvinfo` and `tizen.tvdisplaycontrol` have nothing on the picture mode; `getItemDataList` with an item id that
+does not exist once crashed the app, so only `picturemode` is ever read.
 
-Why scenes (tested 2026-11-20 on the reference "43" Crystal UHD", firmware 3.5.1): the TV reports `samsungvd.pictureMode`
-(modes Dynamic, Eco, FILMMAKER MODE, Movie, Standard; command `setPictureMode(mode)`), and the cloud API accepts that
-command with `COMPLETED`, but the TV answers "this function is not available" and the picture does not change, by name
-or by internal id, from Nest's home screen. The SmartThings app and a scene running the same mode do change it. The
-attribute is stale too (its timestamp never moves), so Nest remembers the mode it last set (`nest.pictureLast`) and
-toggles from that, not from SmartThings' status. Without the scenes Nest still sends the command, which may do nothing
-on a TV like this one. Another TV may take the command directly.
+Tested inside Secretary on 2026-11-27: Secretary last set Dynamic, then the "TV Eco" scene moved the TV to Eco from
+outside; one Red press switched it to Dynamic (before, the toggle went by `nest.pictureLast`, asked for Eco and nothing
+changed until a second press). The other way round (last set Eco, the TV moved to Dynamic outside) one press gave Eco.
+
+**Without that API (another TV), make two scenes in the SmartThings app**, named for the TV and the mode: "TV Eco" and
+"TV Dynamic" (manual routines whose one action sets the TV's picture mode). Secretary runs the scene named for the mode
+(`pictureScene`). Why scenes (tested 2026-11-20 on the reference TV): the TV reports `samsungvd.pictureMode` (modes
+Dynamic, Eco, FILMMAKER MODE, Movie, Standard; command `setPictureMode(mode)`), and the cloud API accepts that command
+with `COMPLETED`, but the TV answers "this function is not available" and the picture does not change, by name or by
+internal id. The SmartThings app and a scene running the same mode do change it. Without the scenes Secretary still
+sends the command, which another TV may take directly.
+
+**SmartThings' status is stale.** The attribute's value and timestamp never move on this TV: on 2026-11-27 it still read
+Dynamic at 2026-11-20T11:13 after the mode had been changed several times, by scenes too. So without the TV's own
+reading Secretary keeps the mode it last set and when (`nest.pictureLast`, `{ mode, at }`; older builds stored the bare
+name) and trusts whichever is newer, SmartThings' report by its timestamp or its own last set (`currentPicture`). On a
+TV whose attribute does update, a change by the remote then wins over Secretary's older one.
 
 ## Set it up (once)
 

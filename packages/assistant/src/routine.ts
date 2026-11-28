@@ -1,7 +1,9 @@
 // Multi-effect routines ("goodnight", "movie night", "good morning"): one prompt runs a light scene, checks open
 // reminders, and pulls tomorrow's (or today's) forecast or film picks together. Each effect runs under allSettled so
-// a missing SmartThings setup or offline forecast never blocks the rest of the answer.
-import { type Answer, type Effects, sayTomorrowWeather, sayWeather } from "./route.ts";
+// a missing SmartThings setup or offline forecast never blocks the rest of the answer. Goodnight and movie night set the
+// viewer's Off and Cinema moods when the caller has moods (`fx.mood`, Secretary's moods.ts), so a mood changed in
+// Settings › SmartThings changes the routine too; morning has no mood and brings the warm lights up.
+import { type Answer, type Effects, moodOrLights, sayTomorrowWeather, sayWeather } from "./route.ts";
 
 export type RoutineKind = "goodnight" | "movie_night" | "morning";
 
@@ -37,7 +39,7 @@ export async function runRoutine(kind: RoutineKind, fx: Effects): Promise<Answer
 
   if (kind === "goodnight") {
     const [lightsRes, weatherRes] = await Promise.allSettled([
-      fx.lights({ scene: "off" }),
+      moodOrLights(fx, "off", { scene: "off" }),
       fx.weather ? fx.weather() : Promise.resolve(null),
     ]);
     const lightsOk = lightsRes.status === "fulfilled";
@@ -52,7 +54,7 @@ export async function runRoutine(kind: RoutineKind, fx: Effects): Promise<Answer
 
   if (kind === "movie_night") {
     const [lightsRes, findRes] = await Promise.allSettled([
-      fx.lights({ scene: "cinema" }),
+      moodOrLights(fx, "cinema", { scene: "cinema" }),
       fx.find ? fx.find({ kind: "movie" }) : Promise.resolve([]),
     ]);
     const lightsOk = lightsRes.status === "fulfilled";

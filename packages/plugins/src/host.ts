@@ -104,19 +104,23 @@ export interface FindListeners {
 /** How long a provider's torrents wait for others' to share one debrid check. */
 const CHECK_DEBOUNCE_MS = 150;
 
+/** A ready-made link whose key is its torrent's info hash (an `infoHash` field, a magnet or a redirector's query). */
+const hashLink = (it: Item) => "stream" in it && /^[0-9a-f]{40}$/.test(it.key);
+
 /**
  * The playable streams in provider order (providers rank for the device themselves), duplicates dropped by hash or
  * URL, torrents only once a debrid service has them. A codec the TV cannot decode goes last (`caps`, core/caps.ts):
  * AVPlay never leaves prepare for AV1 on the reference TV (docs/lessons.md).
  */
-function assemble(found: readonly Item[][], cachedBy: ReadonlyMap<string, DebridId>, caps: DeviceCaps): Stream[] {
+function assemble(found: readonly Item[][], cachedBy: ReadonlyMap<string, DebridId>, caps: DeviceCaps, strict = false): Stream[] {
   const seen = new Set<string>();
   const streams = found
     .flat()
     .filter((it) => !seen.has(it.key) && seen.add(it.key))
     .flatMap((it): Stream[] => {
       const provider = it.provider ? { provider: it.provider } : {};
-      if ("stream" in it) return [{ ...it.stream, ...provider }];
+      // Cached only: a ready-made link that names its torrent plays only once a debrid service says it has it.
+      if ("stream" in it) return strict && hashLink(it) && !cachedBy.has(it.key) ? [] : [{ ...it.stream, ...provider }];
       const svc = cachedBy.get(it.torrent.hash);
       if (!svc) return [];
       const { name, title, hash, fileIdx, group, file, meta } = it.torrent;
@@ -147,6 +151,12 @@ export interface HostOptions {
   tmdbKey?: string;
   /** What providers are told about the TV and the viewer's languages; read on every search, like `debrid`. */
   context?: () => Omit<ProviderContext, "appScope">;
+  /**
+   * Settings › Sources "Cached sources only", read on every search: ready-made links that carry an info hash are checked
+   * with the debrid services too, and dropped when none has it cached. Raw torrents are always checked. With no debrid
+   * service there is nothing to check against, and links are kept.
+   */
+  cachedOnly?: () => boolean;
   /** Extra sources for one title, asked with the title's own id and after the providers in the order. */
   extra?: (id: string, type: "movie" | "series") => ExtraJob[];
   perProviderMs?: number;
@@ -245,6 +255,7 @@ export function createPluginHost({
   tmdbKey = "",
   context = () => ({}),
   extra = () => [],
+  cachedOnly = () => false,
   perProviderMs = 20_000,
   roundMs = 30_000,
   parallel = 6,
@@ -262,6 +273,7 @@ export function createPluginHost({
     const jobs: Job[] = [];
     const ctx: ProviderContext = { ...context(), ...(scope ? { appScope: scope } : {}) };
     const caps = ctx.deviceCaps ? parseCaps(ctx.deviceCaps) : defaultCaps;
+    const strict = cachedOnly() && debrid().length > 0;
     if (state.enabled) {
       void store.refresh();
       const t = await target(id, type, hint);
@@ -305,7 +317,7 @@ export function createPluginHost({
     let pending: string[] = [];
     let checkTimer: ReturnType<typeof setTimeout> | undefined;
     let checking: Promise<void> = Promise.resolve();
-    const snapshot = (done: boolean) => onUpdate?.({ streams: assemble(found, cachedBy, caps), status: status.slice(), done });
+    const snapshot = (done: boolean) => onUpdate?.({ streams: assemble(found, cachedBy, caps, strict), status: status.slice(), done });
     const runCheck = () => {
       checkTimer = undefined;
       const batch = pending;
@@ -318,8 +330,13 @@ export function createPluginHost({
     const answered = (i: number) => {
       // A torrent some provider already gave as a playable link needs no check: the link wins the de-duplication.
       const linked = new Set(found.flat().flatMap((it) => ("stream" in it ? [it.key] : [])));
+      // Cached only, the links that name a torrent are asked about as well.
       const fresh = found[i].flatMap((it) =>
-        "torrent" in it && !checked.has(it.torrent.hash) && !linked.has(it.key) ? [it.torrent.hash] : [],
+        checked.has(it.key)
+          ? []
+          : "torrent" in it
+            ? linked.has(it.key) ? [] : [it.torrent.hash]
+            : strict && hashLink(it) ? [it.key] : [],
       );
       for (const h of fresh) checked.add(h);
       if (!fresh.length) return snapshot(false);
@@ -365,7 +382,7 @@ export function createPluginHost({
       runCheck();
     }
     await checking;
-    const streams = assemble(found, cachedBy, caps);
+    const streams = assemble(found, cachedBy, caps, strict);
     onUpdate?.({ streams, status: status.slice(), done: true });
     return { streams, status };
   }

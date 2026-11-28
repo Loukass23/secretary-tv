@@ -141,7 +141,7 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | Area | Where | OK does |
 | --- | --- | --- |
 | Profile | top left; under the name, an icon for Nuvio sync and one for the server (an alert dot when it is offline), or a line when something needs doing | opens the profile menu: what the TV is connected to in words, then Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
-| Watch together, Search, Lights, Picture, Sound, Settings, Bell | top right, left of the clock, no fill until focused | the party; search; the Mood panel (or the next scene); the TV's picture mode (a screen icon: bright for Dynamic, a moon for Eco); the sound system; Settings; the first open reminder in its card (the badge counts them). Watch together shows only in a build with `PARTY_URL` set (`config.ts` `WATCH_TOGETHER`) |
+| Watch together, Search, Lights, Picture, Sound, Settings, Bell | top right, left of the clock, no fill until focused | the party; search; the mood strip under it, one icon per mood and "more" for the Mood panel, the button showing the active mood's icon (the next scene without SmartThings on the TV); the TV's picture mode (a screen icon: bright for Dynamic, a moon for Eco), read on the TV itself; the sound system; Settings; the first open reminder in its card (the badge counts them). Watch together shows only in a build with `PARTY_URL` set (`config.ts` `WATCH_TOGETHER`) |
 | Assistant (first card) | the greeting, the open reminders and the last exchange | the **full chat**: the cards defocus (dimmed, blurred) and the orb moves to the middle of the screen. Opening it starts listening: the line (blue while you speak, amber while Nest answers) shows only then, and your words and the answer are written around it; otherwise it is the orb. OK or the mic key listens again, Back returns to this card |
 | Weather | a full card: now, the next 5 hours and the next 4 days | OK says it in the toast; the old forecast drop-down is gone |
 | Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
@@ -265,7 +265,7 @@ the next category, Down goes into its lines, and only the lines around focus are
 | Apps | One line per app the Apps card could show; OK hides or shows it |
 | Appearance | Accent colour, clock, boot animation, poster colour and the collection looks |
 | SmartThings (Secretary's, when set up) | Light effects, routines and lights (`launcher/src/smartthings-settings.tsx`) |
-| Accounts (Secretary's) | Simkl: connect with a code, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`) |
+| Accounts (Secretary's) | Simkl and AniList: connect from the phone, sync now, disconnect (`launcher/src/accounts-settings.tsx`, `docs/simkl.md`, `docs/anilist.md`) |
 | Advanced | The autoplay patterns and "Restore default settings" (a second OK confirms) |
 
 Secretary's own preferences are the `home` section of the same settings (`sectv:settings:v1`), read by the launcher
