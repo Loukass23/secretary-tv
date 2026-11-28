@@ -52,6 +52,16 @@ test("art cache: new pictures are fetched once and kept, and the next start show
   assert.equal(next.src(undefined), undefined);
 });
 
+test("art cache: a picture's source is fixed the first time a tile asks, even if its blob is read later", async () => {
+  const s = setup();
+  await s.make().keep([u(1), u(2)]);
+  const next = s.make();
+  assert.equal(next.src(u(1)), u(1), "asked before the read: the network URL");
+  await next.warm();
+  assert.equal(next.src(u(1)), u(1), "and it stays so, so the tile never reloads");
+  assert.match(next.src(u(2)), /^blob:/, "asked after the read: the blob");
+});
+
 test("art cache: least recently shown go first past the limit, from the index and the store", async () => {
   const s = setup({ max: 3 });
   const a = s.make();
@@ -88,6 +98,18 @@ test("art cache: what never loads, is too big or is not a picture takes no place
   await a.keep([u(1), "https://example.com/bad.jpg", "https://example.com/big.jpg", "https://example.com/html", "data:image/gif;base64,R0lG"]);
   assert.deepEqual(a.list(), [u(1)]);
   assert.equal(s.store.m.size, 1);
+});
+
+test("art cache: a picture is kept shrunk, and one still too big once shrunk is not kept", async () => {
+  const s = setup({
+    maxBytes: 100,
+    fetch: async (url: string) => ({ ok: true, blob: async () => png(url.includes("huge") ? 5000 : 900) }),
+    shrink: async (b: Blob) => (b.size > 1000 ? b : png(50)),
+  });
+  const a = s.make();
+  await a.keep([u(1), "https://example.com/huge.jpg"]);
+  assert.deepEqual(a.list(), [u(1)]);
+  assert.equal(s.store.m.get(u(1))?.size, 50);
 });
 
 test("art cache: without a store it does nothing, and a slow store never holds the start", async () => {

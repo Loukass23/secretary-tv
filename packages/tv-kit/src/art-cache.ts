@@ -1,14 +1,19 @@
-// The local art cache (docs/performance.md, "Art cache"): the small pictures of the titles on Secretary's home and in
+// NOT WIRED INTO SECRETARY (docs/performance.md, "Art cache"): measured on the TV, the browser's own HTTP cache already
+// draws the home's pictures as fast, and reading IndexedDB at start only delayed the first render. Kept, tested, for
+// a host where that cache does not hold (offline starts, a cache the TV evicts).
+//
+// The local art cache: the small pictures of the titles on Secretary's home and in
 // Continue watching (posters, stills, logos) kept on the TV as IndexedDB blobs, so the next start draws them on its
 // first frame instead of waiting for the network. The most recent `max` (150) are kept, the least recently shown
 // dropped first; the index (which pictures, in order, and when each was last fetched) is a small localStorage list,
 // read synchronously at start.
 //
-// How it is used: `warm()` once before the home's first render reads the most recent blobs into object URLs (capped in
-// time, so a slow store never holds the start); `src(url)` then gives the blob URL for a picture warmed this session,
-// else the URL itself; `keep(urls)` after the home has drawn marks what it shows as most recent, fetches what is new,
-// and refreshes from the network in the background what was last fetched more than a day ago. Within a session a
-// picture's `src` never changes, so no tile reloads its art under the viewer. Pure apart from the store and fetch it is
+// How it is used: `warm()` at start reads the most recent blobs into object URLs, alongside the first render, never
+// before it (measured on the TV: holding the first render for the read cost more than the browser's own cache saves,
+// docs/performance.md "Art cache"); `src(url)` gives the blob URL for a picture warmed by the time a tile first asks
+// for it, else the URL itself, and that answer sticks for the session, so no tile ever reloads its art under the
+// viewer; `keep(urls)` after the home has drawn marks what it shows as most recent, fetches what is new, and refreshes
+// from the network in the background what was last fetched more than a day ago. Pure apart from the store and fetch it is
 // handed, so it is unit tested.
 
 export interface BlobStore {
@@ -31,7 +36,9 @@ export interface ArtCacheOptions {
   toUrl?: (b: Blob) => string;
   /** Pictures kept at most. */
   max?: number;
-  /** A picture bigger than this is not kept (a full-size backdrop): it is not what the cache is for. */
+  /** Makes a fetched picture small before it is kept (`shrinkImage` on the TV: 480 px wide at most). */
+  shrink?: (b: Blob) => Promise<Blob>;
+  /** A picture still bigger than this once shrunk is not kept: it is not what the cache is for. */
   maxBytes?: number;
   /** How long a fetched picture is good for before a background refresh. */
   refreshMs?: number;
@@ -51,7 +58,8 @@ export const ART_MAX = 150;
 const DAY = 24 * 3600_000;
 
 export interface ArtCache {
-  /** The picture to show for `url`: its blob URL when warmed this session, else `url` itself. */
+  /** The picture to show for `url`: its blob URL when warmed by the first time it is asked for, else `url` itself;
+   *  the same answer every time after that. */
   src<T extends string | undefined>(url: T): T | string;
   /** Reads the most recent `limit` kept pictures into blob URLs, giving up after `ms`; how many it read. */
   warm(limit?: number, ms?: number): Promise<number>;
@@ -63,7 +71,7 @@ export interface ArtCache {
 
 export function createArtCache(o: ArtCacheOptions): ArtCache {
   const max = o.max ?? ART_MAX;
-  const maxBytes = o.maxBytes ?? 400_000;
+  const maxBytes = o.maxBytes ?? 160_000;
   const refreshMs = o.refreshMs ?? DAY;
   const parallel = o.parallel ?? 3;
   const now = o.now ?? Date.now;
@@ -72,6 +80,8 @@ export function createArtCache(o: ArtCacheOptions): ArtCache {
   /** Most recent first. */
   let index: Entry[] = read(o.kv);
   const warmed = new Map<string, string>();
+  /** What `src` answered for each URL: fixed at the first ask. */
+  const told = new Map<string, string>();
   /** Fetched (or failed) this session: never asked twice. */
   const asked = new Set<string>();
 
@@ -88,8 +98,10 @@ export function createArtCache(o: ArtCacheOptions): ArtCache {
     try {
       const res = await get(u);
       if (!res.ok) return false;
-      const b = await res.blob();
-      if (!b.size || b.size > maxBytes || (b.type && !b.type.startsWith("image/"))) return false;
+      const raw = await res.blob();
+      if (!raw.size || (raw.type && !raw.type.startsWith("image/"))) return false;
+      const b = o.shrink ? await o.shrink(raw) : raw;
+      if (b.size > maxBytes) return false;
       await o.store.put(u, b);
       return true;
     } catch {
@@ -98,9 +110,14 @@ export function createArtCache(o: ArtCacheOptions): ArtCache {
   };
 
   return {
-    src: (url) => (url ? (warmed.get(url) ?? url) : url),
+    src: (url) => {
+      if (!url) return url;
+      let s = told.get(url);
+      if (s === undefined) told.set(url, (s = warmed.get(url) ?? url));
+      return s;
+    },
 
-    async warm(limit = 60, ms = 250) {
+    async warm(limit = 40, ms = 250) {
       if (!o.store || !index.length) return 0;
       const keys = index.slice(0, limit).map((e) => e.u);
       const read = o.store.getMany(keys).then((blobs) => {
@@ -198,11 +215,44 @@ export function idbStore(name = "secretary-art"): BlobStore | null {
   };
 }
 
+/** Pictures at most this wide are kept as they come; wider ones (stills, backdrops) are drawn down to it. */
+export const ART_KEEP_W = 480;
+
+/**
+ * A picture drawn down to `w` px wide, as a JPEG (a PNG stays a PNG, for a logo's transparency), so the cache holds
+ * tile-sized pictures and the start reads little. Small files and narrow pictures are kept as they are.
+ */
+export function shrinkImage(b: Blob, w = ART_KEEP_W): Promise<Blob> {
+  if (b.size < 40_000) return Promise.resolve(b);
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(b);
+    const img = new Image();
+    const done = (out: Blob) => {
+      URL.revokeObjectURL(url);
+      resolve(out);
+    };
+    img.onerror = () => done(b);
+    img.onload = () => {
+      if (img.naturalWidth <= w) return done(b);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = Math.round((img.naturalHeight * w) / img.naturalWidth);
+      const g = c.getContext("2d");
+      if (!g) return done(b);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      const png = b.type === "image/png";
+      c.toBlob((out) => done(out && out.size < b.size ? out : b), png ? "image/png" : "image/jpeg", 0.82);
+    };
+    img.src = url;
+  });
+}
+
 /** Secretary's art cache: one per page, on IndexedDB and localStorage. */
 let shared: ArtCache | null = null;
 export function artCache(): ArtCache {
   return (shared ??= createArtCache({
     store: idbStore(),
+    shrink: typeof document !== "undefined" ? shrinkImage : undefined,
     kv: typeof localStorage !== "undefined" ? localStorage : { getItem: () => null, setItem: () => {} },
   }));
 }

@@ -1,5 +1,4 @@
-import { installBackAdapter, record, registerMediaKeys, runBootAnimation } from "@secretary/tv-kit";
-import { artCache } from "@secretary/tv-kit/src/art-cache.ts";
+import { installBackAdapter, registerMediaKeys, runBootAnimation } from "@secretary/tv-kit";
 import { render } from "preact";
 import { App } from "./app.tsx";
 import "./style.css";
@@ -25,19 +24,7 @@ if (lab) {
     render(mode ? <Lab initial={mode} /> : <App />, root);
   });
 } else {
-  // The home's pictures from the last visit (tv-kit art-cache.ts), read from IndexedDB before the first render so its
-  // tiles draw them on their first frame; capped, so a slow store never holds the start.
-  const t0 = performance.now();
-  void artCache()
-    .warm(80, 250)
-    .then(
-      (n) => {
-        record("art.warm", performance.now() - t0);
-        record("art.warmCount", n);
-      },
-      () => {},
-    )
-    .finally(() => render(<App />, root));
+  render(<App />, root);
 }
 
 // With the splash on, the bird gets its time (any key skips it); off, the boot screen leaves as quickly as before.

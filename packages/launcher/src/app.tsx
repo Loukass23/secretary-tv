@@ -1,9 +1,8 @@
 import { exitApp, getTvInputBridge, useKeys, useOkHold } from "@secretary/tv-kit";
 import { artColour, artPalette, type Backdrop, backdropFor, Glass, GlassRoot, glowImage, HoldPill, homeMood, type IconName, type Palette, setWaveLevel, TINTS, useFocusRing } from "@secretary/tv-kit/src/glass/index.ts";
 import { avatarCatalog, avatarImage, type LibraryItem, listProfiles, type Profile, pullCollections, pullLibrary, deleteProgress, progressKey, pullProgress, toItems, withMeta } from "@secretary/nuvio";
-import { readJson, whenIdle, writeJson } from "@secretary/tv-kit";
+import { readJson, writeJson } from "@secretary/tv-kit";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { artCache } from "@secretary/tv-kit/src/art-cache.ts";
 import { Profiles, SignIn } from "./account.tsx";
 import {
   addReminder,
@@ -1597,20 +1596,6 @@ export function App() {
   }
   const colAt = focus.area === "row" ? (focus.col ?? 0) : -1;
   mediaFocused.current = columns[colAt]?.kind === "media";
-  // The home's own pictures (the folded cards, then each card's first row: Continue watching and the picks) are kept on
-  // the TV (tv-kit art-cache.ts), so the next start draws them on its first frame. Once the home has settled, so the
-  // fetches never compete with the tiles' own loads.
-  const homeArt = columns
-    .flatMap((c) => (c.kind === "media" ? [...(c.small ?? []), ...c.items.slice(0, 12)] : []))
-    .flatMap((it) => [it.poster, it.still, it.plain, it.logo])
-    .filter((u): u is string => !!u)
-    .slice(0, 150);
-  const homeArtKey = homeArt.join(" ");
-  useEffect(() => {
-    if (view !== "home" || !homeArt.length) return;
-    const t = setTimeout(() => whenIdle(() => void artCache().keep(homeArt)), 4000);
-    return () => clearTimeout(t);
-  }, [homeArtKey, view]);
   // A collection card picked or opened: its folders' titles load (once a visit) for the rows under its folders, through
   // catalog-kit lib/folder-titles.ts, in the catalog chunk, imported only now so the addon client stays out of the
   // first bundle.

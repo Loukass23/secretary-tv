@@ -1,7 +1,6 @@
 // Glass controls for TV screens. Each is placed absolutely (BoxProps) and takes its focus state
 // from the caller, so screens keep their own remote navigation (see grid.ts / use-keys.ts).
 import type { ComponentChildren } from "preact";
-import { artCache } from "../art-cache.ts";
 import { type BoxProps, Glass } from "./Glass.tsx";
 import { type IconName, iconMask } from "./icons.ts";
 
@@ -124,13 +123,11 @@ interface TileProps {
 
 /**
  * Artwork with a caption; the focused tile lifts (transform only) and gets a white ring. Until the art has loaded the
- * tile shows its skeleton, and a logo slot its own bar; pictures the art cache warmed (art-cache.ts) come from their
- * blobs, so they are usually there on the first frame.
+ * tile shows its skeleton, and a logo slot its own bar.
  */
 export function MediaTile({ x, y, w, h, focused, class: cls, src, title, sub, count, badge, progress, watched, logo, skeleton = true }: Omit<BoxProps, "page"> & TileProps) {
-  const cache = artCache();
-  const art = cache.src(src);
-  const mark = cache.src(logo);
+  const art = src;
+  const mark = logo;
   const skel = !!art && skeleton;
   return (
     <div
