@@ -358,7 +358,7 @@ Paste boxes need no sign-in: the code is the secret, and it is shown only on the
 
 ## Deploying
 
-Nothing here has been run against the maintainer's Cloudflare account; the maintainer runs it.
+Deployed on 28 Nov 2026 to the maintainer's account at `https://secretary-party.lucasdps.workers.dev`, with `TICKET_SECRET` set. Smoke-tested: paste boxes, the page and `/rooms/<code>` without a session (401). Rooms have not yet been tried between two TVs.
 
 1. From `packages/party`, sign in to the maintainer's account: `pnpm dlx wrangler@4 login`.
 2. Make the ticket secret, 32 random bytes, and store it (it never goes in the repo or the TV builds):
