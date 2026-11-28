@@ -19,7 +19,7 @@ import {
 } from "../lib/settings.ts";
 import type { CatalogType } from "../lib/types.ts";
 import { useBase } from "./art.tsx";
-import { type PreviewLine, SettingPreview } from "./setting-preview.tsx";
+import { type PreviewLine, previewKey, SettingPreview } from "./setting-preview.tsx";
 import { SETTINGS_START, type SettingsPlace, stepSettings } from "./settings-nav.ts";
 import { addonRows, type SourceRow, sourceRows } from "./sources.ts";
 import "./hub.css";
@@ -145,6 +145,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
     if (a.kind === "order") return void setDebrid(saveDebrid({ ...debrid, order: [...debrid.order].reverse() }));
     if (a.kind === "scraper" && key !== "Enter") return pluginStore.moveProvider(a.id, key === "Left" ? -1 : 1);
     if (a.kind === "addon" && key !== "Enter") return addonStore.move(a.url, key === "Left" ? -1 : 1);
+    if (a.kind === "cachedOnly") return void setDebrid(saveDebrid({ ...debrid, cachedOnly: debrid.cachedOnly === false }));
     if (a.kind === "torboxAhead") return void setDebrid(saveDebrid({ ...debrid, torboxAhead: !debrid.torboxAhead }));
     if (a.kind === "plugins") pluginStore.setEnabled(!plugins.enabled);
     else if (a.kind === "repo") pluginStore.toggleRepo(a.url);
@@ -292,6 +293,10 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
   // The list's lines: the name and the value set; a switch's dot lit when it is on.
   const items: PreviewListItem[] = rows.map((r) => ({ key: r.key, title: r.title, sub: r.value || undefined, lit: r.on }));
   const shownRow = rows[Math.max(0, Math.min(rows.length - 1, listAt))];
+  // The preview is kept while its line and the settings stay the same: a key that only moves focus on the tabs, or
+  // in the header, does not draw it again (it cost 3 long frames per Settings walk, docs/performance.md).
+  const shownKey = shownRow && !shownRow.preview ? previewKey(shownRow) : "";
+  const keptPreview = useMemo(() => (shownRow && !shownRow.preview ? <SettingPreview line={shownRow} settings={settings} /> : null), [shownKey, settings]);
 
   return (
     <div class="hub-glass" style={active ? undefined : "display:none"}>
@@ -311,7 +316,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
           listW={LIST_W}
           items={items}
           focusIndex={listAt}
-          preview={shownRow ? (shownRow.preview ?? <SettingPreview line={shownRow} settings={settings} />) : null}
+          preview={shownRow ? (shownRow.preview ?? keptPreview) : null}
         />
 
         {toast && (

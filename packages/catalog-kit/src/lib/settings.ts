@@ -1,6 +1,6 @@
 import { type BootAnimationMode, readJson, writeJson } from "@secretary/tv-kit";
-import { applyType, isTextSize, isTypeStyle } from "@secretary/tv-kit/src/glass/type.ts";
-import { TEXT_SIZES, type TextSize, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
+import { applyFont, applyType, isDisplayFont, isTextSize, isTypeStyle } from "@secretary/tv-kit/src/glass/type.ts";
+import { type AccentName, ACCENTS, DISPLAY_FONTS, type DisplayFont, TEXT_SIZES, type TextSize, TYPE_STYLES, type TypeStyle } from "@secretary/tv-kit/src/glass/tokens.ts";
 import { START_AFTER, type StartAfter, startAfterLabel } from "./autoplay.ts";
 import type { SheetOrder } from "../ui/sheet.ts";
 import { patternLabel, SIZE_STEPS_GB, sizeLabel } from "./rules.ts";
@@ -24,7 +24,8 @@ import {
 // The Hub has Search and Settings; the dashboard is Secretary Nest (docs/launcher.md).
 export type OverlayTab = "search" | "settings";
 export type ClockFormat = "24h" | "12h";
-export type AccentTheme = "raptor" | "rose" | "blue" | "gold";
+/** The accent (tv-kit glass tokens.ts ACCENTS): the secretary bird's plumage. */
+export type AccentTheme = AccentName;
 export type ArtworkProviderPref = "fanart" | "tmdb" | "addon";
 export type ReminderSource = "companion" | "local";
 /**
@@ -54,7 +55,7 @@ export const SETTING_TAB_BLURB: Record<SettingTab, string> = {
   Sources: "How a source is picked, then the repositories, debrid keys and addons streams come from.",
   "Home screen": "Turn Secretary's features on or off.",
   Apps: "The apps the Apps card shows. A new app shows until you hide it.",
-  Appearance: "Colours, the clock, the boot animation and how collections look.",
+  Appearance: "Colours, fonts, the clock, the boot animation and how collections look.",
   Advanced: "Patterns that steer autoplay, and restoring the defaults.",
 };
 
@@ -66,6 +67,8 @@ export interface DashboardSettings {
     /** The type style and text size (tv-kit glass tokens.ts TYPE_STYLES, TEXT_SIZES), in Settings › Appearance. */
     typeStyle: TypeStyle;
     textSize: TextSize;
+    /** The display face (tv-kit glass tokens.ts DISPLAY_FONTS), in Settings › Appearance › Font. */
+    displayFont: DisplayFont;
     /**
      * Reduce motion: no push-in on a focused home card and no transition when a card opens (Secretary's home). On the
      * page as `data-sg-motion="reduced"` (applyLook). In Settings › Appearance.
@@ -189,9 +192,10 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   general: {
     bootAnimation: "standard",
     clockFormat: "24h",
-    accentTheme: "raptor",
+    accentTheme: "ember",
     typeStyle: "studio",
     textSize: "normal",
+    displayFont: "grotesk",
     reduceMotion: false,
   },
   domotics: {
@@ -224,12 +228,16 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   },
 };
 
-export const ACCENT_THEMES: Record<AccentTheme, { label: string; hex: string; ink: string }> = {
-  raptor: { label: "Raptor Orange", hex: "#ff5a26", ink: "#ffffff" },
-  rose: { label: "Rose", hex: "#ec407a", ink: "#ffffff" },
-  blue: { label: "Cinema Blue", hex: "#5aa2ff", ink: "#0d0f13" },
-  gold: { label: "Aristocrat Gold", hex: "#e8b04f", ink: "#0d0f13" },
-};
+export const ACCENT_THEMES: Record<AccentTheme, { label: string; hex: string; ink: string }> = ACCENTS;
+
+/** The accents before the plumage set (Nov 2026), each to its nearest: Rose had none, so it takes the default. */
+const OLD_ACCENTS: Record<string, AccentTheme> = { raptor: "ember", rose: "ember", blue: "slate", gold: "ochre" };
+
+/** A stored accent: one of ours, an old one mapped to the new set, anything else the default. */
+export function accentThemeOf(v: unknown): AccentTheme {
+  if (typeof v === "string" && v in ACCENTS) return v as AccentTheme;
+  return (typeof v === "string" && OLD_ACCENTS[v]) || DEFAULT_SETTINGS.general.accentTheme;
+}
 
 /**
  * The one accent (tv-kit glass tokens.ts ACCENT): every focus fill, badge, kicker, progress bar and tab takes this
@@ -237,16 +245,19 @@ export const ACCENT_THEMES: Record<AccentTheme, { label: string; hex: string; in
  */
 export function applyThemeToDocument(theme: AccentTheme): void {
   if (typeof document === "undefined") return;
-  const spec = ACCENT_THEMES[theme] ?? ACCENT_THEMES.raptor;
+  const spec = ACCENT_THEMES[theme] ?? ACCENT_THEMES.ember;
   const root = document.documentElement;
   root.style.setProperty("--accent", spec.hex);
   root.style.setProperty("--tinta", spec.ink);
 }
 
-/** The page's look from the settings: the accent, the type style and the text size. */
-export function applyLook(general: Pick<DashboardSettings["general"], "accentTheme" | "typeStyle" | "textSize"> & { reduceMotion?: boolean }): void {
+/** The page's look from the settings: the accent, the type style, the text size, the display face and motion. */
+export function applyLook(
+  general: Pick<DashboardSettings["general"], "accentTheme" | "typeStyle" | "textSize"> & { displayFont?: DisplayFont; reduceMotion?: boolean },
+): void {
   applyThemeToDocument(general.accentTheme);
   applyType(general.typeStyle, general.textSize);
+  applyFont(general.displayFont);
   applyMotion(general.reduceMotion === true);
 }
 
@@ -316,9 +327,10 @@ export function mergeSettings(partial?: Partial<DashboardSettings> | null, legac
     general: {
       bootAnimation: g.bootAnimation ?? DEFAULT_SETTINGS.general.bootAnimation,
       clockFormat: g.clockFormat ?? DEFAULT_SETTINGS.general.clockFormat,
-      accentTheme: g.accentTheme ?? DEFAULT_SETTINGS.general.accentTheme,
+      accentTheme: accentThemeOf(g.accentTheme),
       typeStyle: isTypeStyle(g.typeStyle) ? g.typeStyle : DEFAULT_SETTINGS.general.typeStyle,
       textSize: isTextSize(g.textSize) ? g.textSize : DEFAULT_SETTINGS.general.textSize,
+      displayFont: isDisplayFont(g.displayFont) ? g.displayFont : DEFAULT_SETTINGS.general.displayFont,
       reduceMotion: typeof g.reduceMotion === "boolean" ? g.reduceMotion : DEFAULT_SETTINGS.general.reduceMotion,
     },
     domotics: {
@@ -420,7 +432,8 @@ export interface SettingItemDef {
 /** The languages to cycle through, with the current one in it when it is not one of ours. */
 const withCurrent = (code: string | undefined) => (code && !LANGUAGES.includes(code) ? [code, ...LANGUAGES] : [...LANGUAGES]);
 
-const ACCENT_ORDER: readonly AccentTheme[] = ["raptor", "rose", "blue", "gold"];
+const ACCENT_ORDER = Object.keys(ACCENTS) as AccentTheme[];
+const FONT_ORDER = Object.keys(DISPLAY_FONTS) as DisplayFont[];
 const TYPE_STYLE_ORDER = Object.keys(TYPE_STYLES) as TypeStyle[];
 const TEXT_SIZE_ORDER = Object.keys(TEXT_SIZES) as TextSize[];
 const BOOT_ORDER: readonly BootAnimationMode[] = ["standard", "fade", "instant"];
@@ -471,7 +484,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.upNextCountdown",
     section: "Watching",
     label: "Up next countdown",
-    description: "How long the Up next card waits before the next episode",
+    description: "How long the Up next card waits before the next episode; Off never starts it by itself",
     getValue: (s) => countdownLabel(s.playback.upNextCountdown),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, upNextCountdown: cycleOption(COUNTDOWNS, s.playback.upNextCountdown, dir) } }),
   },
@@ -597,7 +610,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     section: "Appearance",
     label: "Accent colour",
     description: "Focus, the Play button, progress bars and badges",
-    getValue: (s) => (ACCENT_THEMES[s.general.accentTheme] ?? ACCENT_THEMES.raptor).label,
+    getValue: (s) => (ACCENT_THEMES[s.general.accentTheme] ?? ACCENT_THEMES.ember).label,
     choices: (s) => ({ items: ACCENT_ORDER.map((a) => ACCENT_THEMES[a].label), at: ACCENT_ORDER.indexOf(s.general.accentTheme) }),
     cycle: (s, dir) => ({
       ...s,
@@ -615,6 +628,15 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     getValue: (s) => TYPE_STYLES[s.general.typeStyle].label,
     choices: (s) => ({ items: TYPE_STYLE_ORDER.map((t) => TYPE_STYLES[t].label), at: TYPE_STYLE_ORDER.indexOf(s.general.typeStyle) }),
     cycle: (s, dir) => ({ ...s, general: { ...s.general, typeStyle: cycleOption(TYPE_STYLE_ORDER, s.general.typeStyle, dir) } }),
+  },
+  {
+    id: "general.displayFont",
+    section: "Appearance",
+    label: "Font",
+    description: "The face of titles and numbers; the type style says where it shows",
+    getValue: (s) => DISPLAY_FONTS[s.general.displayFont].label,
+    choices: (s) => ({ items: FONT_ORDER.map((f) => DISPLAY_FONTS[f].label), at: FONT_ORDER.indexOf(s.general.displayFont) }),
+    cycle: (s, dir) => ({ ...s, general: { ...s.general, displayFont: cycleOption(FONT_ORDER, s.general.displayFont, dir) } }),
   },
   {
     id: "general.textSize",

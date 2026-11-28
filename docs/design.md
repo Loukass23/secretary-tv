@@ -37,13 +37,13 @@ same screen.
   opened on Watching, on Home screen's feature switches, on the Apps picker, on Appearance and on SmartThings (the
 category Secretary adds, `launcher/src/smartthings-settings.tsx`: the light effects, the routines and every light by
 room, on a fake SmartThings that switches after a short wait): each category is a
-  compact list beside a preview of what the focused setting does (`ui/setting-preview.tsx`). Its look rows (accent, type
+  compact list beside a preview of what the focused setting does (`ui/setting-preview.tsx`). Its look rows (accent, font, type
   style, text size, Reduce motion) and the toolbar's switches are the same values, so a change in either shows in both. Up from a title page's buttons expands the header. The data is fixtures
   (`packages/design/src/fixtures.ts`, typed against the screens' props, so `pnpm typecheck` catches drift), and the
   artwork is drawn on canvases at boot (`art.ts`): no network, no keys, no real titles.
 
 The toolbar switches the theme (Night, Daylight), the wallpaper tint, the accent (the four of Settings › Appearance), the
-type style (Studio, Classic, Bold) and the text size (Normal, Large), the glass mode (fake, flat, live), the safe-area
+font (Grotesk, Condensed, Geometric), the type style (Studio, Classic, Bold) and the text size (Normal, Large), the glass mode (fake, flat, live), the safe-area
 and grid overlays, and fit or 1:1 scale. The accent and the type go on the page as the TV's settings put them there
 (catalog-kit `applyLook`). The catalog pages draw their own glass (fake, in the section's
 tint), so the theme and mode switches apply to the home screen and the other pages only.
@@ -93,14 +93,37 @@ both together.
 
 One accent colour, `--sg-accent` (and its ink `--sg-accent-ink`), on `:root`: the theme accent the viewer picks in
 Settings › Appearance (`applyThemeToDocument` writes `--accent` and `--tinta`, Secretary applies it at start and on every
-change). Every focus fill and ring, badge, kicker, progress bar and picked tab takes it; no CSS names its own colour for
+change). The four accents come from the secretary bird's plumage (`tokens.ts` `ACCENTS`, Nov 2026):
+
+| Accent | Colour | Ink | Ink contrast |
+| --- | --- | --- | --- |
+| Burnt Orange (default, the bird's face) | `#e2703a` | `#1c120c` | 5.8:1 |
+| Ochre | `#d4a03c` | `#1c120c` | 7.8:1 |
+| Slate Blue (its wings) | `#7d97bd` | `#1c120c` | 6.2:1 |
+| Sage | `#93ad86` | `#1c120c` | 7.5:1 |
+
+All four take the dark ink (white on any of them is under 3.2:1). Settings saved before the plumage set map over:
+Raptor Orange and Rose to Burnt Orange, Cinema Blue to Slate Blue, Aristocrat Gold to Ochre. Where the accent is
+text on the glass rather than a fill (the assistant's words and the bold in its answers), it goes through
+`--sg-accent-text` on `.sg-root`: mixed 70% with white at night and 50% with the daylight ink by day, so every accent
+holds 4.5:1 on both pages (`test/tokens.test.ts` checks the inks and both tints). Every focus fill and ring, badge, kicker, progress bar and picked tab takes it; no CSS names its own colour for
 these. One exception: on Secretary's home at night, with Poster colour on, the focused element's ring and fill take
 the focused poster's colour (`glass/ring.ts` `useFocusRing`, set on the focused elements only), and the accent comes back
 in daylight or with Poster colour off. Type: a scale of eight steps (`--sg-t-xs` 21px to `--sg-t-hero` 72px) times `--sg-text`; every font size in the
 glass and the screens' CSS is a step (a test checks `glass.css`), so the text size scales everything. Two faces: the TV's
-own for body text and Space Grotesk (SIL OFL, `glass/fonts`, 22 KB) for titles and numbers; a type style says which face
-titles (`--sg-font-title`), numbers (`--sg-font-num`) and labels (`--sg-font-label`) use. Style and size are
-`data-sg-type` and `data-sg-text` on `<html>` (`glass/type.ts` `applyType`), so a switch is one restyle.
+own for body text and a display face for titles and numbers; a type style says which face titles (`--sg-font-title`),
+numbers (`--sg-font-num`) and labels (`--sg-font-label`) use. The display face is the Font setting (`tokens.ts`
+`DISPLAY_FONTS`), all SIL OFL 1.1, Latin subset, one variable woff2 each in `glass/fonts` with its licence:
+
+| Font | Face | File |
+| --- | --- | --- |
+| Grotesk (default) | Space Grotesk | 22 KB |
+| Condensed | Oswald, a tall cinema face | 28 KB |
+| Geometric | Outfit, a round geometric sans | 32 KB |
+
+The browser fetches only the face in use. Style, size and font are `data-sg-type`, `data-sg-text` and `data-sg-font`
+on `<html>` (`glass/type.ts` `applyType`, `applyFont`), so a switch is one restyle. At Large, tabs grow to their
+labels (`Tabs` measures them once per set of labels and type, never on a key) instead of spilling.
 
 ## What it does not tell you
 

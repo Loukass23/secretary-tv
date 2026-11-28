@@ -13,9 +13,18 @@ NUVIO_KEY = "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
 name = "ROOMS"
 class_name = "PartyRoom"
 
+# The phone keyboard's paste boxes (src/paste.ts): AniList's sign-in token travels phone -> TV through one.
+[[durable_objects.bindings]]
+name = "PASTES"
+class_name = "PasteBox"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["PartyRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PasteBox"]
 
 # Room creation per account: 5 a minute.
 [[ratelimits]]

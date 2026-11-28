@@ -12,6 +12,8 @@ export interface ColourTokens {
   focus: string;
   "focus-ink": string;
   "focus-ink-dim": string;
+  /** The accent as text on the glass (the assistant's words, bold in its answers): lifted at night, deepened by day, so it reads in both. */
+  "accent-text": string;
 }
 
 /**
@@ -21,9 +23,23 @@ export interface ColourTokens {
  * for them.
  */
 export const ACCENT = {
-  accent: "var(--accent, #ff5a26)",
-  "accent-ink": "var(--tinta, #ffffff)",
+  accent: "var(--accent, #e2703a)",
+  "accent-ink": "var(--tinta, #1c120c)",
 } as const;
+
+/**
+ * The four accents, from the secretary bird's plumage: the burnt orange of its face (the default), ochre, the slate
+ * blue of its wings and sage. Each ink holds at least 4.5:1 on its colour (test/tokens.test.ts); all four take the dark
+ * ink. catalog-kit settings.ts `ACCENT_THEMES` holds the same values for Settings.
+ */
+export const ACCENTS = {
+  ember: { label: "Burnt Orange", hex: "#e2703a", ink: "#1c120c" },
+  ochre: { label: "Ochre", hex: "#d4a03c", ink: "#1c120c" },
+  slate: { label: "Slate Blue", hex: "#7d97bd", ink: "#1c120c" },
+  sage: { label: "Sage", hex: "#93ad86", ink: "#1c120c" },
+} as const;
+
+export type AccentName = keyof typeof ACCENTS;
 
 /** The focus fill and its inks, the same in both themes: the accent (Secretary's home tints them per poster at night, `ring.ts`). */
 const FOCUS = {
@@ -40,6 +56,7 @@ export const NIGHT: ColourTokens = {
   ink: "#f4f4f6",
   "ink-dim": "rgba(244, 244, 246, 0.62)",
   ...FOCUS,
+  "accent-text": "color-mix(in srgb, var(--sg-accent) 70%, #ffffff)",
 };
 
 /** Daylight: the light glass (`.sg-root.sg-day`). Both dim inks hold 4.5:1 on their grounds, even over the lavender glow. */
@@ -50,6 +67,7 @@ export const DAY: ColourTokens = {
   ink: "#2a1810",
   "ink-dim": "rgba(42, 24, 16, 0.7)",
   ...FOCUS,
+  "accent-text": "color-mix(in srgb, var(--sg-accent) 50%, #2a1810)",
 };
 
 /** Page colour behind the wallpaper, per theme. */
@@ -105,6 +123,20 @@ export const FONTS = {
   body: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   display: '"Space Grotesk", "Segoe UI", system-ui, sans-serif',
 } as const;
+
+/**
+ * The display face (Settings › Appearance › Font), as `data-sg-font` on `<html>`; Grotesk, the default, has no
+ * attribute. Each swaps `--sg-font-display`, so the type style decides where it shows. All three are SIL OFL 1.1,
+ * Latin subset, one variable woff2 each in glass/fonts with its licence: Space Grotesk (22 KB), Oswald, a condensed
+ * cinema face (28 KB), and Outfit, a geometric sans (32 KB).
+ */
+export const DISPLAY_FONTS = {
+  grotesk: { label: "Grotesk", about: "Space Grotesk: square and technical", family: FONTS.display },
+  condensed: { label: "Condensed", about: "Oswald: tall and narrow, like a cinema marquee", family: '"Oswald", "Arial Narrow", "Segoe UI", system-ui, sans-serif' },
+  geometric: { label: "Geometric", about: "Outfit: round and even", family: '"Outfit", "Segoe UI", system-ui, sans-serif' },
+} as const;
+
+export type DisplayFont = keyof typeof DISPLAY_FONTS;
 
 /** What a type style sets, as `--sg-<name>` on `:root`. */
 export interface TypeStyleTokens {

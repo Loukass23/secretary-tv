@@ -14,13 +14,31 @@
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+/* The two other display faces (tokens.ts DISPLAY_FONTS, Settings' Font): Oswald (fonts/OFL-oswald.txt) and Outfit
+   (fonts/OFL-outfit.txt), SIL OFL 1.1, the Latin subset, one variable file each. Only the picked one is fetched. */
+@font-face {
+  font-family: "Oswald";
+  src: url("./fonts/oswald-latin.woff2") format("woff2");
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/outfit-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 /* Type (tokens.ts TYPE_SCALE, TEXT_SIZES, FONTS, TYPE_STYLES) on the page itself, so every screen and panel has it:
    the scale times the text size, the two faces, and what the type style gives titles, numbers and labels. Settings
    switches them with data-sg-type and data-sg-text on <html> (type.ts). The one accent (tokens.ts ACCENT) is here too,
    fed by the theme accent setting. */
 :root {
-  --sg-accent: var(--accent, #ff5a26);
-  --sg-accent-ink: var(--tinta, #ffffff);
+  --sg-accent: var(--accent, #e2703a);
+  --sg-accent-ink: var(--tinta, #1c120c);
   --sg-text: 1;
   --sg-t-xs: calc(21px * var(--sg-text));
   --sg-t-s: calc(24px * var(--sg-text));
@@ -53,6 +71,9 @@
   --sg-title-track: -0.02em;
 }
 :root[data-sg-text="large"] { --sg-text: 1.15; }
+/* The display face (tokens.ts DISPLAY_FONTS): Grotesk has no attribute. */
+:root[data-sg-font="condensed"] { --sg-font-display: "Oswald", "Arial Narrow", "Segoe UI", system-ui, sans-serif; }
+:root[data-sg-font="geometric"] { --sg-font-display: "Outfit", "Segoe UI", system-ui, sans-serif; }
 .sg-root {
   --sg-fill: rgba(255, 255, 255, 0.07);
   --sg-line: rgba(255, 255, 255, 0.11);
@@ -62,6 +83,7 @@
   --sg-focus: var(--sg-accent);
   --sg-focus-ink: var(--sg-accent-ink);
   --sg-focus-ink-dim: color-mix(in srgb, var(--sg-accent-ink) 74%, transparent);
+  --sg-accent-text: color-mix(in srgb, var(--sg-accent) 70%, #ffffff);
   --sg-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --sg-move: 280ms;
   --sg-fade: 180ms;
@@ -502,6 +524,7 @@
   --sg-focus: var(--sg-accent);
   --sg-focus-ink: var(--sg-accent-ink);
   --sg-focus-ink-dim: color-mix(in srgb, var(--sg-accent-ink) 74%, transparent);
+  --sg-accent-text: color-mix(in srgb, var(--sg-accent) 50%, #2a1810);
   background-color: #f4e9dc;
 }
 
@@ -639,17 +662,21 @@
 .sg-btn.is-focus::before,
 .sg-tab.is-focus::before { opacity: 1; }
 
-/* Tabs: one width each, the run scrolled by transform; picked is raised, focus the white sheet. */
+/* Tabs: each as wide as its label (at least TAB.w, pieces.tsx), the run scrolled by transform; picked is raised, focus
+   the white sheet. A label longer than any category name is cut with an ellipsis rather than spilling. */
 .sg-tabs { position: absolute; height: 60px; overflow: hidden; }
-.sg-tabs-run { position: absolute; left: 0; top: 0; height: 100%; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
+.sg-tabs-run { position: absolute; left: 0; top: 0; height: 100%; display: flex; transition: transform var(--sg-move) var(--sg-ease); will-change: transform; }
 .sg-tab {
-  position: absolute;
-  top: 0;
-  width: 176px;
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  max-width: 480px;
   height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0 30px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 60px;
+  text-align: center;
   border-radius: 30px;
   font-size: var(--sg-t-m);
   font-weight: 600;
@@ -685,9 +712,10 @@
 /* --- preview beside a list (pieces.tsx PreviewList): compact lines on one panel, the focused line's preview on the other --- */
 .sg-plist .sg-plist-kicker { position: absolute; left: 28px; top: 26px; }
 /* The title and its line sit in the middle of the line's fixed height, and still fit at the Large text size. */
-.sg-plist-line { display: flex; flex-direction: column; justify-content: center; padding: 8px 24px; }
-.sg-plist-line .sg-card-row { font-size: var(--sg-t-m); line-height: 1.15; }
-.sg-plist-line small { margin: 2px 0 0; font-size: var(--sg-t-s); line-height: 1.15; }
+/* Line heights leave room for descenders under the clip: at Large, 12 + 40 + 2 + 33 px fits the 96 px line. */
+.sg-plist-line { display: flex; flex-direction: column; justify-content: center; padding: 6px 24px; }
+.sg-plist-line .sg-card-row { font-size: var(--sg-t-m); line-height: 1.25; }
+.sg-plist-line small { margin: 2px 0 0; font-size: var(--sg-t-s); line-height: 1.2; }
 /* The line the preview shows while the remote is in the preview: raised, not focused. */
 .sg-plist-line.is-picked::after { background: var(--sg-raised); }
 .sg-plist-preview.is-active::after { box-shadow: inset 0 0 0 3px var(--sg-accent); }
@@ -706,3 +734,12 @@
 .sg-info-title { font-family: var(--sg-font-title); font-weight: var(--sg-title-weight); letter-spacing: var(--sg-title-track); }
 .sg-head-clock b, .sg-chip b, .sg-count, .sg-tile-count { font-family: var(--sg-font-num); }
 .sg-kicker, .sg-row-label, .sg-btn, .sg-tab, .sg-seg-item { font-family: var(--sg-font-label); }
+
+/* --- Reduce motion (Settings › Appearance; catalog-kit applyMotion sets data-sg-motion="reduced" on <html>): focus
+   shows by its sheet and ring fading in; nothing grows, slides or drifts. Opacity fades stay, they do not move. --- */
+html[data-sg-motion="reduced"] :is(.sg-btn, .sg-card, .sg-chip, .sg-app, .sg-tile, .sg-fab).is-focus,
+html[data-sg-motion="reduced"] .sg-user.is-focus .sg-avatar { transform: none; }
+html[data-sg-motion="reduced"] :is(.sg-btn, .sg-card, .sg-chip, .sg-app, .sg-tile, .sg-fab, .sg-avatar, .sg-tabs-run, .sg-scroll) { transition-property: opacity; }
+html[data-sg-motion="reduced"] .sg-wave-orb,
+html[data-sg-motion="reduced"] .sg-wave-set { transition-property: opacity; animation: none !important; }
+html[data-sg-motion="reduced"] .sg-sheen > i { animation-play-state: paused; }
