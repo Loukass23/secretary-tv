@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { AuthError, bytesToB64url, createJwtVerifier, fetchProfile } from "../src/auth.ts";
 import { signTicket, verifyTicket } from "../src/ticket.ts";
-import { createHandler, newCode, normalizeCode, CODE_ALPHABET, type Env } from "../src/worker.ts";
+import { createHandler, newCode, normalizeCode, CODE_ALPHABET, type Env } from "../src/service.ts";
 import { PartyRoom } from "../src/do.ts";
 import { ServerClock, correction, DRIFT } from "../src/sync.ts";
 import type { StorageLike } from "../src/cf.ts";

@@ -19,7 +19,9 @@ runs before the first party.
 | `src/protocol.ts` | Message types, validation, close codes, `targetPos`. |
 | `src/room.ts` | The room as a pure state machine with an injected clock. All behaviour below lives here. |
 | `src/do.ts` | `PartyRoom` Durable Object: sockets in, `Room` calls, messages out, snapshot to storage, one alarm. |
-| `src/worker.ts` | HTTP routes, Nuvio token and profile checks, room codes, join tickets. |
+| `src/worker.ts` | The entry: exports only the handler and the Durable Object classes, as Workers requires. |
+| `src/service.ts` | HTTP routes, Nuvio token and profile checks, room codes, join tickets, paste boxes. |
+| `src/paste.ts` | `PasteBox`: the phone keyboard's paste boxes (below). |
 | `src/auth.ts`, `src/ticket.ts` | JWT verification against Nuvio's JWKS; HMAC join tickets. |
 | `src/sync.ts` | Client helpers for the TV: server clock estimate and the drift rule. |
 | `src/client.ts` | The HTTP routes as the TV calls them (create, ticket, summary), and which app opens a room's content. |

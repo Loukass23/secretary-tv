@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { StorageLike } from "../src/cf.ts";
 import { cleanPaste, PASTE_MAX, PASTE_TTL_MS, PasteBox, pastePage } from "../src/paste.ts";
-import { createHandler, type Env } from "../src/worker.ts";
+import { createHandler, type Env } from "../src/service.ts";
 
 const NOW = 1_800_000_000_000;
 
