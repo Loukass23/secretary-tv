@@ -8,6 +8,11 @@ test("the pause menu's buttons: Next only with an episode after, Picture only wh
   assert.deepEqual(pauseActions({ next: false, picture: false }), ["play", "restart", "subs", "audio"]);
 });
 
+test("Sources sits after Audio where the player can switch source, and never while watching together", () => {
+  assert.deepEqual(pauseActions({ next: true, picture: true, sources: true }), ["play", "restart", "next", "subs", "audio", "sources", "picture"]);
+  assert.deepEqual(pauseActions({ next: false, picture: false, sources: false }), ["play", "restart", "subs", "audio"]);
+});
+
 test("time left reads as the rest of Secretary writes it", () => {
   assert.equal(timeLeftLabel(600, 3000), "40 min left");
   assert.equal(timeLeftLabel(0, 3900), "1 h 5 min left");
