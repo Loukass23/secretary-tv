@@ -1,11 +1,13 @@
-// Settings › Accounts (a category Secretary adds to the catalog's Settings, catalog-kit host.ts): Simkl, the watch
-// tracker (docs/simkl.md). Connect shows a code and a QR for simkl.com/pin; the phone signs in and the TV checks
+// Settings › Accounts (a category Secretary adds to the catalog's Settings, catalog-kit host.ts): the watch trackers,
+// Simkl (docs/simkl.md) and AniList for anime (anilist-account.tsx, docs/anilist.md). Connect shows a code and a QR for simkl.com/pin; the phone signs in and the TV checks
 // until the code is used. Signed in, what plays is scrobbled and the history comes back on each sync.
 import type { HostSettingRow, HostSettingsTab } from "@secretary/catalog-kit/src/host.ts";
 import { setResumeTrackers, syncAllResume } from "@secretary/catalog-kit/src/lib/resume.ts";
+import { anilistTracker } from "@secretary/catalog-kit/src/lib/anilist.ts";
 import { simklLastSync, simklPullSoon, simklSignOut, simklTracker } from "@secretary/catalog-kit/src/lib/simkl.ts";
 import { createSimkl, type PinCode, type SimklClient, startPin, waitForPin } from "@secretary/simkl";
 import { readJson, writeJson } from "@secretary/tv-kit";
+import { anilist, anilistRows } from "./anilist-account.tsx";
 import { QrCode } from "./qr.tsx";
 
 declare const __SIMKL_CLIENT_ID__: string | undefined;
@@ -27,8 +29,9 @@ export function simkl(): SimklClient | null {
 
 /** Starts the trackers the viewer has connected; called once when Secretary starts. */
 export function startTrackers(): void {
-  const c = simkl();
-  setResumeTrackers(c ? [simklTracker(c)] : []);
+  const s = simkl();
+  const a = anilist();
+  setResumeTrackers([...(s ? [simklTracker(s)] : []), ...(a ? [anilistTracker(a)] : [])]);
 }
 
 type Pin = { phase: "idle" } | { phase: "asking" } | { phase: "waiting"; code: PinCode } | { phase: "failed"; why: string };
@@ -160,11 +163,11 @@ function rows(c: SimklClient | null): HostSettingRow[] {
 }
 
 export function accountsTab(): HostSettingsTab {
-  const c = simkl();
+  const on = [simkl()?.signedIn() && "Simkl", anilist()?.signedIn() && "AniList"].filter(Boolean);
   return {
     name: ACCOUNTS_TAB,
-    blurb: c?.signedIn() ? "Simkl is connected: what you watch is tracked there too." : "Connect a watch tracker to keep history in step.",
-    rows: () => rows(simkl()),
+    blurb: on.length ? `${on.join(" and ")} connected: what you watch is tracked there too.` : "Connect a watch tracker to keep history in step.",
+    rows: () => [...rows(simkl()), ...anilistRows(changed)],
     subscribe(redraw) {
       listeners.add(redraw);
       return () => void listeners.delete(redraw);

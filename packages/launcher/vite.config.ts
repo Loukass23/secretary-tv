@@ -39,6 +39,8 @@ export default defineConfig({
     __SIMKL_CLIENT_ID__: key("SIMKL_CLIENT_ID"),
     // OAuth 2.0 Simkl apps authenticate the token exchange with their secret; it ships inside the .wgt like the keys above.
     __SIMKL_CLIENT_SECRET__: key("SIMKL_CLIENT_SECRET"),
+    // AniList, the anime tracker in Settings › Accounts (docs/anilist.md): the app's client id. Empty hides it.
+    __ANILIST_CLIENT_ID__: key("ANILIST_CLIENT_ID"),
     __FANART_API_KEY__: key("FANART_API_KEY"),
     __PLUGIN_REPOS__: key("SECRETARY_TV_PLUGIN_REPOS"),
     __TORBOX_API_KEY__: key("TORBOX_API_KEY"),
