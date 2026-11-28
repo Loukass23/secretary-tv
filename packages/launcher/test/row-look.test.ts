@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EXPANDED } from "../src/card-style.ts";
-import { loadRowLooks, ROW_LOOKS_KEY, ROW_SHAPES, rowShape, saveRowLooks, stepShape, tileBox } from "../src/row-look.ts";
+import { FOLDER_SCALE, loadRowLooks, ROW_LOOKS_KEY, ROW_SHAPES, rowShape, saveRowLooks, stepShape, tileBox } from "../src/row-look.ts";
 
 test("no shape is taller than the poster row, and each is a tile apart by its own width", () => {
   for (const s of ROW_SHAPES) {
@@ -39,4 +39,13 @@ test("landscape and 4:3 tiles are as tall as the poster and exactly their art's 
   assert.ok(Math.abs(l.w / l.h - 16 / 9) < 0.01);
   assert.ok(Math.abs(w.w / w.h - 4 / 3) < 0.01);
   assert.equal(tileBox("square").w, tileBox("square").h);
+});
+
+test("a row of folder tiles is drawn smaller, keeping its shape's proportions and the gap", () => {
+  const full = tileBox("landscape");
+  const small = tileBox("landscape", FOLDER_SCALE);
+  assert.equal(small.h, Math.round(EXPANDED.h * FOLDER_SCALE));
+  assert.ok(small.w < full.w * 0.65);
+  assert.equal(Math.round((small.h * 16) / 9), small.w);
+  assert.equal(small.stride - small.w, full.stride - full.w);
 });

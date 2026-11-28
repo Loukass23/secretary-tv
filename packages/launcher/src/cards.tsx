@@ -26,7 +26,7 @@ import { CAPTION, CAPTION_W, type CardStyle, collapsedShape, CONTINUE, EXPANDED_
 import { captionMeta, expandedRows, focusedItem, onRow, rowItems, rowsOf, rowTitle, targetAt, tileKey, tileKeys } from "./card-rows.ts";
 import { stillArt } from "./card-covers.ts";
 import { recLine, type RecState } from "./recommend.ts";
-import { type RowShape, type TileBox, tileBox } from "./row-look.ts";
+import { FOLDER_SCALE, type RowShape, type TileBox, tileBox } from "./row-look.ts";
 import { Component } from "preact";
 import { type Column, END_ALL, END_BUTTONS, END_RECOMMEND, END_TOP, rowAt } from "./nest-nav.ts";
 
@@ -175,13 +175,20 @@ const CW_EPISODES = continueBox(CONTINUE.episodes);
 const CW_FILMS = continueBox(CONTINUE.films);
 const isContinue = (b: TileBox) => b === CW_EPISODES || b === CW_FILMS;
 /** How a row draws its tiles: the look the viewer picked, else Continue watching tiles, else posters. */
-const rowBox = (shape: RowShape | undefined, wide: boolean | undefined, episodes?: boolean): TileBox =>
-  shape ? tileBox(shape) : wide ? (episodes ? CW_EPISODES : CW_FILMS) : tileBox("poster");
-type Look = { shape?: RowShape; wide?: boolean; episodes?: boolean };
-const rowLook = (c: MediaColumn, r: number): Look => (r === 0 ? { shape: c.shape, wide: c.wide, episodes: c.episodes } : (rowsOf(c)[r - 1] ?? {}));
-const lookBox = (l: Look) => rowBox(l.shape, l.wide, l.episodes);
+const rowBox = (shape: RowShape | undefined, wide: boolean | undefined, episodes?: boolean, scale = 1): TileBox =>
+  shape ? tileBox(shape, scale) : wide ? (episodes ? CW_EPISODES : CW_FILMS) : tileBox("poster", scale);
+type Look = { shape?: RowShape; wide?: boolean; episodes?: boolean; folders?: boolean };
+/** A first row of folders only (a collection card's): drawn smaller, at FOLDER_SCALE. */
+const isFolderRow = (items: readonly MediaItem[]) => items.length > 0 && items.every((it) => it.named);
+const rowLook = (c: MediaColumn, r: number): Look =>
+  r === 0 ? { shape: c.shape, wide: c.wide, episodes: c.episodes, folders: isFolderRow(c.items) } : (rowsOf(c)[r - 1] ?? {});
+const lookBox = (l: Look) => rowBox(l.shape, l.wide, l.episodes, l.folders ? FOLDER_SCALE : 1);
 /** The first row's height: the rows under it start lower when it is Continue watching (card-style.ts moreTop). */
-const firstH = (c: MediaColumn) => lookBox(rowLook(c, 0)).h;
+const firstH = (c: MediaColumn) => {
+  const l = rowLook(c, 0);
+  // A folders row has no caption under it (each tile names its folder): the rows under it move up into that room.
+  return lookBox(l).h - (l.folders ? CAPTION.h : 0);
+};
 /** What the folded card shows. */
 const smallItems = (c: MediaColumn): MediaItem[] => c.small ?? c.items;
 
@@ -600,7 +607,8 @@ function MediaRow({ col, focus: flat }: { col: MediaColumn; focus: number }) {
         <Scroller x={0} y={0} w={EXPANDED_W} h={b.h} axis="x" offset={scroll}>
           <Tiles items={col.items} box={b} scroll={scroll} at={at} />
         </Scroller>
-        {hit && <Caption hit={hit} top={b.h + CAPTION.top} />}
+        {/* A folder's tile already says its name: no caption repeating it. */}
+        {hit && !hit.named && <Caption hit={hit} top={b.h + CAPTION.top} />}
       </div>
       {more.map((m, k) => {
         const r = k + 1;

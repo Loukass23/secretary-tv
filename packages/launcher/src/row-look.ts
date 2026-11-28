@@ -24,8 +24,14 @@ export type TileBox = LookBox;
 const GAP = EXPANDED.stride - EXPANDED.w;
 const LEAD = 96;
 
-/** Every shape is as tall as the poster, and as wide as its art needs (16:9 stills, 4:3, square), so the image fits whole. */
-export const tileBox = (shape: RowShape): TileBox => lookBox(shape, { w: EXPANDED.w, h: EXPANDED.h, gap: GAP, lead: LEAD });
+/**
+ * Every shape is as tall as the poster, and as wide as its art needs (16:9 stills, 4:3, square), so the image fits whole.
+ * `scale` shrinks the whole row (a collection's folders, an index of the rows under them).
+ */
+export const tileBox = (shape: RowShape, scale = 1): TileBox => lookBox(shape, { w: EXPANDED.w, h: EXPANDED.h, gap: GAP, lead: LEAD }, scale);
+
+/** How big a row of folder tiles is drawn: an index of the folders' own rows under it, not a row of titles. */
+export const FOLDER_SCALE = 0.6;
 
 const isShape = (v: unknown): v is RowShape => ROW_SHAPES.includes(v as RowShape);
 
