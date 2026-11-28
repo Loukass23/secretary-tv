@@ -19,6 +19,7 @@ export interface SourceRow {
     | { kind: "key"; service: DebridId }
     | { kind: "order" }
     | { kind: "torboxAhead" }
+    | { kind: "cachedOnly" }
     | { kind: "addon"; url: string }
     | { kind: "addonRemove"; url: string }
     | { kind: "addonAdd" }
@@ -118,6 +119,13 @@ export function sourceRows(
     sub: "Debrid · A torrent plays from the first service that has it cached",
     meta: `‹ ${debrid.order.map((s) => DEBRID_LABELS[s]).join(" first, then ")} ›`,
     action: { kind: "order" },
+  });
+  rows.push({
+    key: "cachedOnly",
+    title: "Cached sources only",
+    sub: "Debrid · Lists only torrents your debrid service already has, so nothing starts downloading",
+    meta: onOff(debrid.cachedOnly !== false),
+    action: { kind: "cachedOnly" },
   });
   rows.push({
     key: "torboxAhead",

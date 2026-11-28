@@ -571,3 +571,43 @@ test("an aborted search terminates its Worker at once and starts no more", async
   await assert.rejects(run({} as never, 60_000, stop.signal), /cancelled/);
   assert.equal(made, 1, "an aborted signal makes no new Worker");
 });
+
+test("host: Cached sources only checks the links that name a torrent and drops the uncached ones", async () => {
+  const kv = memoryKv();
+  const store = createPluginStore({ kv, fetch: fakeFetch({}), defaults: [] });
+  store.setEnabled(false);
+  const extra = () => [
+    {
+      id: "addon:one",
+      name: "One",
+      repo: "https://one.example/manifest.json",
+      run: async () => [
+        { name: "One 4K", url: `https://resolve.example/r?hash=${HASH_A}` },
+        { name: "One 1080p", url: "https://cdn.example/one.mkv", infoHash: HASH_B },
+        { name: "One 720p", url: "https://cdn.example/plain.mp4" },
+      ],
+    },
+  ];
+  const asked: string[][] = [];
+  let on = true;
+  let services: Debrid[] = [{ id: "tb", label: "tb", checkCached: async (h) => (asked.push(h), new Set([HASH_B])), resolve: async () => null }];
+  const host = createPluginHost({
+    store,
+    runner: inlineRunner(fakeFetch({})),
+    target: async () => null,
+    debrid: () => services,
+    cachedOnly: () => on,
+    extra,
+  });
+  const urls = async () => (await host.find("tt1", "movie")).streams.map((s) => s.url);
+  assert.deepEqual(await urls(), ["https://cdn.example/one.mkv", "https://cdn.example/plain.mp4"]);
+  assert.deepEqual(asked, [[HASH_A, HASH_B]]);
+  // Off: every link stays, and nothing is asked.
+  on = false;
+  assert.equal((await urls()).length, 3);
+  assert.equal(asked.length, 1);
+  // On, but no debrid service to ask: the links stay.
+  on = true;
+  services = [];
+  assert.equal((await urls()).length, 3);
+});

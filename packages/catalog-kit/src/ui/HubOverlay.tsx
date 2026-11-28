@@ -145,6 +145,7 @@ export function HubOverlay({ active, activeType = "movie", settings, onUpdateSet
     if (a.kind === "order") return void setDebrid(saveDebrid({ ...debrid, order: [...debrid.order].reverse() }));
     if (a.kind === "scraper" && key !== "Enter") return pluginStore.moveProvider(a.id, key === "Left" ? -1 : 1);
     if (a.kind === "addon" && key !== "Enter") return addonStore.move(a.url, key === "Left" ? -1 : 1);
+    if (a.kind === "cachedOnly") return void setDebrid(saveDebrid({ ...debrid, cachedOnly: debrid.cachedOnly === false }));
     if (a.kind === "torboxAhead") return void setDebrid(saveDebrid({ ...debrid, torboxAhead: !debrid.torboxAhead }));
     if (a.kind === "plugins") pluginStore.setEnabled(!plugins.enabled);
     else if (a.kind === "repo") pluginStore.toggleRepo(a.url);

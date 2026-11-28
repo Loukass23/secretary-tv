@@ -403,6 +403,10 @@ html[data-sg-motion="reduced"] .lfx-stage *::after { animation: none !important;
 .lfx-chip.is-on { background: var(--sg-accent); color: var(--sg-accent-ink); box-shadow: none; }
 /* Settings › Accounts: the Simkl code beside its QR (accounts-settings.tsx). */
 .acc-pin { display: flex; gap: 28px; align-items: center; }
+/* AniList's two steps side by side: sign in on AniList, then paste the token into the phone keyboard. */
+.acc-two { display: flex; gap: 32px; }
+.acc-step { display: flex; flex-direction: column; gap: 12px; width: 220px; }
+.acc-step .nest-qr { border-radius: 12px; }
 .acc-pin .nest-qr { flex: none; border-radius: 12px; }
 .acc-pin > div { display: flex; flex-direction: column; min-width: 0; }
 .acc-kicker { font-size: var(--sg-t-xs); color: var(--sg-ink-dim); }

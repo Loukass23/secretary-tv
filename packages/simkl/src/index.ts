@@ -1,5 +1,5 @@
-export { createSimkl, type KV, SIMKL_API, type SimklClient, SimklError } from "./client.ts";
-export { checkPin, type PinCode, startPin, waitForPin } from "./pin.ts";
+export { createSimkl, type KV, SIMKL_API, type SimklClient, SimklError, type SimklToken, toToken } from "./client.ts";
+export { checkPin, type PinCode, type PinState, startPin, waitForPin } from "./pin.ts";
 export {
   addHistory,
   fromIds,

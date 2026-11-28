@@ -484,7 +484,7 @@ export const SETTING_ITEMS: readonly SettingItemDef[] = [
     id: "playback.upNextCountdown",
     section: "Watching",
     label: "Up next countdown",
-    description: "How long the Up next card waits before the next episode",
+    description: "How long the Up next card waits before the next episode; Off never starts it by itself",
     getValue: (s) => countdownLabel(s.playback.upNextCountdown),
     cycle: (s, dir) => ({ ...s, playback: { ...s.playback, upNextCountdown: cycleOption(COUNTDOWNS, s.playback.upNextCountdown, dir) } }),
   },

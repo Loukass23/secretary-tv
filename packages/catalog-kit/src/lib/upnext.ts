@@ -6,7 +6,7 @@
 /** Settings › Playback "Up next countdown": how long the card counts down before the next episode starts. */
 export type Countdown = "off" | "5" | "10" | "15";
 export const COUNTDOWNS: readonly Countdown[] = ["off", "5", "10", "15"];
-export const countdownLabel = (c: Countdown) => (c === "off" ? "Off (plays at the end)" : `${c} seconds`);
+export const countdownLabel = (c: Countdown) => (c === "off" ? "Off (no autoplay)" : `${c} seconds`);
 export const countdownSec = (c: Countdown) => (c === "off" ? null : Number(c));
 
 /** A duration that has not changed for this long is trusted: some streams report a growing one at first. */
@@ -48,4 +48,25 @@ export function durationWatch(now: () => number = Date.now) {
     }
     return now() - since;
   };
+}
+
+/**
+ * What the end of an episode does alone (not watching together): the next episode, or back to the title page. Cancel on
+ * the card, or the countdown Off, means nothing plays by itself.
+ */
+export function atEnd({ hasNext, cancelled, countdown }: { hasNext: boolean; cancelled: boolean; countdown: Countdown }): "next" | "exit" {
+  return hasNext && !cancelled && countdown !== "off" ? "next" : "exit";
+}
+
+/** The card's buttons, left to right. */
+export type CardAction = "play" | "cancel";
+export const CARD_ACTIONS: readonly CardAction[] = ["play", "cancel"];
+
+/** One key on the card: the new focus, or the button OK runs. Back is Cancel. Other keys go to the player. */
+export function stepCard(at: number, key: string): { at: number } | { run: CardAction } | null {
+  if (key === "Left") return { at: 0 };
+  if (key === "Right") return { at: CARD_ACTIONS.length - 1 };
+  if (key === "Enter") return { run: CARD_ACTIONS[at] ?? "play" };
+  if (key === "Back") return { run: "cancel" };
+  return null;
 }

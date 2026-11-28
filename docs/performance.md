@@ -813,3 +813,34 @@ TV's own settings were in use: text size Large, the saved accent (Raptor Orange,
 
 Budget: +0.8 KB JS gzip (vite build 184.1 → 184.9 KB; deploy build with the keys 188.1 → 189.0 KB of 190 KB) and
 +65 KB in the package (the two woff2 files).
+### Player and sources (27 Nov sprint, A)
+
+The pause menu is now the whole screen: no box, a smoke layer of five flat bands at stepped opacities (no gradient),
+the logo large at the top left, and the episode, facts, a short synopsis, the bar with "Ends at" and the buttons at the
+bottom left (`ui/PauseMenu.tsx`). The pause menu's new Sources opens a sheet inside the player (`ui/PlayerSources.tsx`,
+the title page's lines and chips on the player's smoked glass, only the rows around focus rendered).
+
+Measured on the Samsung TV inside Secretary, `main` at `eeaa7c2` against this branch deployed the same way, a 21 min
+1080p episode resumed from Continue watching and paused with OK, 3 runs each:
+
+| Walk | `main` | branch |
+| --- | --- | --- |
+| Pause menu buttons (`walk 250 Right×5,Left×5`) | median 17 ms, p95 17 ms, 0 over 50 ms | median 17 ms, p95 17 ms, 0 over 50 ms |
+| Pause and resume (`walk 700 Enter×6`, three pauses a walk), smoke mounted on pause | 0, 0, 0 over 50 ms (max 33 ms) | 2, 1, 2 over 50 ms (max 67 ms) |
+| The same, smoke kept mounted while playing, faded in by opacity (what ships) | | 1, 1, 0 over 50 ms (max 67 ms) |
+| Playback, 6 s recorded while playing (the invisible smoke layer above the video) | | 17 ms median, 0 over 50 ms, 2 runs |
+| Sources sheet, 37 sources (`walk 250 Down×8,Up×8`) | | median 17 ms, p95 33 ms, 2, 0, 0 over 50 ms |
+
+- Mounting a full-screen layer at the moment of the pause cost about one long frame per pause. The smoke is now
+  mounted with the player's first frame at opacity 0 and only fades in, which halves that; the rest is the menu's own
+  text appearing. Heap 7-10 MB throughout.
+- The sheet's list came back in 1.6 s (`[perf] sources-list`, from the stream cache's search). Picking another source
+  saved the place, stopped AVPlay and reopened the player on the pick at the same second (283 s); OK to first frame
+  9.2 s for that source.
+- Up next with a 15 s countdown: Cancel (Right, OK) hid the card, playback ran to the end, and Secretary went back to
+  the title page with the next episode offered; nothing played by itself (`[upnext] cancelled`).
+- A first run landed on another show whose remembered source was AV1 and failed to decode (`PIPELINE_ERROR_DECODE`):
+  the same on `main`, unrelated to this branch.
+
+Budget: the branch builds to 190.4 KB gzip against 187.7 KB for `main` at `eeaa7c2`, so it adds 2.7 KB and is 0.4 KB
+over the 190 KB limit; the TV builds above were deployed with the limit raised locally, not committed.

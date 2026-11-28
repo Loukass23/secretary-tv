@@ -196,6 +196,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const [view, setView] = useState<View>(() =>
     open ? { name: "detail", itemType: open.type, title: { ...open.title, catalogType: open.type }, autoPlay: open.autoPlay } : hub ? { name: "hub", tab: hub.tab } : { name: "home" },
   );
+  /** Counts players opened on the same episode: a source changed from the player's sheet remounts it. */
+  const [playerRun, setPlayerRun] = useState(0);
   // Opened by the host on a title or a folder: Back from there gives the screen back instead of showing the home.
   const fromHost = useRef(Boolean(open || folder || hub));
   // Watch together (lib/party.ts): one party at a time, kept across the episodes it plays.
@@ -765,7 +767,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
       )}
       {view.name === "player" && (
         <PlayerView
-          key={view.episode?.id ?? view.title.id}
+          // A source changed in the player (its sheet) opens a new player on the same episode: the run counts it.
+          key={`${view.episode?.id ?? view.title.id}#${playerRun}`}
           onPlayState={(playing) => (settings.domotics.cinemaAutoDim ? (playing ? playbackLights.resume() : playbackLights.pause()) : undefined)}
           type={view.itemType}
           title={view.title}
@@ -790,6 +793,17 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
               })
               .catch(() => {})
           }
+          findSources={
+            view.together
+              ? undefined
+              : () => streams.get(view.episode?.id ?? view.title.id, view.episode ? fileHintFor(view.episode) : undefined, streamType(view.itemType))
+          }
+          sheetOrder={settings.playback.sheetOrder}
+          clockFormat={settings.general.clockFormat}
+          onSwitchSource={(found, start) => {
+            setPlayerRun((n) => n + 1);
+            setView({ name: "player", itemType: view.itemType, title: view.title, episode: view.episode, streams: found, start, manual: true });
+          }}
           manualPick={view.manual}
           remember={settings.playback.rememberSource}
           countdown={settings.playback.upNextCountdown}
