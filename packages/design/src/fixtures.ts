@@ -5,6 +5,7 @@ import { type DashboardSettings, DEFAULT_SETTINGS } from "@secretary/catalog-kit
 import type { HomeRow, Title } from "@secretary/catalog-kit/src/lib/types.ts";
 import type { SearchResult } from "@secretary/launcher/src/apps.ts";
 import type { Weather } from "@secretary/launcher/src/assistant.ts";
+import type { AssistantTurn } from "@secretary/launcher/src/assistant.ts";
 import { type CardStyle, collapsedShape, styleFor } from "@secretary/launcher/src/card-style.ts";
 import { coverPicks } from "@secretary/launcher/src/card-covers.ts";
 import type { MediaItem, RowColumn } from "@secretary/launcher/src/cards.tsx";
@@ -48,6 +49,39 @@ export const ASK_IDLE: AskView = {
   focused: false,
   full: false,
 };
+
+export function askConversationFixture(art: Art): readonly AssistantTurn[] {
+  return [
+    {
+      id: 1,
+      prompt: "What's the weather tonight?",
+      reply: "Tonight in Example Bay: rain expected around 19:00, down to 11° over the next few hours.",
+      action: "weather",
+      source: "tv",
+      at: 1,
+    },
+    {
+      id: 2,
+      prompt: "Show me atmospheric films set by the sea",
+      reply: "Here are six by the sea. The Quiet Harbour is the one you started last week.",
+      action: "watch",
+      query: "films by the sea",
+      source: "tv",
+      at: 2,
+      results: Array.from({ length: 6 }, (_, i) => ({
+        type: "movie" as const,
+        title: {
+          id: `dz:chat-${i}`,
+          name: TITLES[i % TITLES.length],
+          year: String(2016 + i),
+          rating: (7.2 + (i % 4) * 0.4).toFixed(1),
+          poster: art.posters[i % art.posters.length],
+          description: "A placeholder coastal mystery drawn by the design workbench for Secretary's inline recommendations.",
+        },
+      })),
+    },
+  ];
+}
 
 export const ASK_ANSWER: AskView = {
   wave: "speaking",

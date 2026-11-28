@@ -31,8 +31,14 @@ export interface StDevice {
   pictureModes?: string[];
   /** The capability that carries it, which a command has to name. */
   pictureCap?: string;
+
+  /** The TV's active sound output ("TV Speaker", "Bluetooth", …), when SmartThings reports it. */
+  soundFrom?: string;
+  soundFromMode?: number;
+
   /** When SmartThings last saw the picture mode change (epoch ms). It never moves on the reference TV (docs/smartthings.md). */
   pictureAt?: number;
+
   /** Takes colour or colour temperature commands. */
   colour?: boolean;
   /** Colour as the light reports it (0-100 each), and its white temperature in kelvin. */
@@ -158,6 +164,10 @@ export function toDevice(raw: RawDevice): StDevice | null {
     if (typeof sat === "number") d.saturation = sat;
     if (typeof temp === "number") d.colorTemp = temp;
   }
+  const soundDetail = value("samsungvd.soundFrom", "detailName") ?? value("audioOutputSource", "audioOutputSource");
+  const soundMode = value("samsungvd.soundFrom", "mode");
+  if (typeof soundDetail === "string" && soundDetail.trim()) d.soundFrom = soundDetail.trim();
+  if (typeof soundMode === "number") d.soundFromMode = soundMode;
   for (const cap of PICTURE_CAPS) {
     const mode = value(cap, "pictureMode");
     if (typeof mode !== "string") continue;
@@ -290,6 +300,11 @@ export const whiteCommands = (kelvin: number): StCommand[] => [
 /** Set the TV's picture mode, on the capability it reported (custom.picturemode when unknown). */
 export const pictureModeCommands = (mode: string, cap: string = PICTURE_CAPS[0]): StCommand[] => [
   { capability: cap, command: "setPictureMode", arguments: [mode] },
+];
+
+/** Ask the TV to route its own media sound to TV speakers (mode 0 on Samsung Tizen TVs). */
+export const tvSoundCommands = (mode = 0, detailName = "TV Speaker"): StCommand[] => [
+  { capability: "samsungvd.soundFrom", command: "setSoundFrom", arguments: [mode, detailName] },
 ];
 
 /** Start cleaning (auto mode), or send the vacuum back to its dock. */

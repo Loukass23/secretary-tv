@@ -25,13 +25,20 @@ import { setLightFx } from "@secretary/launcher/src/light-fx.ts";
 import { accountsTab } from "@secretary/launcher/src/accounts-settings.tsx";
 import { smartThingsTab } from "@secretary/launcher/src/smartthings-settings.tsx";
 import type { HostHeader } from "@secretary/catalog-kit/src/host.ts";
+
+
+import { type ConversationFocus, dockItemCount, stepConversation } from "@secretary/launcher/src/conversation-nav.ts";
+import { AssistantDock, ConversationOverlay } from "@secretary/launcher/src/conversation.tsx";
+import { tailorAssistant } from "@secretary/launcher/src/assistant-context.ts";
+
 import { enter, type Focus, HEADER_LIGHTS, HEADER_PROFILE, type Layout, leave, step } from "@secretary/launcher/src/nest-nav.ts";
+
 import "@secretary/launcher/src/style.css";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Art } from "../art.ts";
 import type { PageProps } from "../app.tsx";
 import { SearchScreen } from "@secretary/launcher/src/search.tsx";
-import { ASK_ANSWER, ASK_IDLE, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, searchOffline, SETTINGS_APPS, SETTINGS_FIXTURE, smartThingsFixture } from "../fixtures.ts";
+import { ASK_ANSWER, ASK_IDLE, askConversationFixture, catalogRows, LIGHT_DEVICES, LIGHT_SCENES, LIGHTS_API, nestColumns, RECENT_SEARCHES, searchFixture, searchOffline, SETTINGS_APPS, SETTINGS_FIXTURE, smartThingsFixture } from "../fixtures.ts";
 
 /** Nest home is the row; Nest assistant has the assistant under the cards focused; Nest chat is the full-screen one. */
 /** Secretary's screens: its home (with the assistant and the chat), then the catalog pages it opens inside itself. */
@@ -102,6 +109,8 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   const base = useMemo(() => nestColumns(art, shown, turn), [art, JSON.stringify(shown), turn]);
   const columns = useMemo(() => applyOrder(base, order), [base, order]);
   const [focus, setFocus] = useState<Focus>(start === "row" ? { area: "row", col: 0, i: 0 } : { area: start, i: 0 });
+  const [convFocus, setConvFocus] = useState<ConversationFocus>({ zone: "chips", i: 0 });
+  const chatTurns = useMemo(() => askConversationFixture(art), [art]);
   const [menuOpen, setMenuOpen] = useState(false);
   // The mood strip under the lights button (launcher mood-strip.tsx), on the workbench's routines (LIGHT_SCENES).
   const [stripOpen, setStripOpen] = useState(start === "moods");
@@ -115,7 +124,7 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
   const pickedMedia = !styleMenu && !moving && focus.area === "row" && !focus.inside && expands(columns[focus.col ?? 0]);
   const holdable = !styleMenu && !moving && focus.area === "row" && !focus.inside;
   const layout: Layout = {
-    ask: 1,
+    ask: dockItemCount(3),
     cols: rowLayout(columns, openCol).nav,
     menu: menuOpen ? MENU.length : 0,
     moods: stripOpen ? moods.length + 1 : 0,
@@ -190,6 +199,10 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
       else if (focus.area !== "ask" && focus.area !== "chat") setFocus(enter(focus, layout));
       return true;
     }
+    if (focus.area === "chat" && (key === "Left" || key === "Right" || key === "Up" || key === "Down")) {
+      setConvFocus((cur) => stepConversation(cur, key, { resultRows: [6], chips: 4, controls: 3 }));
+      return true;
+    }
     const next = step(focus, key, layout);
     if (next !== focus) setFocus(next);
     return true;
@@ -213,6 +226,31 @@ function Nest({ mode, theme, backdrop, art, start }: PageProps & { art: Art; sta
         me={{ name: "Robin", color: "#5b52e6" }}
         mood={mood}
         moodStrip={stripOpen ? { moods, active: mood } : null}
+      />
+      <AssistantDock
+        wave={(start === "row" ? ASK_IDLE : ASK_ANSWER).wave}
+        status={(start === "row" ? ASK_IDLE : ASK_ANSWER).status}
+        reply={(start === "row" ? ASK_IDLE : ASK_ANSWER).reply}
+        tailored={tailorAssistant({ screen: "home", card: columns[focus.col ?? 0]?.key, userName: "Robin", hasContinue: true }, chatTurns[chatTurns.length - 1])}
+        focused={focus.area === "ask"}
+        focusIndex={focus.area === "ask" ? focus.i : 0}
+        compact={openCol >= 0}
+        hidden={focus.area === "chat"}
+        listening={start === "ask"}
+        audio={{ hasMic: true, roomMic: true, bluetooth: true }}
+      />
+      <ConversationOverlay
+        open={focus.area === "chat"}
+        turns={start === "row" ? [] : chatTurns}
+        wave={(start === "row" ? ASK_IDLE : ASK_ANSWER).wave}
+        status={(start === "row" ? ASK_IDLE : ASK_ANSWER).status}
+        listening={false}
+        asking={false}
+        tailored={tailorAssistant({ screen: "home", card: columns[focus.col ?? 0]?.key, userName: "Robin", hasContinue: true }, chatTurns[chatTurns.length - 1])}
+        focus={convFocus}
+        audio={{ hasMic: true, roomMic: true, bluetooth: true }}
+        speakOn
+        canSpeak
       />
     </GlassRoot>
   );

@@ -1,9 +1,8 @@
-// The Nest home screen (docs/launcher.md): the person top left, a small clock and quiet buttons top right, and one row of
-// content cards, the Assistant first, then the weather over the calendar, Recent and one per app, running off the right
-// edge. The assistant also sits under the cards (the compact mode, with its line and one line of text), or takes the
-// whole screen (the chat, opened from its card). Layout only; data and keys live in app.tsx.
+// The Secretary home screen (docs/launcher.md): the person top left, a small clock and quiet buttons top right, and one row of
+// content cards, the Assistant first, then the weather, Calendar, Recent and one per app, running off the right
+// edge. App.tsx renders the shared bottom AssistantDock and ConversationOverlay across screens.
 import { useRef } from "preact/hooks";
-import { Glass, Glow, Header, type HeaderButton, Icon, type IconName, Scroller, VoiceWave, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
+import { Glass, Glow, Header, type HeaderButton, Icon, type IconName, Scroller, type WaveState } from "@secretary/tv-kit/src/glass/index.ts";
 import { type CardStyle, LAYOUT_LABEL, LAYOUTS, SIZE_LABEL, SIZE_LINE, type StyleMenu } from "./card-style.ts";
 import { CARD_H, columnHeight, columnShape, expands, itemBox, LABEL_H, RowCard, type RowColumn, rowLayout } from "./cards.tsx";
 import { WATCH_TOGETHER } from "./config.ts";
@@ -12,9 +11,7 @@ import { moodIcon } from "./moods.ts";
 import { type Focus, HEADER_BELL, HEADER_PROFILE, headerItems } from "./nest-nav.ts";
 
 const PAD = 80;
-/** The header's items as nest-nav numbers them: the person, then the buttons (Watch together only while it is on). */
 export const HEADER_ITEMS = headerItems(WATCH_TOGETHER);
-/** The header buttons, left to right, as nest-nav numbers them. */
 export const HEADER_ORDER = HEADER_ITEMS.filter((i) => i !== HEADER_PROFILE);
 
 /** Each header button's icon, by its nest-nav number (1 Watch together ... 7 the bell). */
@@ -38,34 +35,22 @@ export const headerButtons = (pictureMode: string | undefined, soundOn: boolean 
   return HEADER_ORDER.map((i) => ({ key: String(i), icon: icons[i], badge: i === HEADER_BELL ? open : undefined }));
 };
 
-/**
- * The picture button switches the TV's own picture mode (SmartThings), not Secretary's look: a screen with a sun for
- * Dynamic, with a moon for Eco, a plain screen for anything else, so it never reads as Night/Daylight.
- */
 function pictureIcon(mode: string | undefined): IconName {
   const m = (mode ?? "").toLowerCase();
   return m.startsWith("dynamic") ? "picture-bright" : m.startsWith("eco") ? "picture-dim" : "picture";
 }
-/** The full screen width: the orb rests in the middle under the cards, and the ribbons run out to both edges. */
-const WAVE = { x: 0, y: 880, w: 1920, h: 72 };
-/** The cards start at the left edge, the assistant being the first of them. The row clips sideways; it is tall enough for
- * an opened card's caption and synopsis under its titles. */
+
 const ROW = { x: PAD, y: 236, h: LABEL_H + CARD_H + 240 };
-/** The right edge a focused card is kept inside of. */
 const VIEW_RIGHT = 1920 - 60;
 const MENU = { x: PAD, y: 150, w: 480, item: 76 };
-/** The assistant's two modes: under the cards (compact) and on the whole screen (full). */
+
 export interface AskView {
   wave: WaveState;
-  /** "Listening…", "Thinking…", or empty. */
   status: string;
   prompt?: string;
   reply: string;
-  /** Changes with each new answer, so the text fades in again. */
   turnId: number;
-  /** Compact: the assistant under the cards has focus, so its line is drawn out and its text shown. */
   focused: boolean;
-  /** Full: the cards defocus and the assistant takes the screen. */
   full: boolean;
 }
 
@@ -73,31 +58,19 @@ interface Props {
   focus: Focus | null;
   time: string;
   ask: AskView;
-  /** The profile menu's items while it is open. */
   menu: readonly string[] | null;
-  /** Lines over the menu's items: what the TV is connected to, in words. */
   menuInfo?: readonly string[];
-  /** What the TV is connected to, as icons under the person's name; an alert dot on one that is off. */
   links?: readonly { icon: IconName; off?: boolean }[];
-  /** The glow image in the focused picture's artwork colour. */
   glow?: string;
   columns: readonly RowColumn[];
-  /** Open reminders, for the bell's count. */
   open: number;
   status: string;
-  /** The Nuvio profile on this TV; null without Nuvio. */
   me: { name: string; color?: string; img?: string } | null;
-  /** The card style menu (a long OK on a media card), while it is open. */
   styleMenu?: StyleMenu | null;
-  /** The move/remove menu (a long OK on any other card), while it is open. */
   removeMenu?: CardMenu | null;
-  /** The menu on a tile of an opened media card (a long OK on it), while it is open. */
   tileMenu?: TileMenu | null;
-  /** The card being moved (Left and Right), by key. */
   moving?: string | null;
-  /** The TV's picture mode, when SmartThings reports it; the Picture button's icon follows it. */
   pictureMode?: string;
-  /** Whether the sound system is on, when SmartThings shows one; the Sound button's icon follows it. */
   soundOn?: boolean;
   /** The active mood's key: the lights button's icon. */
   mood?: string | null;
@@ -106,10 +79,8 @@ interface Props {
 }
 
 const INFO_H = 36;
-/** Where the profile menu's items start: under its lines of connection details and a hairline. */
 const menuTop = (info: readonly string[]) => (info.length ? 22 + info.length * INFO_H + 20 : 12);
 
-/** What the TV is connected to, as quiet icons; one that is off carries the alert dot. */
 function Links({ links }: { links: readonly { icon: IconName; off?: boolean }[] }) {
   return (
     <span class="nest-links">
@@ -126,7 +97,6 @@ function Links({ links }: { links: readonly { icon: IconName; off?: boolean }[] 
 const STYLE_W = 460;
 const STYLE_LINE = 72;
 
-/** The long-OK menu beside a media card: its layouts, then its size. The card shows each choice as it is picked. */
 function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; name: string }) {
   const lines = [...LAYOUTS.map((l) => LAYOUT_LABEL[l]), `Size  ‹ ${SIZE_LABEL[m.style.size]} ›`, "Move", "Remove from home"];
   return (
@@ -145,14 +115,11 @@ function CardStyleMenu({ m, x, y, name }: { m: StyleMenu; x: number; y: number; 
   );
 }
 
-/** A long-OK menu on the other cards: move the card, or take it off the home screen. */
 export interface CardMenu {
   key: string;
-  /** 0 Move, 1 Remove from home. */
   line: number;
 }
 
-/** A long-OK menu on a title in an opened media card: the lines (catalog-kit titleMenu) and the focused one. */
 export interface TileMenu {
   name: string;
   lines: { id: string; label: string }[];
@@ -186,16 +153,12 @@ function RemoveMenu({ m, x, y, name }: { m: CardMenu; x: number; y: number; name
   );
 }
 
-/** The style a card shows: the menu's while it is open on that card. */
 export const shownStyle = (m: StyleMenu | null | undefined, key: string, saved: CardStyle): CardStyle => (m?.key === key ? m.style : saved);
 
 export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, columns, open, status, me, styleMenu, removeMenu, tileMenu, moving, pictureMode, soundOn, mood = null, moodStrip }: Props) {
   const on = (area: Focus["area"], i: number) => focus?.area === area && focus.i === i;
-
-  // A media card is open while the remote is inside it; the row scrolls just enough to keep the focused column whole.
   const openCol = focus?.area === "row" && focus.inside && expands(columns[focus.col ?? 0]) ? (focus.col ?? 0) : -1;
   const layout = rowLayout(columns, openCol);
-  // The row keeps its scroll while the assistant or the header has focus, so it is where it was left when focus returns.
   const lastCol = useRef(0);
   if (focus?.area === "row") lastCol.current = focus.col ?? 0;
   const colAt = Math.min(lastCol.current, Math.max(0, columns.length - 1));
@@ -203,23 +166,15 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
   const rowScroll = Math.max(0, Math.min(left - PAD, left + (layout.w[colAt] ?? 0) - VIEW_RIGHT));
   const inside = focus?.area === "row" && focus.inside;
   const focusBox = inside && columns[colAt] && focus.i >= 0 ? itemBox(columns[colAt], focus.i, colAt === openCol) : null;
-  // A card picked as a whole is pushed in towards the viewer (style.css .nest-col.is-picked); the glow behind it moves
-  // with it, and the other cards step back, so the space around the card shifts as focus goes along the row.
   const pickedCol = focus?.area === "row" && !inside && !moving && columns[colAt] ? colAt : -1;
-  // The glow goes behind cards of artwork only: through a glass card's gaps it reads as a stain, not a light.
   const artCard = pickedCol >= 0 && ["media", "videos", "folders"].includes(columns[pickedCol].kind);
   const pickedBox = artCard ? { x: 0, y: 0, w: columnShape(columns[pickedCol]).w, h: columnHeight(columns[pickedCol]) } : null;
   const box = focusBox ?? pickedBox;
   const glowAt = box ? { x: ROW.x + layout.x[colAt] - rowScroll + box.x, y: ROW.y + LABEL_H + box.y, w: box.w, h: box.h } : null;
   const menuKey = styleMenu?.key ?? removeMenu?.key ?? moving ?? null;
-  // The wave shows only while someone speaks; the line under it says what is going on, else names the assistant.
-  const busy = ask.wave !== "idle";
-  const live = busy || ask.focused;
-  const line = busy ? ask.status || ask.reply : "Ask Assistant";
 
   return (
     <>
-      {/* The one header (tv-kit Header): the person top left, a small clock and the quiet buttons top right. */}
       <Header
         time={time}
         person={{ name: me?.name ?? "Secretary", sub: status || <Links links={links} />, color: me?.color, img: me?.img }}
@@ -227,12 +182,10 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
         focus={focus?.area !== "header" ? null : focus.i === HEADER_PROFILE ? "person" : HEADER_ORDER.indexOf(focus.i)}
       />
 
-      {/* Behind a card picked as a whole the glow is quieter than behind one title: it shows through the card's gaps. */}
       <div class={`nest-glow${!focusBox && pickedBox ? " is-card" : ""}`}>
         <Glow at={glowAt} src={glow} />
       </div>
 
-      {/* In the full chat the cards stay put but defocus (dimmed, blurred) behind the line. */}
       <div class={`nest-stage${ask.full ? " is-away" : ""}`}>
         <Scroller x={0} y={ROW.y} w={1920} h={ROW.h} axis="x" offset={rowScroll}>
           {columns.map((col, c) => (
@@ -250,25 +203,6 @@ export function Home({ focus, time, ask, menu, menuInfo = [], links = [], glow, 
             />
           ))}
         </Scroller>
-      </div>
-
-      {/* The orb and its line are fixed under the cards. Full: the line rises to the middle of the screen. A card that
-          is open hides the orb. */}
-      <div class={`nest-bottom${openCol >= 0 ? " is-away" : ""}${ask.full ? " is-centred" : ""}`}>
-        <VoiceWave {...WAVE} state={ask.wave} />
-      </div>
-      {/* One line under it: only a hint at rest, the status or the answer while the assistant is focused or busy. */}
-      <div class={`nest-ask-dock${ask.full || openCol >= 0 ? " is-gone" : ""}`} style={{ top: `${WAVE.y + WAVE.h + 8}px` }}>
-        <span class={`nest-ask-hint${live ? " is-live" : ""}`}>{line}</span>
-      </div>
-
-      {/* The full chat: what was said above the line, the answer below it, each in its own colour. */}
-      <div class={`nest-say nest-say-you${ask.full ? " is-on" : ""}`}>
-        <small>{ask.status}</small>
-        {ask.prompt && <b key={ask.turnId}>{ask.prompt}</b>}
-      </div>
-      <div class={`nest-say nest-say-reply${ask.full ? " is-on" : ""}`}>
-        <p key={ask.turnId}>{ask.reply}</p>
       </div>
 
       {tileMenu && <TitleTileMenu m={tileMenu} />}

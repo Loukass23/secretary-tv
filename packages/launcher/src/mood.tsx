@@ -11,7 +11,7 @@ import { HEADER_LIGHTS } from "./nest-nav.ts";
 import { type PanelHeader, usePanelHeader } from "./panel-header.tsx";
 
 const TITLE = { x: 80, y: 146 };
-const LIST = { x: 80, y: 290, w: 1760, h: 750, listW: 640 };
+const LIST = { x: 80, y: 290, w: 1760, h: 696, listW: 640 };
 /** The last line: Settings › SmartThings. */
 const SETUP = "setup";
 
@@ -58,6 +58,8 @@ export function MoodPanel({
   onSetup,
   onClose,
   header,
+  active: keyActive = true,
+  onAssistant,
 }: {
   devices: readonly StDevice[];
   scenes: readonly StScene[];
@@ -67,6 +69,8 @@ export function MoodPanel({
   onSetup: () => void;
   onClose: () => void;
   header: PanelHeader;
+  active?: boolean;
+  onAssistant?(how: "voice" | "dock" | "chat"): void;
 }) {
   // As the viewer set them in Settings › SmartThings (moods.ts allMoods).
   const moods = useMemo(() => allMoods(scenes), [scenes]);
@@ -79,11 +83,12 @@ export function MoodPanel({
   const lines = moods.length + 1;
   const i = Math.min(at, lines - 1);
 
-  useKeys(true, (key) => {
+  useKeys(keyActive, (key) => {
+    if (key === "SearchVoice" && onAssistant) return void onAssistant("voice");
     if (head.key(key)) return;
     if (key === "Back") return void onClose();
     if (key === "Up") return i === 0 ? void head.enter() : void setAt(i - 1);
-    if (key === "Down") return void setAt(Math.min(lines - 1, i + 1));
+    if (key === "Down") return i === lines - 1 && onAssistant ? void onAssistant("dock") : void setAt(Math.min(lines - 1, i + 1));
     if (key === "Enter") {
       const m = moods[i];
       if (!m) return onSetup();

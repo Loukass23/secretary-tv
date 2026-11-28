@@ -7,6 +7,7 @@ import {
   fadeShow,
   homeAction,
   homeAlerts,
+  isBluetoothSound,
   isIndependent,
   glideTint,
   moodGlide,
@@ -28,10 +29,13 @@ import {
   sharedLights,
   type ShowStep,
   smartThings,
+  soundOutputScene,
+  soundTv,
   stColour,
   type StDevice,
   type StTokens,
   toDevice,
+  tvSoundCommands,
 } from "../src/index.ts";
 
 const status = (caps: Record<string, Record<string, unknown>>) =>
@@ -583,4 +587,31 @@ test("glideTint goes the short way round the wheel and keeps to its ends", () =>
   assert.deepEqual(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 0.5), { hue: 0, saturation: 60 });
   assert.deepEqual(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 1), { hue: 10, saturation: 40 });
   assert.equal(glideTint({ hue: 90, saturation: 80 }, { hue: 10, saturation: 40 }, 0).hue, 90);
+});
+
+test("TV sound output: detects Bluetooth soundFrom, picks TV Speaker / Bluetooth Speaker scenes, and builds setSoundFrom", () => {
+  const btTv = toDevice({
+    deviceId: "dev-tv-bt",
+    label: "Living room TV",
+    type: "OCF",
+    ocf: { ocfDeviceType: "oic.d.tv" },
+    components: [{ id: "main", capabilities: status({ "samsungvd.soundFrom": { detailName: "Jabra Bluetooth", mode: 4 } }) }],
+  })!;
+  assert.equal(btTv.soundFrom, "Jabra Bluetooth");
+  assert.equal(btTv.soundFromMode, 4);
+  assert.equal(isBluetoothSound(btTv.soundFrom), true);
+  assert.equal(isBluetoothSound("TV Speaker"), false);
+  assert.equal(isBluetoothSound(undefined), false);
+  assert.equal(soundTv([...DEVICES, btTv])?.id, "dev-tv-bt");
+  assert.equal(soundTv(DEVICES)?.id, "dev-tv");
+
+  const scenes = [
+    ...SCENES,
+    { id: "sc-tv-spk", name: "TV Speaker" },
+    { id: "sc-bt-spk", name: "Bluetooth Speaker" },
+  ];
+  assert.equal(soundOutputScene("tv", scenes)?.id, "sc-tv-spk");
+  assert.equal(soundOutputScene("bluetooth", scenes)?.id, "sc-bt-spk");
+  assert.equal(soundOutputScene("tv", [{ id: "x", name: "Bluetooth TV Speaker" }]), undefined);
+  assert.deepEqual(tvSoundCommands(), [{ capability: "samsungvd.soundFrom", command: "setSoundFrom", arguments: [0, "TV Speaker"] }]);
 });

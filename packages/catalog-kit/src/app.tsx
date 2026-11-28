@@ -98,6 +98,12 @@ export interface EmbeddedHost {
   settingsTabs?: readonly import("./host.ts").HostSettingsTab[];
   /** Whether this TV build has keys for voice input and spoken replies (Settings › Home screen). */
   voice?: import("./host.ts").HostVoice;
+  /** True while Secretary's bottom Assistant Dock or full-screen Conversation owns remote focus. */
+  assistantOpen?: boolean;
+  /** Opens Secretary's assistant from the catalog ("voice" from SearchVoice, "dock" from Down at the page foot). */
+  onAssistant?(how: "voice" | "dock" | "chat"): void;
+  /** Reports which catalog screen and title are currently active, so Secretary tailors its assistant and routes media sound. */
+  onContext?(ctx: import("./host.ts").HostCatalogContext): void;
 }
 
 declare const __TRAKT_CLIENT_ID__: string | undefined;
@@ -243,7 +249,11 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   }, [settings.general.accentTheme, settings.general.typeStyle, settings.general.textSize, settings.general.displayFont, settings.general.reduceMotion]);
 
   // Global Channel Rocker (CH- / CH+) and Search shortcuts when inside Detail or Timeline views.
-  useKeys(view.name === "detail" || view.name === "timeline", (key) => {
+  useKeys((view.name === "detail" || view.name === "timeline") && !embedded.assistantOpen, (key) => {
+    if (key === "SearchVoice" && embedded.onAssistant) {
+      embedded.onAssistant("voice");
+      return true;
+    }
     if (key === "ChannelDown" || key === "Search" || key === "SearchVoice") {
       embedded.onSearch?.();
       return true;
@@ -601,6 +611,32 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
   const nextOf = (title: Title, episode: Video | undefined) =>
     episode && title.videos ? nextEpisode(title.videos, episode.id) : null;
   const currentHeading = activeType === type ? heading : HEADING_FOR[activeType];
+  const homeFocusedTitle = view.name === "home" ? rows[focus.row]?.items[focus.col] : undefined;
+  const activeDetailResume = shown ? resume.find((e) => e.type === shown.itemType && e.title.id === shown.title.id) : undefined;
+  useEffect(() => {
+    const raw = view.name === "detail" && shown ? shown.title : homeFocusedTitle && !homeFocusedTitle.folder ? homeFocusedTitle : undefined;
+    const rawKind = view.name === "detail" && shown ? shown.itemType : raw?.catalogType ?? activeType;
+    embedded.onContext?.({
+      screen: view.name,
+      kind: rawKind,
+      title: raw
+        ? {
+            kind: rawKind,
+            id: raw.id,
+            name: raw.name,
+            year: raw.year,
+            rating: raw.rating,
+            poster: raw.poster,
+            background: raw.background,
+            description: raw.description,
+            resume: view.name === "detail" ? Boolean(activeDetailResume) : Boolean(raw.progressPct),
+            episodeLabel: activeDetailResume?.episode ? episodeLabel(activeDetailResume.episode) : undefined,
+          }
+        : undefined,
+      folderTitle: view.name === "folder" ? folderShown?.folder.title : undefined,
+      sagaTitle: view.name === "timeline" ? view.collection.title : undefined,
+    });
+  }, [view.name, activeType, shown?.title.id, homeFocusedTitle?.id, folderShown?.folder.title, Boolean(activeDetailResume)]);
 
   return (
     <>
@@ -611,7 +647,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         type={activeType}
         rows={rows}
         focus={focus}
-        active={view.name === "home"}
+        active={view.name === "home" && !embedded.assistantOpen}
+        onAssistant={embedded.onAssistant}
         status={status}
         heading={currentHeading}
         clockFormat={settings.general.clockFormat}
@@ -653,12 +690,13 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           look={settings.collections}
           rowLook={folderOpen?.rowLook}
           active={view.name === "folder"}
+          keysPaused={Boolean(embedded.assistantOpen)}
           onOpen={(itemType, title) => setView({ name: "detail", itemType, title })}
           onBack={goHome}
         />
       )}
       <HubOverlay
-        active={view.name === "hub"}
+        active={view.name === "hub" && !embedded.assistantOpen}
         activeType={activeType}
         settings={settings}
         onUpdateSettings={setSettings}
@@ -675,7 +713,7 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
         <SagaTimeline
           key={view.collection.id}
           collection={view.collection}
-          active={true}
+          active={!embedded.assistantOpen}
           clockFormat={settings.general.clockFormat}
           initialFocusTitleId={view.initialFocusTitleId}
           onOpenTitle={(itemType, title, autoPlay) =>
@@ -709,6 +747,8 @@ export function CatalogApp({ type, heading, serverUrl, embedded, open, folder, h
           streams={streams}
           resume={resume.find((e) => e.type === shown.itemType && e.title.id === shown.title.id)}
           active={view.name === "detail"}
+          keysPaused={Boolean(embedded.assistantOpen)}
+          onAssistant={embedded.onAssistant}
           autoPlay={view.name === "detail" && Boolean(view.autoPlay)}
           clockFormat={settings.general.clockFormat}
           header={embedded.header}

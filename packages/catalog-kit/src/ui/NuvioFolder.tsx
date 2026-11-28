@@ -85,6 +85,7 @@ interface Props {
   /** The look of the home row it was opened from: a Top 10 opens as a ranking, a spotlight as a mural (viewOfLook). */
   rowLook?: CardShape;
   active: boolean;
+  keysPaused?: boolean;
   onOpen(type: CatalogType, title: Title): void;
   onBack(): void;
 }
@@ -92,7 +93,7 @@ interface Props {
 const isFilmography = (r: ResolvedSource) =>
   r.source.provider === "tmdb" && (r.source.tmdbSourceType === "PERSON" || r.source.tmdbSourceType === "DIRECTOR");
 
-export function NuvioFolder({ type, collection, folder, sources, keys, look, rowLook, active, onOpen, onBack }: Props) {
+export function NuvioFolder({ type, collection, folder, sources, keys, look, rowLook, active, keysPaused, onOpen, onBack }: Props) {
   const [own, setOwn] = useState<FolderView | null>(() => loadFolderView(collection.id, folder.id));
   const auto = viewOfLook(rowLook) ?? autoFolderView(collection.viewMode, sources.length > 0 && sources.every(isFilmography));
   const view = resolveFolderView(own, look.folderView, auto);
@@ -227,7 +228,7 @@ export function NuvioFolder({ type, collection, folder, sources, keys, look, row
   /** Up from the top of the titles: the tabs, else the View button. */
   const up = () => setZone(hasTabBar ? "tabs" : "view");
 
-  useKeys(active, (key) => {
+  useKeys(active && !keysPaused, (key) => {
     if (popup) return void popupKey(popup, key);
     if (key === "Back") {
       if (zone !== "items") return void setZone("items");

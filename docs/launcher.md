@@ -142,10 +142,16 @@ in two modes (below). `src/nest-nav.ts` moves focus between them and is unit tes
 | --- | --- | --- |
 | Profile | top left; under the name, an icon for Nuvio sync and one for the server (an alert dot when it is offline), or a line when something needs doing | opens the profile menu: what the TV is connected to in words, then Switch profile (or Sign in to Nuvio), TV settings, Theme, Spoken replies; Back closes it |
 | Watch together, Search, Lights, Picture, Sound, Settings, Bell | top right, left of the clock, no fill until focused | the party; search; the mood strip under it, one icon per mood and "more" for the Mood panel, the button showing the active mood's icon (the next scene without SmartThings on the TV); the TV's picture mode (a screen icon: bright for Dynamic, a moon for Eco), read on the TV itself; the sound system; Settings; the first open reminder in its card (the badge counts them). Watch together shows only in a build with `PARTY_URL` set (`config.ts` `WATCH_TOGETHER`) |
-| Assistant (first card) | the greeting, the open reminders and the last exchange | the **full chat**: the cards defocus (dimmed, blurred) and the orb moves to the middle of the screen. Opening it starts listening: the line (blue while you speak, amber while Nest answers) shows only then, and your words and the answer are written around it; otherwise it is the orb. OK or the mic key listens again, Back returns to this card |
+
+
+| Assistant (first card) | the greeting, the open reminders and the last exchange | the **full conversation** (`src/conversation.tsx`, `ConversationOverlay`): the stage dims (`opacity` only, no runtime blur) and a multi-turn conversation thread opens with user bubbles on the right, Secretary's replies on the left, **inline recommended poster cards** directly under each watch reply (navigable and playable with the remote), a bottom status + `VoiceWave` dock, remote-clickable suggestion and follow-up chips, and Voice / Type / Full chat / Close controls. Opening it starts listening; Back returns to the screen underneath |
+
+
+
+
 | Weather | a full card: now, the next 5 hours and the next 4 days | OK says it in the toast; the old forecast drop-down is gone |
 | Calendar | a full card: today's date and the month, today marked | OK goes to the reminders (events come later) |
-| Assistant under the cards | fixed at the bottom centre, under the orb | the **compact** mode. Down from a card, or from the last line inside a card that is not a media card, focuses it **and starts listening at once** (an opened media card ends on its own bar instead: the assistant's orb and "Ask Assistant", then Recommend me, which asks the assistant for picks of the card's kind and adds them as a row above the bar, See all, which opens that catalog, and Back to top; the bar takes the last row's caption place, so it is never cut off); an opened Weather card keeps the remote too; the ribbons show only while the room speaks or Nest answers, otherwise it is the orb (pulsing faster while it thinks), with a line of text under it (status, the answer, or "Ask Assistant"). Leaving it drops the clip. What it is asked moves focus to the card concerned: films open Cinema (or Shows, Anime) onto the picks, with what you asked and what the assistant did shown beside the card's label; the weather opens Weather, a reminder opens Reminders, the lights focus Home. Back returns to the first card |
+| Assistant dock (bottom bar) | fixed at the bottom centre across browsing screens (`Home`, `CatalogHome`, `Detail`, `Folder`, `Timeline`, `Mood`; hidden in `Player`, `Search`, `HubOverlay`, `Party` and profile sign-in) | the **page-tailored** dock (`src/conversation.tsx` `AssistantDock`, `src/assistant-context.ts` `tailorAssistant`). Shows a live context badge (`For you`, `Cinema`, the focused film/show, `Lights`, etc.), a reactive `VoiceWave` orb, status or latest answer, and three remote-clickable suggestion chips tailored to the active page or title (`What's this about?`, `Something like this`, `Add to My List`, etc.), plus Voice, Type and Full chat buttons. Down at the bottom of a card, catalog home, film/series detail or Mood panel focuses the dock; Left/Right walks the orb, chips and buttons; OK runs a chip immediately or speaks; watch answers with multiple picks open into the full conversation with inline posters |
 | Recent | after Today, while there is an answer | goes back to that answer (the picks, the weather, the lights, the reminder, or asks again) |
 | Cinema | a tall poster (the card's style); the label is one word, whatever the card holds | opens the card: every film; a film resumes or opens; with nothing in progress, tonight's picks |
 | Shows | two stacked stills with the title's logo (catalog-kit `titleArt`, Fanart.tv, else the name) | opens the card: every show; resumes the episode or opens the show |
@@ -304,14 +310,14 @@ Ideas taken from a light, glassy TV concept video: an assistant panel with a voi
 to it, an artwork-coloured glow, a weather and calendar cards, a clock, a Recent row and a light theme. Its shopping flow is
 out of scope, and so are its small grey text, large soft shadows and all-white screen at night.
 
-- **Ask Nest** (`src/assistant.ts`, the panel in `home.tsx`) shows the conversation: up to three earlier prompts above
-  the current one, each older one fainter, then the answer and the wave (`VoiceWave` in tv-kit glass) and four chips.
+- **Secretary conversation & dock** (`src/conversation.tsx`, `src/conversation-nav.ts`, `src/assistant-context.ts`): full-screen mode is a scrollable multi-turn chat thread (scrolled by `transform` only) that keeps every turn, renders recommended media titles (`turn.results`) inline as selectable `MediaTile` poster rows right beneath each answer, and offers context-aware follow-up chips (`Play the first one`, `Something lighter`, `Add first to My List`, etc.) at the bottom so every turn can be driven by voice or the remote. The compact bottom dock stays available across home and catalog browsing screens (`CatalogHome`, `Detail`, `Folder`, `Timeline`, `Mood`) and adapts its badge, prompt hint and suggestion chips to the page and focused title.
+
 - **The wave follows the voice.** While the room microphone records, each frame's level drives it (`record(onLevel)`);
   while a spoken reply plays, a loudness envelope worked out from the WAV before playback does (`envelope()` in
   `src/voice.ts`, 50 ms steps), so the audio never goes through Web Audio and `setSinkId` still picks the speakerphone.
-  `setWaveLevel()` writes each ribbon's `scaleY` straight to the DOM (no Preact render), and the ribbons ease towards
-  the level at their own pace. Cool ribbons while the room speaks, warm ones while Nest answers (two sets swapped by
-  opacity). Without a live level the wave is idle, listening, thinking or speaking, as before.
+  `setWaveLevel()` writes each ribbon's `scaleY` and the orb's pulse straight to the DOM (no Preact render), with fast syllabic attack (`visualRms`, 42 ms frames, noise-gated `levelOf`) and smooth release, plus distinct sky-blue listening and warm amber speaking ribbons/orbs (`VoiceWave.tsx`, `glass.css`).
+
+
 - **Answers take the stage**: titles from a watch prompt replace the apps and reminders on the right, four posters
   across, until Back. Every answer also becomes a card in **Recent** (bottom left, before Continue Watching), with home
   alerts from SmartThings ("the vacuum finished"): Watch, Reminder, Lights, Weather, Briefing and Home cards.
@@ -391,10 +397,11 @@ profile is what makes the microphone appear.
   a clip needs 250 ms of voice-level sound to be sent at all (`MIN_SPEECH_MS`), and Groq's segments with a
   `no_speech_prob` of 0.6 or more are dropped (Whisper otherwise invents "Thank you." from silence). Either way Nest says
   "Couldn't hear anything" and nothing reaches the assistant. Entering the assistant hides earlier exchanges from it. Nest then answers on the TV like a typed prompt (`send()`).
-- **Spoken replies**: voice prompts with `NEST_GEMINI_API_KEY` synthesize the reply on the TV as WAV from a Gemini speech
-  model (`speak()` in `packages/assistant`). Nest plays it on
-  the speakerphone's own output when it has one (`setSinkId`; the TV would otherwise keep its own speakers), and the
-  wave speaks until it ends. Blue mutes or unmutes this, as does Settings › Home screen ("Spoken replies").
+- **Spoken replies & split TV/Bluetooth audio**: voice and chip replies with `NEST_GEMINI_API_KEY` synthesize the reply on the TV as WAV (`speak()` in `packages/assistant`), display the text answer immediately while audio prepares, and route playback to the Bluetooth / speakerphone output via `HTMLAudioElement.setSinkId` (`pickRoomSink` in `src/voice.ts`, skipping built-in TV/HDMI outputs). When a film or episode starts in `AVPlay`, Samsung Tizen's master Sound Output is kept on the TV speakers / soundbar (`ensureTvSoundForMedia` in `src/home-control.ts`, running a `"TV Speaker"` / `"TV Sound"` SmartThings routine or `samsungvd.soundFrom`), so movies play on the TV while Secretary's voice stays on the Bluetooth speaker. Blue mutes or unmutes spoken replies, as does Settings › Home screen ("Spoken replies").
+- **Bluetooth hot-plug after boot**: `watchAudioDevices` (`src/voice.ts`) subscribes to `navigator.mediaDevices` `devicechange`, unlocks empty device labels after hot-plug, invalidates any cached default-mic stream when a Bluetooth/room speakerphone (`ROOM_DEVICE`) appears, re-enumerates before every recording and spoken reply, and shows a toast (`Bluetooth speaker ready for Secretary`) without restarting the app.
+
+
+
 - **Fallbacks**: without `NEST_GEMINI_API_KEY` or `NEST_GROQ_API_KEY`, or if the TV gives the app no microphone, auto-listen
   is off and OK or the mic key opens the TV keyboard instead.
 - **Privilege**: `http://tizen.org/privilege/mediacapture` in `tizen/config.xml.tpl`.

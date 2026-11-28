@@ -1,60 +1,59 @@
-// Ask Nest by voice from a room microphone (a USB conference speaker on the TV, say): docs/launcher.md, "Room
-// microphone". Records a short clip as 16 kHz WAV for Gemini (from the TV or through the server). No MediaRecorder:
-// Gemini does not list WebM, and the TV's MediaRecorder support varies, so the samples are taken with Web Audio and
-// encoded here. The wave follows the clip's level while recording, and the reply's while it plays.
+// Ask Secretary by voice from a room microphone or Bluetooth speakerphone (docs/launcher.md, "Room microphone").
+// Listens to `devicechange` and re-checks devices before recording/playback so Bluetooth speakers turned on after boot
+// are detected immediately, and routes AI speech via `setSinkId` while TV speakers remain dedicated to AVPlay media.
 
-/** Sample rate of the clip sent to the server: plenty for speech, a third of the bytes of 48 kHz. */
 export const CLIP_RATE = 16000;
-/** Level (RMS, 0..1) above which a frame counts as speech. */
 const SPEECH_RMS = 0.02;
-/** Loud time it takes to count as speech: a click, a cough or a bump on the table is not a question. */
 const MIN_SPEECH_MS = 250;
-/** Silence after speech that ends the clip. */
 const TRAILING_SILENCE_MS = 1200;
-/** Give up when nobody speaks this long after the key press. */
 const NO_SPEECH_MS = 6000;
 export const MAX_CLIP_MS = 15000;
 
-/** Root mean square of a frame, 0 for silence, about 0.7 for a full-scale sine. */
 export function rms(frame: Float32Array): number {
   let sum = 0;
   for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
   return frame.length ? Math.sqrt(sum / frame.length) : 0;
 }
 
+/** Peak half-window RMS so syllabic consonants and quick words register crisply in the visual wave. */
+export function visualRms(frame: Float32Array): number {
+  if (frame.length < 64) return rms(frame);
+  const mid = frame.length >> 1;
+  return Math.max(rms(frame.subarray(0, mid)), rms(frame.subarray(mid)));
+}
+
 export type EndReason = "silence" | "no-speech" | "max";
 
-/** Decides when a clip ends from the level of each frame. `feed` returns why it ended, or null to keep going. */
 export function endpointer() {
   let elapsed = 0;
   let heard = false;
   let loud = 0;
   let quiet = 0;
   return {
+    get heard() {
+      return heard;
+    },
     feed(level: number, ms: number): EndReason | null {
       elapsed += ms;
       if (level >= SPEECH_RMS) {
         loud += ms;
-        if (loud >= MIN_SPEECH_MS) heard = true;
         quiet = 0;
-      } else {
+        if (loud >= MIN_SPEECH_MS) heard = true;
+      } else if (heard) {
         quiet += ms;
+        if (quiet >= TRAILING_SILENCE_MS) return "silence";
+      } else {
+        loud = 0;
+        if (elapsed >= NO_SPEECH_MS) return "no-speech";
       }
-      if (elapsed >= MAX_CLIP_MS) return "max";
-      if (heard && quiet >= TRAILING_SILENCE_MS) return "silence";
-      if (!heard && elapsed >= NO_SPEECH_MS) return "no-speech";
-      return null;
-    },
-    get heard() {
-      return heard;
+      return elapsed >= MAX_CLIP_MS ? "max" : null;
     },
   };
 }
 
-/** Averages each run of input samples into one output sample (fine for speech going down to 16 kHz). */
-export function downsample(samples: Float32Array, from: number, to: number): Float32Array {
-  if (to >= from) return samples;
-  const ratio = from / to;
+export function downsample(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate <= toRate) return samples;
+  const ratio = fromRate / toRate;
   const out = new Float32Array(Math.floor(samples.length / ratio));
   for (let i = 0; i < out.length; i++) {
     const start = Math.floor(i * ratio);
@@ -66,14 +65,16 @@ export function downsample(samples: Float32Array, from: number, to: number): Flo
   return out;
 }
 
-/** 16-bit mono PCM WAV. */
 export function encodeWav(samples: Float32Array, rate: number): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(44 + samples.length * 2);
+  const dataBytes = samples.length * 2;
+  const out = new Uint8Array(new ArrayBuffer(44 + dataBytes));
   const v = new DataView(out.buffer);
-  const ascii = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
-  ascii(0, "RIFF");
-  v.setUint32(4, 36 + samples.length * 2, true);
-  ascii(8, "WAVEfmt ");
+  const put = (at: number, s: string) => {
+    for (let i = 0; i < s.length; i++) out[at + i] = s.charCodeAt(i);
+  };
+  put(0, "RIFF");
+  v.setUint32(4, 36 + dataBytes, true);
+  put(8, "WAVEfmt ");
   v.setUint32(16, 16, true);
   v.setUint16(20, 1, true);
   v.setUint16(22, 1, true);
@@ -81,8 +82,8 @@ export function encodeWav(samples: Float32Array, rate: number): Uint8Array<Array
   v.setUint32(28, rate * 2, true);
   v.setUint16(32, 2, true);
   v.setUint16(34, 16, true);
-  ascii(36, "data");
-  v.setUint32(40, samples.length * 2, true);
+  put(36, "data");
+  v.setUint32(40, dataBytes, true);
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
@@ -90,19 +91,11 @@ export function encodeWav(samples: Float32Array, rate: number): Uint8Array<Array
   return out;
 }
 
-/** RMS of a loud voice at the speakerphone; levels are scaled so this fills the wave. */
-const LOUD_RMS = 0.12;
-
-/** A frame's RMS as the wave's 0..1 height: quiet speech still shows, shouting does not clip at once. */
-export const levelOf = (r: number) => Math.min(1, (r / LOUD_RMS) ** 0.6);
-
-/** Step of a reply's loudness envelope, in ms. */
+const NOISE_FLOOR = 0.005;
+const LOUD_RMS = 0.085;
+export const levelOf = (r: number) => (r <= NOISE_FLOOR ? 0 : Math.min(1, ((r - NOISE_FLOOR) / (LOUD_RMS - NOISE_FLOOR)) ** 0.58));
 export const ENVELOPE_MS = 50;
 
-/**
- * How loud a 16-bit PCM WAV is every ENVELOPE_MS, as wave levels: worked out before the reply plays, so the wave
- * follows Nest's voice without routing the audio through Web Audio (that would undo setSinkId on the speakerphone).
- */
 export function envelope(wav: Uint8Array): number[] {
   const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
   const tag = (at: number) => String.fromCharCode(wav[at], wav[at + 1], wav[at + 2], wav[at + 3]);
@@ -137,95 +130,210 @@ export function envelope(wav: Uint8Array): number[] {
   return [];
 }
 
-/** A speakerphone by its device label, for both its microphone and its speaker. */
-// Not a bare "speak": the TV calls its own output "builtin-speaker". Over Bluetooth the TV labels the microphone
-// "<name> (bluetooth voice)" and the speaker just "BluetoothMedia (bluetooth media)", with no product name.
-const ROOM_DEVICE = /jabra|speakerphone|conference|bluetooth/i;
+export interface AudioDeviceLike {
+  kind: string;
+  deviceId: string;
+  label: string;
+}
 
-/** The microphone stays open between asks, so the second press starts at once. */
-let mic: Promise<MediaStream> | null = null;
+const BT_RE = /bluetooth|bt[-_\s]|a2dp|hands[-_\s]?free|headset|earbuds?/i;
+export const ROOM_DEVICE = /jabra|speakerphone|conference|bluetooth|bt[-_\s]|a2dp|hands[-_\s]?free|headset|earbuds?/i;
+const BUILTIN_ID = /^(?:default|communications)$/i;
+const TV_BUILTIN_LABEL = /builtin|internal|tv[-_\s]?speaker|hdmi|optical|arc/i;
+
+export function pickRoomMic<T extends AudioDeviceLike>(devices: readonly T[]): T | undefined {
+  const inputs = devices.filter((d) => d.kind === "audioinput");
+  return inputs.find((d) => ROOM_DEVICE.test(d.label)) ?? inputs[0];
+}
+
+export function pickRoomSink<T extends AudioDeviceLike>(devices: readonly T[]): T | undefined {
+  const outputs = devices.filter((d) => d.kind === "audiooutput");
+  return (
+    outputs.find((d) => ROOM_DEVICE.test(d.label)) ??
+    outputs.find((d) => d.deviceId && !BUILTIN_ID.test(d.deviceId) && Boolean(d.label) && !TV_BUILTIN_LABEL.test(d.label))
+  );
+}
+
+export interface AudioRouteState {
+  hasMic: boolean;
+  micLabel?: string;
+  roomMic: boolean;
+  sinkId?: string;
+  sinkLabel?: string;
+  bluetooth: boolean;
+}
+
+export function summarizeAudioDevices(devices: readonly AudioDeviceLike[]): AudioRouteState {
+  const micDev = pickRoomMic(devices);
+  const sinkDev = pickRoomSink(devices);
+  return {
+    hasMic: Boolean(micDev),
+    micLabel: micDev?.label || undefined,
+    roomMic: Boolean(micDev && ROOM_DEVICE.test(micDev.label)),
+    sinkId: sinkDev?.deviceId || undefined,
+    sinkLabel: sinkDev?.label || undefined,
+    bluetooth: Boolean((micDev && BT_RE.test(micDev.label)) || (sinkDev && BT_RE.test(sinkDev.label))),
+  };
+}
 
 const CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+let mic: Promise<MediaStream> | null = null;
+let openedStream: MediaStream | null = null;
+let routeState: AudioRouteState = { hasMic: false, roomMic: false, bluetooth: false };
+const routeListeners = new Set<(state: AudioRouteState) => void>();
 
-/** Opens the room microphone, preferring a Jabra (or any USB speakerphone) over the default input. */
+const stopStream = (s: MediaStream | null) => s?.getTracks().forEach((t) => t.stop());
+
+function closeCachedMic() {
+  mic = null;
+  stopStream(openedStream);
+  openedStream = null;
+}
+
+const streamLive = (s: MediaStream | null) => Boolean(s?.active && s.getAudioTracks()[0]?.readyState === "live");
+
+function publishRoute(next: AudioRouteState) {
+  if (JSON.stringify(next) === JSON.stringify(routeState)) return;
+  routeState = next;
+  for (const fn of routeListeners) fn(next);
+}
+
+export const getAudioRouteState = (): AudioRouteState => routeState;
+
+export async function refreshAudioDevices(opts: { unlockLabels?: boolean } = {}): Promise<AudioRouteState> {
+  const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+  if (!md?.enumerateDevices) return routeState;
+  try {
+    let list = await md.enumerateDevices();
+    if (opts.unlockLabels && md.getUserMedia && list.some((d) => (d.kind === "audioinput" || d.kind === "audiooutput") && !d.label)) {
+      try {
+        const probe = await md.getUserMedia({ audio: CONSTRAINTS });
+        list = await md.enumerateDevices();
+        if (!streamLive(openedStream)) {
+          openedStream = probe;
+          mic = Promise.resolve(probe);
+        } else stopStream(probe);
+      } catch {
+        // Outputs may still enumerate when mic permission or hardware is absent.
+      }
+    }
+    const next = summarizeAudioDevices(list);
+    if (openedStream) {
+      const track = openedStream.getAudioTracks()[0];
+      const roomMic = pickRoomMic(list);
+      const upgraded = roomMic && ROOM_DEVICE.test(roomMic.label) && !ROOM_DEVICE.test(track?.label ?? "") && roomMic.deviceId !== track?.getSettings?.().deviceId;
+      if (!streamLive(openedStream) || upgraded) closeCachedMic();
+    }
+    publishRoute(next);
+    return next;
+  } catch {
+    return routeState;
+  }
+}
+
+export function watchAudioDevices(listener: (state: AudioRouteState) => void): () => void {
+  routeListeners.add(listener);
+  const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+  const onChange = () => void refreshAudioDevices({ unlockLabels: true });
+  md?.addEventListener?.("devicechange", onChange);
+  void refreshAudioDevices({ unlockLabels: false });
+  return () => {
+    routeListeners.delete(listener);
+    md?.removeEventListener?.("devicechange", onChange);
+  };
+}
+
 async function openMic(): Promise<MediaStream> {
   const md = navigator.mediaDevices;
   if (!md?.getUserMedia) throw new Error("no getUserMedia");
   const first = await md.getUserMedia({ audio: CONSTRAINTS });
-  // Labels are only filled in once a stream is open.
-  const inputs = (await md.enumerateDevices()).filter((d) => d.kind === "audioinput");
-  const room = inputs.find((d) => ROOM_DEVICE.test(d.label));
+  const list = await md.enumerateDevices();
+  publishRoute(summarizeAudioDevices(list));
+  const room = pickRoomMic(list);
   const current = first.getAudioTracks()[0]?.getSettings().deviceId;
-  if (!room || room.deviceId === current) return first;
-  first.getTracks().forEach((t) => t.stop());
-  return md.getUserMedia({ audio: { ...CONSTRAINTS, deviceId: { exact: room.deviceId } } });
+  let chosen = first;
+  if (room && ROOM_DEVICE.test(room.label) && room.deviceId && room.deviceId !== current) {
+    stopStream(first);
+    chosen = await md.getUserMedia({ audio: { ...CONSTRAINTS, deviceId: { exact: room.deviceId } } });
+  }
+  openedStream = chosen;
+  chosen.getAudioTracks().forEach((t) =>
+    t.addEventListener?.("ended", () => {
+      if (openedStream === chosen) closeCachedMic();
+      void refreshAudioDevices();
+    }),
+  );
+  return chosen;
 }
 
-export function micName(stream: MediaStream): string {
-  return stream.getAudioTracks()[0]?.label || "microphone";
-}
+export const micName = (stream: MediaStream): string => stream.getAudioTracks()[0]?.label || "microphone";
 
 export interface Recording {
-  /** Ends the clip now (the mic key pressed again). */
   stop(): void;
-  /** Drops the clip: focus left the assistant, so nothing is sent. `done` resolves null and `cancelled` is true. */
   cancel(): void;
   readonly cancelled: boolean;
-  /** The clip as WAV, or null when nobody spoke. */
+  readonly heard: boolean;
   done: Promise<Uint8Array<ArrayBuffer> | null>;
-  /** Which microphone it is recording from. */
   name: string;
 }
 
-let audio: AudioContext | null = null;
+let audioCtx: AudioContext | null = null;
 
-/** Starts a clip; rejects when the TV gives the app no microphone. `onLevel` gets each frame's wave level, then null. */
 export async function record(onLevel?: (level: number | null) => void): Promise<Recording> {
-  if (!mic) mic = openMic();
+  stopPlayback();
+  await refreshAudioDevices();
+  if (!mic || !streamLive(openedStream)) {
+    closeCachedMic();
+    mic = openMic();
+  }
   let stream: MediaStream;
   try {
     stream = await mic;
+    if (!streamLive(stream)) {
+      closeCachedMic();
+      mic = openMic();
+      stream = await mic;
+    }
   } catch (e) {
-    mic = null;
+    closeCachedMic();
     throw e;
   }
-  // One context for every clip, suspended in between: creating one cost 67-133 ms on the TV's main thread, and closing
-  // it 67 ms (docs/performance.md, "Voice").
-  if (!audio) {
+  if (!audioCtx) {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    audio = new Ctx();
+    audioCtx = new Ctx();
   }
-  const ctx = audio;
+  const ctx = audioCtx;
   if (ctx.state === "suspended") await ctx.resume();
   const source = ctx.createMediaStreamSource(stream);
-  // ScriptProcessor is deprecated but present on every TV; AudioWorklet would need a separate module file.
-  const node = ctx.createScriptProcessor(4096, 1, 1);
+  const bufSize = 2048;
+  const node = ctx.createScriptProcessor(bufSize, 1, 1);
   const frames: Float32Array[] = [];
   const ends = endpointer();
-  const frameMs = (4096 / ctx.sampleRate) * 1000;
+  const frameMs = (bufSize / ctx.sampleRate) * 1000;
   let finish!: (clip: Uint8Array<ArrayBuffer> | null) => void;
   const done = new Promise<Uint8Array<ArrayBuffer> | null>((r) => (finish = r));
   let stopped = false;
   let cancelled = false;
+  onLevel?.(0);
 
-  const cancel = () => {
-    if (stopped) return;
-    cancelled = true;
+  const teardown = () => {
     stopped = true;
     onLevel?.(null);
     node.disconnect();
     source.disconnect();
     void ctx.suspend();
+  };
+
+  const cancel = () => {
+    if (stopped) return;
+    cancelled = true;
+    teardown();
     finish(null);
   };
 
   const stop = () => {
     if (stopped) return;
-    stopped = true;
-    onLevel?.(null);
-    node.disconnect();
-    source.disconnect();
-    void ctx.suspend();
+    teardown();
     if (!ends.heard) return finish(null);
     const all = new Float32Array(frames.reduce((n, f) => n + f.length, 0));
     let at = 0;
@@ -241,22 +349,30 @@ export async function record(onLevel?: (level: number | null) => void): Promise<
     const frame = new Float32Array(e.inputBuffer.getChannelData(0));
     frames.push(frame);
     const level = rms(frame);
-    onLevel?.(levelOf(level));
+    onLevel?.(levelOf(visualRms(frame)));
     if (ends.feed(level, frameMs)) stop();
   };
   source.connect(node);
-  // A ScriptProcessor only runs while connected to the output; it writes silence there.
   node.connect(ctx.destination);
-  return { stop, cancel, done, name: micName(stream), get cancelled() { return cancelled; } };
+  return {
+    stop,
+    cancel,
+    done,
+    name: micName(stream),
+    get cancelled() {
+      return cancelled;
+    },
+    get heard() {
+      return ends.heard;
+    },
+  };
 }
 
-/**
- * Plays a spoken reply on the speakerphone when there is one, else the TV's output: WAV bytes (Gemini from the TV) or a
- * WAV data: URL (from the server). `onLevel` gets the reply's loudness as it plays, then null.
- */
+let activeAudioStop: (() => void) | null = null;
+export const stopPlayback = (): void => activeAudioStop?.();
+
 export async function play(src: string | Uint8Array, onLevel?: (level: number | null) => void): Promise<void> {
-  // The bytes behind a Blob URL: an <audio> on a 300 KB data: URL took 64 ms of the main thread on the TV, and decoding
-  // base64 by hand 35 ms more; fetch() decodes it off the main thread (docs/performance.md, "Voice").
+  stopPlayback();
   let wav: Uint8Array;
   try {
     wav = typeof src === "string" ? new Uint8Array(await (await fetch(src)).arrayBuffer()) : src;
@@ -267,20 +383,26 @@ export async function play(src: string | Uint8Array, onLevel?: (level: number | 
   const audio = new Audio(url) as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
   const levels = onLevel ? envelope(wav) : [];
   try {
-    // The TV lists a USB speakerphone as an output too, but keeps playing on its own speakers unless told.
-    const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
-    const room = outputs.find((d) => ROOM_DEVICE.test(d.label));
-    if (room && audio.setSinkId) await audio.setSinkId(room.deviceId);
+    const state = await refreshAudioDevices({ unlockLabels: true });
+    if (state.sinkId && audio.setSinkId) await audio.setSinkId(state.sinkId);
   } catch {
-    // The default output it is.
+    // Keep default output when setSinkId is unsupported or refused.
   }
-  // 50 ms steps are enough: the wave eases between them.
-  const meter = levels.length
-    ? setInterval(() => onLevel!(levels[Math.floor((audio.currentTime * 1000) / ENVELOPE_MS)] ?? 0), ENVELOPE_MS)
-    : undefined;
+  const meter = levels.length ? setInterval(() => onLevel!(levels[Math.floor((audio.currentTime * 1000) / ENVELOPE_MS)] ?? 0), 30) : undefined;
   return new Promise<void>((resolve) => {
-    audio.onended = audio.onerror = () => resolve();
-    audio.play().catch(() => resolve());
+    const done = () => {
+      if (activeAudioStop === stopNow) activeAudioStop = null;
+      resolve();
+    };
+    const stopNow = () => {
+      try {
+        audio.pause();
+      } catch {}
+      done();
+    };
+    activeAudioStop = stopNow;
+    audio.onended = audio.onerror = done;
+    audio.play().catch(done);
   }).finally(() => {
     clearInterval(meter);
     URL.revokeObjectURL(url);
